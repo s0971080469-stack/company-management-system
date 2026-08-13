@@ -10,7 +10,7 @@ import {
   CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from "recharts";
 import { loadKey, saveKey } from "./storage.js";
-import { supabase } from "./supabaseClient.js";
+import { supabase, createAuthActionClient } from "./supabaseClient.js";
 
 /* ---------------------------------------------------------
    企業帳冊 Corporate Ledger — 主題設計
@@ -2947,8 +2947,42 @@ function PermissionsView({ ctx }) {
 }
 
 function SysUserForm({ data, roles, employees, onSave, onCancel }) {
+  const isNew = !data.id;
   const [f, setF] = useState(data);
+  const [password, setPassword] = useState("");
+  const [password2, setPassword2] = useState("");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+
+  const handleSave = async () => {
+    if (!f.name) return;
+    setError("");
+
+    // 只有「新增」帳號時才會順便建立可登入的密碼；編輯既有帳號的密碼
+    // 需要當事人自己用「忘記密碼」流程重設，前端沒有權限直接改別人密碼。
+    if (isNew && password) {
+      if (!f.email) { setError("要設定密碼就必須先填 Email，這是登入時要用的帳號。"); return; }
+      if (password.length < 6) { setError("密碼至少需要 6 個字元。"); return; }
+      if (password !== password2) { setError("兩次輸入的密碼不一致，請再確認一次。"); return; }
+
+      setSaving(true);
+      const authClient = createAuthActionClient();
+      const { error: signUpError } = await authClient.auth.signUp({ email: f.email, password });
+      setSaving(false);
+      if (signUpError) {
+        setError(
+          signUpError.message?.includes("already registered") || signUpError.status === 422
+            ? "這個 Email 已經有登入帳號了，請改用其他 Email，或不要填密碼直接建立資料列。"
+            : `建立登入帳號失敗：${signUpError.message}`
+        );
+        return;
+      }
+    }
+
+    onSave(f);
+  };
+
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
       <Field label="姓名" span={2}><TextInput value={f.name} onChange={set("name")} placeholder="使用者姓名" /></Field>
@@ -2968,9 +3002,27 @@ function SysUserForm({ data, roles, employees, onSave, onCancel }) {
           {employees.map((emp) => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
         </Select>
       </Field>
+
+      {isNew && (
+        <>
+          <Field label="密碼（選填，填了就會建立可登入帳號）">
+            <TextInput type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="至少 6 個字元" />
+          </Field>
+          <Field label="確認密碼">
+            <TextInput type="password" value={password2} onChange={(e) => setPassword2(e.target.value)} placeholder="再輸入一次" />
+          </Field>
+        </>
+      )}
+
+      {error && (
+        <div style={{ gridColumn: "span 2", background: THEME.dangerSoft, color: THEME.danger, fontSize: 12.5, padding: "8px 12px", borderRadius: 8 }}>
+          {error}
+        </div>
+      )}
+
       <div style={{ gridColumn: "span 2", display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 6 }}>
-        <Btn onClick={onCancel}>取消</Btn>
-        <Btn variant="primary" icon={Check} onClick={() => f.name && onSave(f)} disabled={!f.name}>儲存</Btn>
+        <Btn onClick={onCancel} disabled={saving}>取消</Btn>
+        <Btn variant="primary" icon={Check} onClick={handleSave} disabled={!f.name || saving}>{saving ? "建立中…" : "儲存"}</Btn>
       </div>
     </div>
   );
