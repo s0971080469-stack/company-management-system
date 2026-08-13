@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import {
   LayoutDashboard, Users, Wallet, FileText, Receipt, Clock, HandCoins,
   Landmark, BarChart3, Plus, Trash2, Pencil, X, Check, Search,
@@ -658,6 +659,95 @@ function MonthFilterBar({ month, setMonth, label }) {
       <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600 }}>{label || "月份"}</span>
       <TextInput type="month" value={month} onChange={(e) => setMonth(e.target.value)} style={{ width: 160 }} />
       {month && <Btn size="sm" onClick={() => setMonth("")}>顯示全部</Btn>}
+    </div>
+  );
+}
+
+function DatePickerButton({ value, onChange, placeholder = "選擇日期" }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const [viewYear, setViewYear] = useState(() => (value ? new Date(value) : new Date()).getFullYear());
+  const [viewMonth, setViewMonth] = useState(() => (value ? new Date(value) : new Date()).getMonth());
+  const wrapRef = React.useRef(null);
+  const popRef = React.useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (wrapRef.current?.contains(e.target)) return;
+      if (popRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const updatePos = () => {
+      const r = wrapRef.current?.getBoundingClientRect();
+      if (r) setPos({ top: r.bottom + 6, left: r.left });
+    };
+    updatePos();
+    window.addEventListener("scroll", updatePos, true);
+    window.addEventListener("resize", updatePos);
+    return () => {
+      window.removeEventListener("scroll", updatePos, true);
+      window.removeEventListener("resize", updatePos);
+    };
+  }, [open]);
+
+  const openCalendar = () => {
+    const d = value ? new Date(value) : new Date();
+    setViewYear(d.getFullYear());
+    setViewMonth(d.getMonth());
+    setOpen((o) => !o);
+  };
+
+  const pad = (n) => String(n).padStart(2, "0");
+  const dateStr = (d) => `${viewYear}-${pad(viewMonth + 1)}-${pad(d)}`;
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const firstWeekday = new Date(viewYear, viewMonth, 1).getDay();
+  const cells = [...Array(firstWeekday).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
+  const todayIso = todayStr();
+
+  const prevMonth = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear((y) => y - 1); } else setViewMonth((m) => m - 1); };
+  const nextMonth = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear((y) => y + 1); } else setViewMonth((m) => m + 1); };
+
+  return (
+    <div ref={wrapRef} style={{ display: "inline-block" }}>
+      <Btn size="sm" icon={CalendarDays} onClick={openCalendar}>{value ? fmtDate(value) : placeholder}</Btn>
+      {open && createPortal(
+        <div ref={popRef} style={{ position: "fixed", zIndex: 300, top: pos.top, left: pos.left, background: "#fff", border: `1px solid ${THEME.line}`, borderRadius: 10, boxShadow: "0 12px 32px rgba(0,0,0,0.18)", padding: 12, width: 240 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+            <button type="button" onClick={prevMonth} style={{ border: "none", background: "transparent", cursor: "pointer", color: THEME.muted, padding: 4, fontSize: 15 }}>‹</button>
+            <div style={{ fontSize: 13, fontWeight: 700, color: THEME.text }}>{viewYear}年{viewMonth + 1}月</div>
+            <button type="button" onClick={nextMonth} style={{ border: "none", background: "transparent", cursor: "pointer", color: THEME.muted, padding: 4, fontSize: 15 }}>›</button>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 2, fontSize: 11, color: THEME.muted, textAlign: "center", marginBottom: 4 }}>
+            {["日", "一", "二", "三", "四", "五", "六"].map((w) => <div key={w}>{w}</div>)}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 2 }}>
+            {cells.map((d, i) => {
+              if (!d) return <div key={i} />;
+              const iso = dateStr(d);
+              const isSelected = value === iso;
+              const isToday = todayIso === iso;
+              return (
+                <button key={i} type="button" onClick={() => { onChange(iso); setOpen(false); }}
+                  style={{
+                    border: isToday && !isSelected ? `1px solid ${THEME.brass}` : "1px solid transparent",
+                    borderRadius: 6, padding: "6px 0", fontSize: 12, cursor: "pointer",
+                    background: isSelected ? THEME.brass : "transparent",
+                    color: isSelected ? "#fff" : THEME.text,
+                    fontWeight: isSelected ? 700 : 400,
+                  }}>{d}</button>
+              );
+            })}
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
@@ -1935,7 +2025,7 @@ function InvoicesView({ ctx }) {
       ) : filtered.length === 0 ? (
         <EmptyState icon={Receipt} text="這個篩選條件下沒有發票。" />
       ) : (
-        <Table columns={["發票號碼", "開票公司", "估價單號碼", "客戶", "開立日", "到期日", "含稅金額", "狀態", ""]}>
+        <Table columns={["發票號碼", "開票公司", "估價單號碼", "客戶", "開立日", "入帳日", "含稅金額", "狀態", ""]}>
           {filtered.map((inv) => {
             const total = inv.total ?? sumItems(inv.items) * (1 + Number(inv.taxRate) / 100);
             return (
@@ -1945,7 +2035,9 @@ function InvoicesView({ ctx }) {
                 <td style={{ ...td, fontFamily: FONT_NUM, color: THEME.muted }}>{inv.quoteNo || "—"}</td>
                 <td style={td}><strong>{inv.client}</strong></td>
                 <td style={td}>{fmtDate(inv.date)}</td>
-                <td style={td}>{fmtDate(inv.dueDate)}</td>
+                <td style={td}>
+                  <DatePickerButton value={inv.dueDate} onChange={(v) => persist.invoices(invoices.map((x) => (x.id === inv.id ? { ...x, dueDate: v } : x)))} />
+                </td>
                 <td style={{ ...td, fontFamily: FONT_NUM, fontWeight: 700 }}>{fmtMoney(total)}</td>
                 <td style={td}>
                   <Select value={inv.status} onChange={(e) => setStatus(inv, e.target.value)} style={{ padding: "4px 8px", fontSize: 12 }}>
@@ -2007,7 +2099,6 @@ function InvoiceForm({ data, quotes, onSave, onCancel }) {
         <Field label="客戶名稱"><TextInput value={f.client} onChange={set("client")} placeholder="客戶 / 公司名稱" /></Field>
         <Field label="工作名稱"><TextInput value={f.workName} onChange={set("workName")} placeholder="專案 / 工作名稱" /></Field>
         <Field label="開立日期"><TextInput type="date" value={f.date} onChange={set("date")} /></Field>
-        <Field label="到期日"><TextInput type="date" value={f.dueDate} onChange={set("dueDate")} /></Field>
         <Field label="付款方式">
           <Select value={f.paymentMethod} onChange={set("paymentMethod")}>
             <option value="">未設定</option>
