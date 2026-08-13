@@ -184,12 +184,19 @@ const fmtDate = (s) => {
   if (isNaN(d)) return s;
   return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
 };
+const fmtDateTime = (s) => {
+  if (!s) return "—";
+  const d = new Date(s);
+  if (isNaN(d)) return s;
+  return `${fmtDate(s)} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
+};
 const nextNo = (prefix, list, dateKey = "date") => {
   const y = new Date().getFullYear();
   const count = list.filter((x) => (x.no || "").startsWith(`${prefix}-${y}`)).length + 1;
   return `${prefix}-${y}-${String(count).padStart(3, "0")}`;
 };
 const sumItems = (items = []) => items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.price) || 0), 0);
+const actorName = (ctx) => ctx.currentUser?.name || ctx.currentUser?.email || "—";
 
 /* ---------------- 打卡地點限制 ---------------- */
 const CLOCK_RADIUS_M = 200;
@@ -1065,8 +1072,8 @@ function Dashboard({ ctx }) {
   });
 
   const recentActivity = [
-    ...invoices.map((i) => ({ t: i.date, text: `發票 ${i.no} — ${i.client}`, tag: i.status })),
-    ...billing.filter((b) => b.status).map((b) => ({ t: b.date, text: `公司付款 ${b.no} — ${b.vendor}`, tag: b.status })),
+    ...invoices.map((i) => ({ t: i.date, dt: i.createdAt, text: `發票 ${i.no} — ${i.client}`, tag: i.status, by: i.createdBy })),
+    ...billing.filter((b) => b.status).map((b) => ({ t: b.date, dt: b.createdAt, text: `公司付款 ${b.no} — ${b.vendor}`, tag: b.status, by: b.createdBy })),
     ...quotesActivity(ctx),
   ].filter((x) => x.t).sort((a, b) => (a.t < b.t ? 1 : -1)).slice(0, 6);
 
@@ -1123,7 +1130,7 @@ function Dashboard({ ctx }) {
                 <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 13, color: THEME.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.text}</div>
-                    <div style={{ fontSize: 11, color: THEME.muted }}>{fmtDate(a.t)}</div>
+                    <div style={{ fontSize: 11, color: THEME.muted }}>{a.dt ? fmtDateTime(a.dt) : fmtDate(a.t)}{a.by ? ` · ${a.by}` : ""}</div>
                   </div>
                   <StatusBadge status={a.tag} />
                 </div>
@@ -1142,7 +1149,7 @@ function Dashboard({ ctx }) {
   );
 }
 function quotesActivity(ctx) {
-  return ctx.quotes.map((q) => ({ t: q.date, text: `估價單 ${q.no} — ${q.client}`, tag: q.status }));
+  return ctx.quotes.map((q) => ({ t: q.date, dt: q.createdAt, text: `估價單 ${q.no} — ${q.client}`, tag: q.status, by: q.createdBy }));
 }
 
 /* =========================================================
@@ -1566,7 +1573,7 @@ function QuotesView({ ctx, setTab }) {
       persist.quotes(quotes.map((q) => (q.id === data.id ? data : q)));
     } else {
       const no = nextNo("Q", quotes);
-      const newQuote = { ...data, id: uid(), no, total: sumItems(data.items) };
+      const newQuote = { ...data, id: uid(), no, total: sumItems(data.items), createdBy: actorName(ctx), createdAt: new Date().toISOString() };
       persist.quotes([newQuote, ...quotes]);
       downloadQuotePdf(newQuote);
     }
@@ -1599,7 +1606,7 @@ function QuotesView({ ctx, setTab }) {
     const newInv = {
       id: uid(), no, quoteNo: q.no, client: q.client, workName: q.workName || "", paymentMethod: q.paymentMethod || "",
       date: todayStr(), dueDate: "",
-      items: q.items, taxRate: 5, status: "未付款", note: `轉自估價單 ${q.no}`, posted: false, ...letterhead,
+      items: q.items, taxRate: 5, status: "未付款", note: `轉自估價單 ${q.no}`, posted: false, createdBy: actorName(ctx), createdAt: new Date().toISOString(), ...letterhead,
     };
     ctx.persist.invoices([newInv, ...invoices]);
     setTab("invoices");
@@ -1996,7 +2003,7 @@ function InvoicesView({ ctx }) {
     if (data.id) {
       persist.invoices(invoices.map((q) => (q.id === data.id ? { ...data, total } : q)));
     } else {
-      persist.invoices([{ ...data, id: uid(), total }, ...invoices]);
+      persist.invoices([{ ...data, id: uid(), total, createdBy: actorName(ctx), createdAt: new Date().toISOString() }, ...invoices]);
     }
     setModal(null);
   };
@@ -2351,7 +2358,7 @@ function BillingView({ ctx }) {
       persist.billing(billing.map((b) => (b.id === data.id ? data : b)));
     } else {
       const no = nextNo("PC", pettyCash);
-      const entry = { ...data, id: uid(), no, posted: true };
+      const entry = { ...data, id: uid(), no, posted: true, createdBy: actorName(ctx), createdAt: new Date().toISOString() };
       persist.billing([entry, ...billing]);
       addAccountingEntry({ type: "支出", category: "零用金", amount: entry.amount, desc: `零用金 — ${entry.item}`, date: entry.date });
     }
@@ -2363,7 +2370,7 @@ function BillingView({ ctx }) {
       persist.billing(billing.map((b) => (b.id === data.id ? data : b)));
     } else {
       const no = nextNo("PR", companyPayments);
-      persist.billing([{ ...data, id: uid(), no }, ...billing]);
+      persist.billing([{ ...data, id: uid(), no, createdBy: actorName(ctx), createdAt: new Date().toISOString() }, ...billing]);
     }
     setModal(null);
   };
