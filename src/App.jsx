@@ -1557,16 +1557,25 @@ function QuotesView({ ctx, setTab }) {
   const [templateManagerOpen, setTemplateManagerOpen] = useState(false);
   const [templateModal, setTemplateModal] = useState(null);
   const [attachModal, setAttachModal] = useState(null);
+  const [companyFilter, setCompanyFilter] = useState("全部");
+
+  const KNOWN_COMPANIES = VENDOR_COMPANY_OPTIONS.filter((o) => o !== "其他");
+  const companyTabs = ["全部", ...KNOWN_COMPANIES, "其他"];
+  const filteredQuotes = quotes.filter((q) => {
+    if (companyFilter === "全部") return true;
+    if (companyFilter === "其他") return !KNOWN_COMPANIES.includes(q.companyName);
+    return q.companyName === companyFilter;
+  });
 
   const groupedByMonth = useMemo(() => {
     const map = new Map();
-    quotes.forEach((q) => {
+    filteredQuotes.forEach((q) => {
       const key = (q.date || "").slice(0, 7) || "未填日期";
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(q);
     });
     return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [quotes]);
+  }, [filteredQuotes]);
 
   const save = (data) => {
     if (data.id) {
@@ -1622,8 +1631,24 @@ function QuotesView({ ctx, setTab }) {
           </div>
         } />
 
+      {quotes.length > 0 && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+          {companyTabs.map((c) => (
+            <button key={c} onClick={() => setCompanyFilter(c)}
+              style={{
+                padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
+                border: `1px solid ${companyFilter === c ? THEME.brass : THEME.line}`,
+                background: companyFilter === c ? THEME.brass : "#fff",
+                color: companyFilter === c ? "#fff" : THEME.text,
+              }}>{c}</button>
+          ))}
+        </div>
+      )}
+
       {quotes.length === 0 ? (
         <EmptyState icon={FileText} text="尚未建立任何估價單。" action={<Btn variant="brass" icon={Plus} onClick={() => setPickerOpen(true)}>建立第一張估價單</Btn>} />
+      ) : filteredQuotes.length === 0 ? (
+        <EmptyState icon={FileText} text="這個篩選條件下沒有估價單。" />
       ) : (
         groupedByMonth.map(([key, list]) => (
           <div key={key} style={{ marginBottom: 28 }}>
@@ -1631,7 +1656,7 @@ function QuotesView({ ctx, setTab }) {
               <span style={{ fontSize: 14.5, fontWeight: 700, color: THEME.text }}>{fmtMonthLabel(key)}</span>
               <span style={{ fontSize: 12.5, color: THEME.muted }}>共 {list.length} 張・小計 <span style={{ fontFamily: FONT_NUM, color: THEME.text }}>{fmtMoney(list.reduce((s, q) => s + sumItems(q.items), 0))}</span></span>
             </div>
-            <Table columns={["單號", "客戶", "日期", "有效期限", "金額", "狀態", ""]}>
+            <Table columns={["單號", "客戶", "日期", "有效期限", "金額", "報價公司", "狀態", ""]}>
               {list.map((q) => (
                 <tr key={q.id}>
                   <td style={{ ...td, fontFamily: FONT_NUM }}>{q.no}</td>
@@ -1639,6 +1664,7 @@ function QuotesView({ ctx, setTab }) {
                   <td style={td}>{fmtDate(q.date)}</td>
                   <td style={td}>{fmtDate(q.validUntil)}</td>
                   <td style={{ ...td, fontFamily: FONT_NUM }}>{fmtMoney(sumItems(q.items))}</td>
+                  <td style={td}>{q.companyName ? <StatusBadge status={q.companyName.slice(0, 4)} /> : "—"}</td>
                   <td style={td}>
                     <Select value={q.status} onChange={(e) => persist.quotes(quotes.map((x) => x.id === q.id ? { ...x, status: e.target.value } : x))} style={{ padding: "4px 8px", fontSize: 12 }}>
                       <option value="草擬">草擬</option>
