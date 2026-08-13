@@ -80,7 +80,7 @@ const DEFAULT_MATRIX = () => {
     roles: DEFAULT_ROLES,
     matrix: {
       "管理員": on(NAV.map((n) => n.key)),
-      "財務": on(["dashboard", "payroll", "vendors", "quotes", "invoices", "billing", "contracts", "accounting", "reports"]),
+      "財務": on(["dashboard", "payroll", "vendors", "quotes", "invoices", "billing", "contracts", "accounting", "reports", "attendance"]),
       "人資": on(["dashboard", "employees", "payroll", "attendance", "reports"]),
       "一般員工": on(["dashboard", "attendance"]),
     },
