@@ -170,6 +170,10 @@ const SEED_QUOTE_TEMPLATES = [
 const uid = () => Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4);
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const monthStr = (d = new Date()) => d.toISOString().slice(0, 7);
+const fmtMonthLabel = (key) => {
+  const m = /^(\d{4})-(\d{2})$/.exec(key);
+  return m ? `${m[1]}年${Number(m[2])}月` : key;
+};
 const fmtMoney = (n) => "NT$ " + Math.round(Number(n) || 0).toLocaleString("zh-TW");
 const fmtDate = (s) => {
   if (!s) return "—";
@@ -1391,9 +1395,16 @@ function QuotesView({ ctx, setTab }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [templateManagerOpen, setTemplateManagerOpen] = useState(false);
   const [templateModal, setTemplateModal] = useState(null);
-  const [month, setMonth] = useState(monthStr());
 
-  const filtered = quotes.filter((q) => !month || (q.date || "").startsWith(month));
+  const groupedByMonth = useMemo(() => {
+    const map = new Map();
+    quotes.forEach((q) => {
+      const key = (q.date || "").slice(0, 7) || "未填日期";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(q);
+    });
+    return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [quotes]);
 
   const save = (data) => {
     if (data.id) {
@@ -1452,40 +1463,41 @@ function QuotesView({ ctx, setTab }) {
       {quotes.length === 0 ? (
         <EmptyState icon={FileText} text="尚未建立任何估價單。" action={<Btn variant="brass" icon={Plus} onClick={() => setPickerOpen(true)}>建立第一張估價單</Btn>} />
       ) : (
-        <>
-          <MonthFilterBar month={month} setMonth={setMonth} label="報價日期月份" />
-          {filtered.length === 0 ? (
-            <EmptyState icon={FileText} text="這個月份沒有估價單。" />
-          ) : (
-        <Table columns={["單號", "客戶", "日期", "有效期限", "金額", "狀態", ""]}>
-          {filtered.map((q) => (
-            <tr key={q.id}>
-              <td style={{ ...td, fontFamily: FONT_NUM }}>{q.no}</td>
-              <td style={td}><strong>{q.client}</strong></td>
-              <td style={td}>{fmtDate(q.date)}</td>
-              <td style={td}>{fmtDate(q.validUntil)}</td>
-              <td style={{ ...td, fontFamily: FONT_NUM }}>{fmtMoney(sumItems(q.items))}</td>
-              <td style={td}>
-                <Select value={q.status} onChange={(e) => persist.quotes(quotes.map((x) => x.id === q.id ? { ...x, status: e.target.value } : x))} style={{ padding: "4px 8px", fontSize: 12 }}>
-                  <option value="草擬">草擬</option>
-                  <option value="已送出">已送出</option>
-                  <option value="已核准">已核准</option>
-                  <option value="已拒絕">已拒絕</option>
-                </Select>
-              </td>
-              <td style={{ ...td, textAlign: "right" }}>
-                <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                  <Btn size="sm" icon={Download} onClick={() => downloadQuotePdf(q)}>下載PDF</Btn>
-                  <Btn size="sm" icon={ArrowRight} onClick={() => convertToInvoice(q)}>轉發票</Btn>
-                  <Btn size="sm" icon={Pencil} onClick={() => setModal({ mode: "edit", data: q })} />
-                  <Btn size="sm" variant="danger" icon={Trash2} onClick={() => askDelete(`確定要刪除估價單 ${q.no} 嗎？`, () => persist.quotes(quotes.filter((x) => x.id !== q.id)))} />
-                </div>
-              </td>
-            </tr>
-          ))}
-        </Table>
-          )}
-        </>
+        groupedByMonth.map(([key, list]) => (
+          <div key={key} style={{ marginBottom: 28 }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 10 }}>
+              <span style={{ fontSize: 14.5, fontWeight: 700, color: THEME.text }}>{fmtMonthLabel(key)}</span>
+              <span style={{ fontSize: 12.5, color: THEME.muted }}>共 {list.length} 張・小計 <span style={{ fontFamily: FONT_NUM, color: THEME.text }}>{fmtMoney(list.reduce((s, q) => s + sumItems(q.items), 0))}</span></span>
+            </div>
+            <Table columns={["單號", "客戶", "日期", "有效期限", "金額", "狀態", ""]}>
+              {list.map((q) => (
+                <tr key={q.id}>
+                  <td style={{ ...td, fontFamily: FONT_NUM }}>{q.no}</td>
+                  <td style={td}><strong>{q.client}</strong></td>
+                  <td style={td}>{fmtDate(q.date)}</td>
+                  <td style={td}>{fmtDate(q.validUntil)}</td>
+                  <td style={{ ...td, fontFamily: FONT_NUM }}>{fmtMoney(sumItems(q.items))}</td>
+                  <td style={td}>
+                    <Select value={q.status} onChange={(e) => persist.quotes(quotes.map((x) => x.id === q.id ? { ...x, status: e.target.value } : x))} style={{ padding: "4px 8px", fontSize: 12 }}>
+                      <option value="草擬">草擬</option>
+                      <option value="已送出">已送出</option>
+                      <option value="已核准">已核准</option>
+                      <option value="已拒絕">已拒絕</option>
+                    </Select>
+                  </td>
+                  <td style={{ ...td, textAlign: "right" }}>
+                    <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                      <Btn size="sm" icon={Download} onClick={() => downloadQuotePdf(q)}>下載PDF</Btn>
+                      <Btn size="sm" icon={ArrowRight} onClick={() => convertToInvoice(q)}>轉發票</Btn>
+                      <Btn size="sm" icon={Pencil} onClick={() => setModal({ mode: "edit", data: q })} />
+                      <Btn size="sm" variant="danger" icon={Trash2} onClick={() => askDelete(`確定要刪除估價單 ${q.no} 嗎？`, () => persist.quotes(quotes.filter((x) => x.id !== q.id)))} />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </Table>
+          </div>
+        ))
       )}
 
       {pickerOpen && (
