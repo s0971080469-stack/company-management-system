@@ -1998,6 +1998,14 @@ function InvoicesView({ ctx }) {
     }
   };
 
+  const setDueDate = (inv, dueDate) => {
+    const total = inv.total ?? sumItems(inv.items) * (1 + Number(inv.taxRate) / 100);
+    persist.invoices(invoices.map((x) => x.id === inv.id ? { ...x, dueDate, status: "已付款", posted: true } : x));
+    if (!inv.posted) {
+      addAccountingEntry({ type: "收入", category: "發票收款", amount: total, desc: `發票 ${inv.no} — ${inv.client}` });
+    }
+  };
+
   return (
     <div>
       <SectionHeader eyebrow="INVOICE · 06" title="發票"
@@ -2036,7 +2044,7 @@ function InvoicesView({ ctx }) {
                 <td style={td}><strong>{inv.client}</strong></td>
                 <td style={td}>{fmtDate(inv.date)}</td>
                 <td style={td}>
-                  <DatePickerButton value={inv.dueDate} onChange={(v) => persist.invoices(invoices.map((x) => (x.id === inv.id ? { ...x, dueDate: v } : x)))} />
+                  <DatePickerButton value={inv.dueDate} onChange={(v) => setDueDate(inv, v)} />
                 </td>
                 <td style={{ ...td, fontFamily: FONT_NUM, fontWeight: 700 }}>{fmtMoney(total)}</td>
                 <td style={td}>
