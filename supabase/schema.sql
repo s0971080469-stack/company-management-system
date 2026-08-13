@@ -37,6 +37,33 @@ create policy "authenticated can update app_storage"
   to authenticated
   using (true);
 
+-- 2) 估價單附件（掃描檔圖片）Storage bucket
+--    每張估價單可以上傳掃描檔圖片保存，實際檔案存在 Supabase Storage，
+--    估價單資料裡只存檔案路徑（見 app_storage 的 quotations）。
+--    bucket 設為非公開，只有登入的公司帳號能讀取／上傳／刪除，
+--    讀取時前端會用 createSignedUrl() 產生一組限時的預覽網址。
+insert into storage.buckets (id, name, public)
+values ('quote-scans', 'quote-scans', false)
+on conflict (id) do nothing;
+
+drop policy if exists "authenticated can read quote-scans" on storage.objects;
+create policy "authenticated can read quote-scans"
+  on storage.objects for select
+  to authenticated
+  using (bucket_id = 'quote-scans');
+
+drop policy if exists "authenticated can upload quote-scans" on storage.objects;
+create policy "authenticated can upload quote-scans"
+  on storage.objects for insert
+  to authenticated
+  with check (bucket_id = 'quote-scans');
+
+drop policy if exists "authenticated can delete quote-scans" on storage.objects;
+create policy "authenticated can delete quote-scans"
+  on storage.objects for delete
+  to authenticated
+  using (bucket_id = 'quote-scans');
+
 -- ============================================================
 -- 重要提醒（請務必閱讀）
 -- ============================================================

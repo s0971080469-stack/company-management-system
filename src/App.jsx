@@ -3,7 +3,8 @@ import {
   LayoutDashboard, Users, Wallet, FileText, Receipt, Clock, HandCoins,
   Landmark, BarChart3, Plus, Trash2, Pencil, X, Check, Search,
   LogIn, LogOut, Building2, TrendingUp, TrendingDown, CalendarDays,
-  ChevronRight, RotateCcw, ArrowRight, AlertCircle, FileSignature, Truck, ShieldCheck, UserCog, Download, Car
+  ChevronRight, RotateCcw, ArrowRight, AlertCircle, FileSignature, Truck, ShieldCheck, UserCog, Download, Car,
+  Paperclip, Eye, Upload, Image as ImageIcon, Loader2
 } from "lucide-react";
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis,
@@ -187,6 +188,27 @@ const nextNo = (prefix, list, dateKey = "date") => {
   return `${prefix}-${y}-${String(count).padStart(3, "0")}`;
 };
 const sumItems = (items = []) => items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.price) || 0), 0);
+
+/* ---------------- 估價單附件（掃描檔）— 存到 Supabase Storage ---------------- */
+const QUOTE_SCAN_BUCKET = "quote-scans";
+
+async function uploadQuoteScan(quoteId, file) {
+  const path = `${quoteId}/${Date.now()}-${uid()}-${file.name}`;
+  const { error } = await supabase.storage.from(QUOTE_SCAN_BUCKET).upload(path, file);
+  if (error) throw error;
+  return { id: uid(), name: file.name, path, uploadedAt: new Date().toISOString() };
+}
+
+async function getQuoteScanUrl(path) {
+  const { data, error } = await supabase.storage.from(QUOTE_SCAN_BUCKET).createSignedUrl(path, 300);
+  if (error) throw error;
+  return data.signedUrl;
+}
+
+async function deleteQuoteScan(path) {
+  const { error } = await supabase.storage.from(QUOTE_SCAN_BUCKET).remove([path]);
+  if (error) throw error;
+}
 
 /* ---------------- 估價單 PDF 下載（純前端組出真正的 PDF 檔） ---------------- */
 const CHINESE_DIGITS = ["", "一", "二", "三", "四", "五", "六", "七", "八", "九"];
@@ -775,6 +797,7 @@ export default function CompanyManagementSystem({ session }) {
         * { box-sizing: border-box; }
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-thumb { background: #D8D5C8; border-radius: 8px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
 
       <Sidebar tab={tab} setTab={setTab} nav={allowedNav} employees={employees} sysUsers={sysUsers} currentUserId={currentUserId} setCurrentUserId={persist.currentUserId} realIsAdmin={realIsAdmin} matchedUser={matchedUser} session={session} />
@@ -1410,7 +1433,7 @@ const emptyLetterhead = () => ({ companyName: "", docTitle: "", taxId: "", addre
 const emptyQuote = () => ({
   no: "", client: "", workName: "", paymentMethod: "", date: todayStr(), validUntil: "",
   items: [{ id: uid(), desc: "", unit: "", qty: 1, price: 0, note: "" }],
-  status: "草擬", note: "", ...emptyLetterhead(), docTitle: "估　　價　　單",
+  status: "草擬", note: "", attachments: [], ...emptyLetterhead(), docTitle: "估　　價　　單",
 });
 const addDays = (base, days) => { const d = new Date(base); d.setDate(d.getDate() + Number(days || 0)); return d.toISOString().slice(0, 10); };
 const emptyQuoteTemplate = () => ({
@@ -1425,6 +1448,7 @@ function QuotesView({ ctx, setTab }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [templateManagerOpen, setTemplateManagerOpen] = useState(false);
   const [templateModal, setTemplateModal] = useState(null);
+  const [attachModal, setAttachModal] = useState(null);
 
   const groupedByMonth = useMemo(() => {
     const map = new Map();
@@ -1517,6 +1541,7 @@ function QuotesView({ ctx, setTab }) {
                   </td>
                   <td style={{ ...td, textAlign: "right" }}>
                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                      <Btn size="sm" icon={Paperclip} onClick={() => setAttachModal(q)}>附件{(q.attachments || []).length ? ` ${(q.attachments || []).length}` : ""}</Btn>
                       <Btn size="sm" icon={Download} onClick={() => downloadQuotePdf(q)}>下載PDF</Btn>
                       <Btn size="sm" icon={ArrowRight} onClick={() => convertToInvoice(q)}>轉發票</Btn>
                       <Btn size="sm" icon={Pencil} onClick={() => setModal({ mode: "edit", data: q })} />
@@ -1562,6 +1587,105 @@ function QuotesView({ ctx, setTab }) {
         <Modal title={templateModal.mode === "new" ? "新增估價範本" : "編輯估價範本"} onClose={() => setTemplateModal(null)} width={680}>
           <QuoteTemplateForm data={templateModal.data} onSave={saveTemplate} onCancel={() => setTemplateModal(null)} />
         </Modal>
+      )}
+
+      {attachModal && (
+        <Modal title={`附件 — 估價單 ${attachModal.no}`} onClose={() => setAttachModal(null)} width={640}>
+          <QuoteAttachments
+            quote={attachModal}
+            askDelete={askDelete}
+            onChange={(next) => {
+              persist.quotes(quotes.map((x) => (x.id === attachModal.id ? next : x)));
+              setAttachModal(next);
+            }}
+          />
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function QuoteAttachments({ quote, onChange, askDelete }) {
+  const attachments = quote.attachments || [];
+  const [uploading, setUploading] = useState(false);
+  const [preview, setPreview] = useState(null); // { name, url } | { name, loading: true }
+  const fileInputRef = React.useRef(null);
+
+  const handleFiles = async (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (!files.length) return;
+    setUploading(true);
+    try {
+      const uploaded = [];
+      for (const file of files) {
+        uploaded.push(await uploadQuoteScan(quote.id, file));
+      }
+      onChange({ ...quote, attachments: [...attachments, ...uploaded] });
+    } catch (err) {
+      console.error(err);
+      alert("圖片上傳失敗，請稍後再試一次。");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const openPreview = async (att) => {
+    setPreview({ name: att.name, loading: true });
+    try {
+      const url = await getQuoteScanUrl(att.path);
+      setPreview({ name: att.name, url });
+    } catch (err) {
+      console.error(err);
+      setPreview(null);
+      alert("圖片預覽失敗，請稍後再試一次。");
+    }
+  };
+
+  const removeAttachment = (att) => {
+    askDelete(`確定要刪除附件「${att.name}」嗎？`, async () => {
+      try {
+        await deleteQuoteScan(att.path);
+      } catch (err) {
+        console.error(err);
+      }
+      onChange({ ...quote, attachments: attachments.filter((a) => a.id !== att.id) });
+    });
+  };
+
+  return (
+    <div>
+      <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFiles} disabled={uploading} style={{ display: "none" }} />
+      <Btn variant="brass" icon={uploading ? Loader2 : Upload} disabled={uploading} onClick={() => fileInputRef.current?.click()}>
+        {uploading ? "上傳中…" : "上傳掃描圖片"}
+      </Btn>
+
+      {attachments.length === 0 ? (
+        <div style={{ fontSize: 12.5, color: THEME.muted, marginTop: 14 }}>尚未上傳任何附件，開好的估價單掃描檔可以在這裡上傳保存。</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 16 }}>
+          {attachments.map((att) => (
+            <div key={att.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, border: `1px solid ${THEME.line}` }}>
+              <IconBadge icon={ImageIcon} tone="ink" />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, color: THEME.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{att.name}</div>
+                <div style={{ fontSize: 11, color: THEME.muted }}>{fmtDate(att.uploadedAt)}</div>
+              </div>
+              <Btn size="sm" icon={Eye} onClick={() => openPreview(att)}>預覽</Btn>
+              <Btn size="sm" variant="danger" icon={Trash2} onClick={() => removeAttachment(att)} />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {preview && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(27,35,51,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 24 }} onClick={() => setPreview(null)}>
+          {preview.loading ? (
+            <Loader2 color="#fff" size={28} style={{ animation: "spin 1s linear infinite" }} />
+          ) : (
+            <img src={preview.url} alt={preview.name} style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 8, boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }} onClick={(e) => e.stopPropagation()} />
+          )}
+        </div>
       )}
     </div>
   );
