@@ -1559,11 +1559,15 @@ function QuotesView({ ctx, setTab }) {
   const [attachModal, setAttachModal] = useState(null);
   const [companyFilter, setCompanyFilter] = useState("全部");
 
-  const KNOWN_COMPANIES = VENDOR_COMPANY_OPTIONS.filter((o) => o !== "其他");
-  const companyTabs = ["全部", ...KNOWN_COMPANIES, "其他"];
+  // 估價單的報價公司是自由輸入欄位（不像發票鎖定固定公司清單），
+  // 所以標籤要直接從實際填過的公司名稱產生，而不是比對固定選項，
+  // 否則使用者打的名稱跟固定清單對不起來，篩選永遠是空的。
+  const quoteCompanies = Array.from(new Set(quotes.map((q) => q.companyName).filter(Boolean)));
+  const hasUnset = quotes.some((q) => !q.companyName);
+  const companyTabs = ["全部", ...quoteCompanies, ...(hasUnset ? ["未填公司"] : [])];
   const filteredQuotes = quotes.filter((q) => {
     if (companyFilter === "全部") return true;
-    if (companyFilter === "其他") return !KNOWN_COMPANIES.includes(q.companyName);
+    if (companyFilter === "未填公司") return !q.companyName;
     return q.companyName === companyFilter;
   });
 
