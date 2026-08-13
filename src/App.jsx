@@ -1024,7 +1024,10 @@ function quotesActivity(ctx) {
 /* =========================================================
    EMPLOYEES
 ========================================================= */
-const emptyEmployee = { name: "", dept: "", title: "", phone: "", email: "", hireDate: todayStr(), baseSalary: "", status: "在職" };
+const emptyEmployee = {
+  name: "", dept: "", title: "", phone: "", email: "", hireDate: todayStr(), baseSalary: "", status: "在職",
+  additions: [], deductions: [], laborInsurance: 0, healthInsurance: 0, pensionSelf: 0, advance: 0, insuranceStatus: "加保",
+};
 
 function EmployeesView({ ctx }) {
   const { employees, persist, askDelete } = ctx;
@@ -1082,7 +1085,7 @@ function EmployeesView({ ctx }) {
       )}
 
       {modal && (
-        <Modal title={modal.mode === "new" ? "新增員工" : "編輯員工資料"} onClose={() => setModal(null)}>
+        <Modal title={modal.mode === "new" ? "新增員工" : "編輯員工資料"} onClose={() => setModal(null)} width={680}>
           <EmployeeForm data={modal.data} onSave={save} onCancel={() => setModal(null)} />
         </Modal>
       )}
@@ -1091,24 +1094,49 @@ function EmployeesView({ ctx }) {
 }
 
 function EmployeeForm({ data, onSave, onCancel }) {
-  const [f, setF] = useState(data);
+  const [f, setF] = useState({ additions: [], deductions: [], laborInsurance: 0, healthInsurance: 0, pensionSelf: 0, advance: 0, insuranceStatus: "加保", ...data });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-      <Field label="姓名"><TextInput value={f.name} onChange={set("name")} placeholder="王小明" /></Field>
-      <Field label="部門"><TextInput value={f.dept} onChange={set("dept")} placeholder="業務部" /></Field>
-      <Field label="職位"><TextInput value={f.title} onChange={set("title")} placeholder="專案經理" /></Field>
-      <Field label="到職日"><TextInput type="date" value={f.hireDate} onChange={set("hireDate")} /></Field>
-      <Field label="底薪"><TextInput type="number" value={f.baseSalary} onChange={set("baseSalary")} placeholder="40000" /></Field>
-      <Field label="狀態">
-        <Select value={f.status} onChange={set("status")}>
-          <option value="在職">在職</option>
-          <option value="離職">離職</option>
+    <div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <Field label="姓名"><TextInput value={f.name} onChange={set("name")} placeholder="王小明" /></Field>
+        <Field label="部門"><TextInput value={f.dept} onChange={set("dept")} placeholder="業務部" /></Field>
+        <Field label="職位"><TextInput value={f.title} onChange={set("title")} placeholder="專案經理" /></Field>
+        <Field label="到職日"><TextInput type="date" value={f.hireDate} onChange={set("hireDate")} /></Field>
+        <Field label="底薪"><TextInput type="number" value={f.baseSalary} onChange={set("baseSalary")} placeholder="40000" /></Field>
+        <Field label="狀態">
+          <Select value={f.status} onChange={set("status")}>
+            <option value="在職">在職</option>
+            <option value="離職">離職</option>
+          </Select>
+        </Field>
+        <Field label="聯絡電話"><TextInput value={f.phone} onChange={set("phone")} placeholder="0912-345-678" /></Field>
+        <Field label="Email"><TextInput value={f.email} onChange={set("email")} placeholder="name@company.com" /></Field>
+      </div>
+
+      <div style={{ fontSize: 12, color: THEME.muted, fontWeight: 700, margin: "18px 0 8px" }}>薪資表預設項目（產生薪資時自動套入，仍可在薪資表內個別調整）</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 22, marginBottom: 18 }}>
+        <AmountListEditor label="加項（獎金、津貼等）" items={f.additions} setItems={(v) => setF({ ...f, additions: v })} tone="success" />
+        <AmountListEditor label="減項（遲到扣款等其他項目）" items={f.deductions} setItems={(v) => setF({ ...f, deductions: v })} tone="danger" />
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 18 }}>
+        <Field label="勞保自負額"><TextInput type="number" value={f.laborInsurance} onChange={set("laborInsurance")} /></Field>
+        <Field label="健保自付額"><TextInput type="number" value={f.healthInsurance} onChange={set("healthInsurance")} /></Field>
+        <Field label="勞退自付額"><TextInput type="number" value={f.pensionSelf} onChange={set("pensionSelf")} /></Field>
+        <Field label="借支"><TextInput type="number" value={f.advance} onChange={set("advance")} /></Field>
+      </div>
+
+      <Field label="保險狀態">
+        <Select value={f.insuranceStatus} onChange={set("insuranceStatus")}>
+          <option value="加保">加保</option>
+          <option value="在保">在保</option>
+          <option value="退保">退保</option>
+          <option value="停保">停保</option>
         </Select>
       </Field>
-      <Field label="聯絡電話"><TextInput value={f.phone} onChange={set("phone")} placeholder="0912-345-678" /></Field>
-      <Field label="Email"><TextInput value={f.email} onChange={set("email")} placeholder="name@company.com" /></Field>
-      <div style={{ gridColumn: "span 2", display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 6 }}>
+
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
         <Btn onClick={onCancel}>取消</Btn>
         <Btn variant="primary" icon={Check} onClick={() => f.name && onSave(f)} disabled={!f.name}>儲存</Btn>
       </div>
@@ -1127,9 +1155,11 @@ const payrollNet = (r) =>
 const emptyPayrollRow = (e, month) => ({
   id: uid(), month, employeeId: e.id, employeeName: e.name, department: e.dept || "",
   baseSalary: Number(e.baseSalary) || 0,
-  additions: [], deductions: [],
-  laborInsurance: 0, healthInsurance: 0, pensionSelf: 0, advance: 0,
-  insuranceStatus: "加保", paymentDate: "", note: "",
+  additions: (e.additions || []).map((it) => ({ ...it, id: uid() })),
+  deductions: (e.deductions || []).map((it) => ({ ...it, id: uid() })),
+  laborInsurance: Number(e.laborInsurance) || 0, healthInsurance: Number(e.healthInsurance) || 0,
+  pensionSelf: Number(e.pensionSelf) || 0, advance: Number(e.advance) || 0,
+  insuranceStatus: e.insuranceStatus || "加保", paymentDate: "", note: "",
   status: "待發放", posted: false,
 });
 
