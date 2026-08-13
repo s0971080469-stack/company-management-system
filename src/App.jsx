@@ -5,7 +5,7 @@ import {
   Landmark, BarChart3, Plus, Trash2, Pencil, X, Check, Search,
   LogIn, LogOut, Building2, TrendingUp, TrendingDown, CalendarDays,
   ChevronRight, RotateCcw, ArrowRight, AlertCircle, FileSignature, Truck, ShieldCheck, UserCog, Download, Car,
-  Paperclip, Eye, Upload, Image as ImageIcon, Loader2
+  Paperclip, Eye, Upload, Image as ImageIcon, Loader2, MapPin
 } from "lucide-react";
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis,
@@ -73,6 +73,7 @@ const STORAGE_KEYS = {
   quoteTemplates: "quote_templates",
   vehicles: "vehicles",
   currentUser: "current_user_id",
+  companyLocation: "company_location",
 };
 
 const DEFAULT_ROLES = ["管理員", "財務", "人資", "一般員工"];
@@ -189,6 +190,10 @@ const nextNo = (prefix, list, dateKey = "date") => {
   return `${prefix}-${y}-${String(count).padStart(3, "0")}`;
 };
 const sumItems = (items = []) => items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.price) || 0), 0);
+
+/* ---------------- 打卡地點限制 ---------------- */
+const CLOCK_RADIUS_M = 200;
+const DEFAULT_COMPANY_LOCATION = { lat: 22.708703, lng: 120.326208 };
 
 /* ---------------- 估價單附件（掃描檔）— 存到 Supabase Storage ---------------- */
 const QUOTE_SCAN_BUCKET = "quote-scans";
@@ -774,6 +779,7 @@ export default function CompanyManagementSystem({ session }) {
   const [quoteTemplates, setQuoteTemplates] = useState([]);
   const [currentUserId, setCurrentUserId] = useState("");
   const [vehicles, setVehicles] = useState([]);
+  const [companyLocation, setCompanyLocation] = useState(null);
 
   const [confirmState, setConfirmState] = useState(null);
 
@@ -784,7 +790,7 @@ export default function CompanyManagementSystem({ session }) {
 
   useEffect(() => {
     (async () => {
-      const [emp, att, pay, qt, inv, bil, acc, ven, con, usr, rp, qtpl, cuid, veh] = await Promise.all([
+      const [emp, att, pay, qt, inv, bil, acc, ven, con, usr, rp, qtpl, cuid, veh, cloc] = await Promise.all([
         loadKey(STORAGE_KEYS.employees, []),
         loadKey(STORAGE_KEYS.attendance, []),
         loadKey(STORAGE_KEYS.payroll, []),
@@ -799,6 +805,7 @@ export default function CompanyManagementSystem({ session }) {
         loadKey(STORAGE_KEYS.quoteTemplates, []),
         loadKey(STORAGE_KEYS.currentUser, ""),
         loadKey(STORAGE_KEYS.vehicles, []),
+        loadKey(STORAGE_KEYS.companyLocation, null),
       ]);
       setEmployees(emp); setAttendance(att); setPayroll(pay); setQuotes(qt);
       setInvoices(inv); setBilling(bil); setAccounting(acc);
@@ -810,6 +817,9 @@ export default function CompanyManagementSystem({ session }) {
       setQuoteTemplates(mergedTemplates);
       setCurrentUserId(cuid || "");
       setVehicles(veh);
+      const loc = cloc || DEFAULT_COMPANY_LOCATION;
+      if (!cloc) saveKey(STORAGE_KEYS.companyLocation, loc);
+      setCompanyLocation(loc);
       setLoading(false);
     })();
   }, []);
@@ -830,6 +840,7 @@ export default function CompanyManagementSystem({ session }) {
     quoteTemplates: (v) => { setQuoteTemplates(v); saveKey(STORAGE_KEYS.quoteTemplates, v); },
     currentUserId: (v) => { setCurrentUserId(v); saveKey(STORAGE_KEYS.currentUser, v); },
     vehicles: (v) => { setVehicles(v); saveKey(STORAGE_KEYS.vehicles, v); },
+    companyLocation: (v) => { setCompanyLocation(v); saveKey(STORAGE_KEYS.companyLocation, v); },
   };
 
   const addAccountingEntry = useCallback((entry) => {
@@ -875,7 +886,7 @@ export default function CompanyManagementSystem({ session }) {
 
   const ctx = {
     employees, attendance, payroll, quotes, invoices, billing, accounting,
-    vendors, contracts, sysUsers, rolePerms, quoteTemplates, vehicles,
+    vendors, contracts, sysUsers, rolePerms, quoteTemplates, vehicles, companyLocation,
     currentUser, isAdmin, realIsAdmin,
     persist, addAccountingEntry, askDelete, now,
   };
@@ -2129,7 +2140,7 @@ function InvoiceForm({ data, quotes, onSave, onCancel }) {
    ATTENDANCE
 ========================================================= */
 function AttendanceView({ ctx }) {
-  const { employees, attendance, persist, now, isAdmin, currentUser } = ctx;
+  const { employees, attendance, persist, now, isAdmin, currentUser, companyLocation } = ctx;
   const activeEmployees = employees.filter((e) => e.status === "在職");
   const myEmployeeId = currentUser?.employeeId || "";
   const restricted = !isAdmin;
@@ -2143,7 +2154,7 @@ function AttendanceView({ ctx }) {
   const todayRowsAll = attendance.filter((a) => a.date === today);
   const todayRows = restricted ? todayRowsAll.filter((a) => a.employeeId === myEmployeeId) : todayRowsAll;
 
-  const clockIn = () => {
+  const doClockIn = () => {
     if (!empId) return;
     const existing = todayRowsAll.find((a) => a.employeeId === empId);
     const time = now.toLocaleTimeString("zh-TW", { hour12: false });
@@ -2153,7 +2164,7 @@ function AttendanceView({ ctx }) {
       persist.attendance([{ id: uid(), employeeId: empId, date: today, clockIn: time, clockOut: "" }, ...attendance]);
     }
   };
-  const clockOut = () => {
+  const doClockOut = () => {
     if (!empId) return;
     const existing = todayRowsAll.find((a) => a.employeeId === empId);
     const time = now.toLocaleTimeString("zh-TW", { hour12: false });
@@ -2162,6 +2173,17 @@ function AttendanceView({ ctx }) {
     } else {
       persist.attendance([{ id: uid(), employeeId: empId, date: today, clockIn: "", clockOut: time }, ...attendance]);
     }
+  };
+  const clockIn = doClockIn;
+  const clockOut = doClockOut;
+
+  const useCurrentLocationAsCompany = () => {
+    if (!navigator.geolocation) { alert("您的裝置不支援定位功能。"); return; }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => persist.companyLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => alert("無法取得目前位置，請確認已開啟定位權限。"),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
   };
 
   const empName = (id) => employees.find((e) => e.id === id)?.name || "（已刪除員工）";
@@ -2196,6 +2218,21 @@ function AttendanceView({ ctx }) {
   return (
     <div>
       <SectionHeader eyebrow="ATTENDANCE · 07" title="打卡上下班" />
+
+      <div style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 12, padding: "16px 18px", marginBottom: 18 }}>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: THEME.text, marginBottom: 6 }}>打卡地點限制</div>
+        <div style={{ fontSize: 12, color: THEME.muted, marginBottom: 10 }}>
+          設定公司座標後，管理員以下所有人員只能在公司 {CLOCK_RADIUS_M} 公尺範圍內打卡。
+        </div>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          {companyLocation && (
+            <span style={{ fontSize: 12, color: THEME.muted, fontFamily: FONT_NUM }}>
+              目前座標：{companyLocation.lat.toFixed(6)}, {companyLocation.lng.toFixed(6)}
+            </span>
+          )}
+          <Btn size="sm" icon={MapPin} onClick={useCurrentLocationAsCompany}>使用目前位置</Btn>
+        </div>
+      </div>
 
       <div style={{ background: THEME.ink, borderRadius: 14, padding: "28px 30px", marginBottom: 22, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 20 }}>
         <div>
