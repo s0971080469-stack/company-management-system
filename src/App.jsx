@@ -726,6 +726,29 @@ export default function CompanyManagementSystem({ session }) {
 
   const askDelete = (message, onConfirm) => setConfirmState({ message, onConfirm });
 
+  // 「真實身分」以登入帳號的 Email 對應到系統帳號清單為準，不是側邊欄下拉選單
+  // 可以自己亂選的——不然任何人都能把自己切成「管理員」。找不到對應的系統帳號時
+  // （例如系統剛啟用、還沒建立任何帳號）先當管理員，才能進來把第一批帳號設好。
+  const myEmail = (session?.user?.email || "").toLowerCase();
+  const matchedUser = sysUsers.find((u) => u.email && u.email.toLowerCase() === myEmail) || null;
+  const realIsAdmin = !matchedUser || matchedUser.role === "管理員";
+  // 只有真實身分是管理員，才能用側邊欄下拉選單切換要操作的身分（例如共用打卡機情境）；
+  // 一般員工的身分固定就是自己登入帳號比對到的那筆系統帳號，不能自己改成別人或改成管理員。
+  const currentUser = realIsAdmin ? (sysUsers.find((u) => u.id === currentUserId) || matchedUser) : matchedUser;
+  const isAdmin = !currentUser || currentUser.role === "管理員";
+
+  const allowedNav = NAV.filter((n) => {
+    if (n.key === "permissions") return isAdmin; // 權限設定一律只有管理員能進，角色矩陣裡的勾選對這頁不生效，避免有人把自己的角色設成能改權限
+    return isAdmin || !!rolePerms.matrix[currentUser?.role]?.[n.key];
+  });
+  const allowedKeys = allowedNav.map((n) => n.key).join(",");
+
+  useEffect(() => {
+    if (!loading && !allowedKeys.split(",").includes(tab)) {
+      setTab(allowedNav[0]?.key || "dashboard");
+    }
+  }, [loading, tab, allowedKeys]);
+
   if (loading) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 500, fontFamily: FONT_BODY, color: THEME.muted }}>
@@ -734,13 +757,10 @@ export default function CompanyManagementSystem({ session }) {
     );
   }
 
-  const currentUser = sysUsers.find((u) => u.id === currentUserId) || null;
-  const isAdmin = !currentUser || currentUser.role === "管理員";
-
   const ctx = {
     employees, attendance, payroll, quotes, invoices, billing, accounting,
     vendors, contracts, sysUsers, rolePerms, quoteTemplates, vehicles,
-    currentUser, isAdmin,
+    currentUser, isAdmin, realIsAdmin,
     persist, addAccountingEntry, askDelete, now,
   };
 
@@ -753,7 +773,7 @@ export default function CompanyManagementSystem({ session }) {
         ::-webkit-scrollbar-thumb { background: #D8D5C8; border-radius: 8px; }
       `}</style>
 
-      <Sidebar tab={tab} setTab={setTab} employees={employees} sysUsers={sysUsers} currentUserId={currentUserId} setCurrentUserId={persist.currentUserId} session={session} />
+      <Sidebar tab={tab} setTab={setTab} nav={allowedNav} employees={employees} sysUsers={sysUsers} currentUserId={currentUserId} setCurrentUserId={persist.currentUserId} realIsAdmin={realIsAdmin} matchedUser={matchedUser} session={session} />
 
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
         <TopBar tab={tab} now={now} />
@@ -786,9 +806,8 @@ export default function CompanyManagementSystem({ session }) {
 }
 
 /* ---------------- Sidebar ---------------- */
-function Sidebar({ tab, setTab, employees, sysUsers, currentUserId, setCurrentUserId, session }) {
+function Sidebar({ tab, setTab, nav, employees, sysUsers, currentUserId, setCurrentUserId, realIsAdmin, matchedUser, session }) {
   const active = employees.filter((e) => e.status === "在職").length;
-  const current = sysUsers.find((u) => u.id === currentUserId);
   return (
     <div style={{ width: 232, background: THEME.ink, color: "#fff", display: "flex", flexDirection: "column", flexShrink: 0 }}>
       <div style={{ padding: "24px 22px 18px", borderBottom: `1px solid ${THEME.inkSoft}` }}>
@@ -804,7 +823,7 @@ function Sidebar({ tab, setTab, employees, sysUsers, currentUserId, setCurrentUs
       </div>
 
       <div style={{ flex: 1, padding: "14px 12px", overflow: "auto" }}>
-        {NAV.map((n, i) => {
+        {nav.map((n, i) => {
           const isActive = tab === n.key;
           return (
             <button key={n.key} onClick={() => setTab(n.key)}
@@ -829,14 +848,20 @@ function Sidebar({ tab, setTab, employees, sysUsers, currentUserId, setCurrentUs
 
       <div style={{ padding: "14px 22px 16px", borderTop: `1px solid ${THEME.inkSoft}` }}>
         <div style={{ fontSize: 10.5, color: "#8B93A8", letterSpacing: 0.5, marginBottom: 6 }}>目前身分</div>
-        <Select
-          value={currentUserId}
-          onChange={(e) => setCurrentUserId(e.target.value)}
-          style={{ width: "100%", background: THEME.inkSoft, color: "#fff", border: `1px solid ${THEME.inkFaint}`, marginBottom: 10 }}
-        >
-          <option value="">管理員（完整權限）</option>
-          {sysUsers.map((u) => <option key={u.id} value={u.id}>{u.name}（{u.role}）</option>)}
-        </Select>
+        {realIsAdmin ? (
+          <Select
+            value={currentUserId}
+            onChange={(e) => setCurrentUserId(e.target.value)}
+            style={{ width: "100%", background: THEME.inkSoft, color: "#fff", border: `1px solid ${THEME.inkFaint}`, marginBottom: 10 }}
+          >
+            <option value="">管理員（完整權限）</option>
+            {sysUsers.map((u) => <option key={u.id} value={u.id}>{u.name}（{u.role}）</option>)}
+          </Select>
+        ) : (
+          <div style={{ width: "100%", background: THEME.inkSoft, border: `1px solid ${THEME.inkFaint}`, borderRadius: 8, padding: "8px 10px", fontSize: 12.5, marginBottom: 10 }}>
+            {matchedUser?.name}（{matchedUser?.role}）
+          </div>
+        )}
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, fontSize: 11.5, color: "#8B93A8" }}>
           <span>在職人數</span><span style={{ fontFamily: FONT_NUM, color: "#fff" }}>{active}</span>
         </div>
@@ -2812,11 +2837,17 @@ function VehicleForm({ data, employees, onSave, onCancel }) {
 const emptySysUser = (roles) => ({ name: "", email: "", role: roles[0] || "", status: "啟用", employeeId: "" });
 
 function PermissionsView({ ctx }) {
-  const { sysUsers, rolePerms, employees, persist, askDelete } = ctx;
+  const { sysUsers, rolePerms, employees, persist, askDelete, isAdmin } = ctx;
   const [modal, setModal] = useState(null);
   const [newRole, setNewRole] = useState("");
   const roles = rolePerms.roles;
   const empName = (id) => employees.find((e) => e.id === id)?.name || "";
+
+  if (!isAdmin) {
+    return (
+      <EmptyState icon={ShieldCheck} text="只有管理員可以開啟權限設定。" />
+    );
+  }
 
   const saveUser = (data) => {
     if (data.id) persist.sysUsers(sysUsers.map((u) => (u.id === data.id ? data : u)));
