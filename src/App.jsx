@@ -2971,11 +2971,13 @@ function SysUserForm({ data, roles, employees, onSave, onCancel }) {
       const { error: signUpError } = await authClient.auth.signUp({ email: f.email, password });
       setSaving(false);
       if (signUpError) {
-        setError(
-          signUpError.message?.includes("already registered") || signUpError.status === 422
-            ? "這個 Email 已經有登入帳號了，請改用其他 Email，或不要填密碼直接建立資料列。"
-            : `建立登入帳號失敗：${signUpError.message}`
-        );
+        let msg = `建立登入帳號失敗：${signUpError.message}`;
+        if (signUpError.message?.includes("already registered") || signUpError.status === 422) {
+          msg = "這個 Email 已經有登入帳號了，請改用其他 Email，或不要填密碼直接建立資料列。";
+        } else if (signUpError.message?.toLowerCase().includes("rate limit")) {
+          msg = "短時間內建立太多帳號，觸發 Supabase 寄信的頻率限制了，請等幾分鐘後再試一次（或到 Supabase 後台把 Authentication 的「Confirm email」關掉就不會再卡在寄信這步）。";
+        }
+        setError(msg);
         return;
       }
     }
@@ -3011,6 +3013,9 @@ function SysUserForm({ data, roles, employees, onSave, onCancel }) {
           <Field label="確認密碼">
             <TextInput type="password" value={password2} onChange={(e) => setPassword2(e.target.value)} placeholder="再輸入一次" />
           </Field>
+          <div style={{ gridColumn: "span 2", fontSize: 11.5, color: THEME.muted, marginTop: -6 }}>
+            若 Supabase 專案的 Authentication 設定開著「Confirm email」，對方要先到信箱點確認信才能登入；小團隊內部工具通常建議把這個選項關掉，設完密碼就能直接登入。
+          </div>
         </>
       )}
 

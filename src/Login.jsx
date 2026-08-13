@@ -24,7 +24,13 @@ export default function Login() {
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
-    if (error) setError("登入失敗：帳號或密碼錯誤，請確認後再試一次。");
+    if (error) {
+      if (error.message?.includes("Email not confirmed")) {
+        setError("登入失敗：這個帳號的 Email 尚未完成驗證，請到信箱（含垃圾郵件）找 Supabase 寄的驗證信，點擊連結後再試一次。");
+      } else {
+        setError("登入失敗：帳號或密碼錯誤，請確認後再試一次。");
+      }
+    }
   };
 
   return (
