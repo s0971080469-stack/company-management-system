@@ -2199,8 +2199,12 @@ function AttendanceView({ ctx }) {
   const selfRecord = todayRowsAll.find((a) => a.employeeId === empId);
 
   const [month, setMonth] = useState(monthStr());
+  const [empFilter, setEmpFilter] = useState("全部");
   const monthRowsAll = attendance.filter((a) => (a.date || "").startsWith(month));
-  const monthRows = (restricted ? monthRowsAll.filter((a) => a.employeeId === myEmployeeId) : monthRowsAll)
+  const monthEmpIds = Array.from(new Set(monthRowsAll.map((a) => a.employeeId)));
+  const monthRows = (restricted
+    ? monthRowsAll.filter((a) => a.employeeId === myEmployeeId)
+    : monthRowsAll.filter((a) => empFilter === "全部" || a.employeeId === empFilter))
     .slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 
   if (restricted && !myEmployeeId) {
@@ -2281,6 +2285,26 @@ function AttendanceView({ ctx }) {
 
       <h3 style={{ fontSize: 14.5, fontWeight: 700, color: THEME.text, margin: "30px 0 12px" }}>{restricted ? "我的月份出勤紀錄" : "月份出勤紀錄"}</h3>
       <MonthFilterBar month={month} setMonth={setMonth} label="出勤月份" />
+      {!restricted && monthEmpIds.length > 1 && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+          <button onClick={() => setEmpFilter("全部")}
+            style={{
+              padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
+              border: `1px solid ${empFilter === "全部" ? THEME.brass : THEME.line}`,
+              background: empFilter === "全部" ? THEME.brass : "#fff",
+              color: empFilter === "全部" ? "#fff" : THEME.text,
+            }}>全部</button>
+          {monthEmpIds.map((id) => (
+            <button key={id} onClick={() => setEmpFilter(id)}
+              style={{
+                padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
+                border: `1px solid ${empFilter === id ? THEME.brass : THEME.line}`,
+                background: empFilter === id ? THEME.brass : "#fff",
+                color: empFilter === id ? "#fff" : THEME.text,
+              }}>{empName(id)}</button>
+          ))}
+        </div>
+      )}
       {monthRows.length === 0 ? (
         <EmptyState icon={Clock} text="這個月份沒有打卡紀錄。" />
       ) : (
