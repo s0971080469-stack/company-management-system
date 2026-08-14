@@ -857,7 +857,7 @@ export default function CompanyManagementSystem({ session }) {
 
   const addAccountingEntry = useCallback((entry) => {
     setAccounting((prev) => {
-      const next = [{ id: uid(), date: todayStr(), ...entry }, ...prev];
+      const next = [{ id: uid(), date: todayStr(), ...entry, createdAt: new Date().toISOString() }, ...prev];
       saveKey(STORAGE_KEYS.accounting, next);
       return next;
     });
@@ -2082,7 +2082,7 @@ function InvoicesView({ ctx }) {
 
   const setStatus = (inv, status) => {
     const total = inv.total ?? sumItems(inv.items) * (1 + Number(inv.taxRate) / 100);
-    persist.invoices(invoices.map((x) => x.id === inv.id ? { ...x, status, posted: status === "已付款" ? true : x.posted } : x));
+    persist.invoices(invoices.map((x) => x.id === inv.id ? { ...x, status, posted: status === "已付款" } : x));
     if (status === "已付款" && !inv.posted) {
       addAccountingEntry({ type: "收入", category: "發票收款", amount: total, desc: `發票 ${inv.no} — ${inv.client}` });
     }
@@ -2618,13 +2618,28 @@ const emptyAccounting = () => ({ type: "收入", category: "", amount: "", date:
 function AccountingView({ ctx }) {
   const { accounting, persist, askDelete } = ctx;
   const [modal, setModal] = useState(null);
+  const [month, setMonth] = useState("");
+  const [typeFilter, setTypeFilter] = useState("全部");
 
   const save = (data) => {
-    persist.accounting([{ ...data, id: uid() }, ...accounting]);
+    persist.accounting([{ ...data, id: uid(), createdAt: new Date().toISOString() }, ...accounting]);
     setModal(null);
   };
 
-  const sorted = [...accounting].sort((a, b) => (a.date < b.date ? 1 : -1));
+  const filtered = accounting.filter((a) => {
+    if (month && !(a.date || "").startsWith(month)) return false;
+    if (typeFilter !== "全部" && a.type !== typeFilter) return false;
+    return true;
+  });
+
+  // 依「新增／更新的時間」排序，而不是紀錄本身的交易日期——
+  // 交易日期可能是使用者自己填的過去日期（如零用金補登），
+  // 用交易日期排序會讓剛新增的紀錄不一定出現在最上面。
+  const sorted = [...filtered].sort((a, b) => {
+    const ak = a.createdAt || a.date;
+    const bk = b.createdAt || b.date;
+    return ak < bk ? 1 : ak > bk ? -1 : 0;
+  });
   const income = accounting.filter((a) => a.type === "收入").reduce((s, a) => s + Number(a.amount || 0), 0);
   const expense = accounting.filter((a) => a.type === "支出").reduce((s, a) => s + Number(a.amount || 0), 0);
 
@@ -2644,8 +2659,27 @@ function AccountingView({ ctx }) {
         發票收款、支出管理付款與已發放薪資會自動登錄於此帳冊，亦可手動新增其他收支項目。
       </div>
 
-      {sorted.length === 0 ? (
+      {accounting.length > 0 && (
+        <>
+          <MonthFilterBar month={month} setMonth={setMonth} label="日期月份" />
+          <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+            {["全部", "收入", "支出"].map((t) => (
+              <button key={t} onClick={() => setTypeFilter(t)}
+                style={{
+                  padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
+                  border: `1px solid ${typeFilter === t ? THEME.brass : THEME.line}`,
+                  background: typeFilter === t ? THEME.brass : "#fff",
+                  color: typeFilter === t ? "#fff" : THEME.text,
+                }}>{t}</button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {accounting.length === 0 ? (
         <EmptyState icon={Landmark} text="尚無帳務紀錄。" action={<Btn variant="brass" icon={Plus} onClick={() => setModal(true)}>新增第一筆紀錄</Btn>} />
+      ) : sorted.length === 0 ? (
+        <EmptyState icon={Landmark} text="這個篩選條件下沒有帳務紀錄。" />
       ) : (
         <Table columns={["日期", "類型", "類別", "說明", "金額", ""]}>
           {sorted.map((a) => (
