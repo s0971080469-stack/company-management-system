@@ -2985,11 +2985,11 @@ function VendorForm({ data, onSave, onCancel }) {
 ========================================================= */
 const emptyContract = (vendors) => ({
   title: "", party: "", type: "服務", startDate: todayStr(), endDate: "", amount: "", status: "生效中", note: "",
-  hasPerformanceBond: "無", performanceBondAmount: "", hasInsurance: "無", insurancePurchaseStatus: "估價中",
+  hasPerformanceBond: "無", performanceBondAmount: "", hasInsurance: "無", insurancePurchaseStatus: "估價中", owner: "",
 });
 
 function ContractsView({ ctx }) {
-  const { contracts, vendors, persist, askDelete } = ctx;
+  const { contracts, vendors, sysUsers, persist, askDelete } = ctx;
   const [modal, setModal] = useState(null);
   const [year, setYear] = useState(String(new Date().getFullYear()));
 
@@ -3044,7 +3044,7 @@ function ContractsView({ ctx }) {
           {filtered.length === 0 ? (
             <EmptyState icon={FileSignature} text="這個年度沒有契約。" />
           ) : (
-        <Table columns={["契約編號", "契約名稱", "對方單位", "類型", "起訖日期", "金額", "履保金", "保險", "狀態", ""]}>
+        <Table columns={["契約編號", "契約名稱", "對方單位", "類型", "起訖日期", "金額", "履保金", "保險", "負責人員", "狀態", ""]}>
           {filtered.map((c) => (
             <tr key={c.id} style={isExpiringSoon(c) ? { background: THEME.warnSoft } : undefined}>
               <td style={{ ...td, fontFamily: FONT_NUM }}>{c.no}</td>
@@ -3071,6 +3071,12 @@ function ContractsView({ ctx }) {
                 )}
               </td>
               <td style={td}>
+                <Select value={c.owner || ""} onChange={(e) => persist.contracts(contracts.map((x) => x.id === c.id ? { ...x, owner: e.target.value } : x))} style={{ padding: "4px 8px", fontSize: 12 }}>
+                  <option value="">未指定</option>
+                  {sysUsers.map((u) => <option key={u.id} value={u.name}>{u.name}</option>)}
+                </Select>
+              </td>
+              <td style={td}>
                 <Select value={c.status} onChange={(e) => persist.contracts(contracts.map((x) => x.id === c.id ? { ...x, status: e.target.value } : x))} style={{ padding: "4px 8px", fontSize: 12 }}>
                   <option value="草擬">草擬</option>
                   <option value="審核中">審核中</option>
@@ -3094,15 +3100,15 @@ function ContractsView({ ctx }) {
 
       {modal && (
         <Modal title={modal.mode === "new" ? "新增契約" : `編輯契約 ${modal.data.no || ""}`} onClose={() => setModal(null)}>
-          <ContractForm data={modal.data} vendors={vendors} onSave={save} onCancel={() => setModal(null)} />
+          <ContractForm data={modal.data} vendors={vendors} sysUsers={sysUsers} onSave={save} onCancel={() => setModal(null)} />
         </Modal>
       )}
     </div>
   );
 }
 
-function ContractForm({ data, vendors, onSave, onCancel }) {
-  const [f, setF] = useState({ hasPerformanceBond: "無", performanceBondAmount: "", hasInsurance: "無", insurancePurchaseStatus: "估價中", ...data });
+function ContractForm({ data, vendors, sysUsers, onSave, onCancel }) {
+  const [f, setF] = useState({ hasPerformanceBond: "無", performanceBondAmount: "", hasInsurance: "無", insurancePurchaseStatus: "估價中", owner: "", ...data });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
@@ -3159,6 +3165,13 @@ function ContractForm({ data, vendors, onSave, onCancel }) {
           </Select>
         </Field>
       )}
+
+      <Field label="負責人員">
+        <Select value={f.owner} onChange={set("owner")}>
+          <option value="">未指定</option>
+          {(sysUsers || []).map((u) => <option key={u.id} value={u.name}>{u.name}</option>)}
+        </Select>
+      </Field>
 
       <Field label="備註" span={2}><TextArea value={f.note} onChange={set("note")} /></Field>
       <div style={{ gridColumn: "span 2", display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 6 }}>
