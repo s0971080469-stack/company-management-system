@@ -1802,6 +1802,25 @@ function QuoteAttachments({ quote, onChange, askDelete }) {
     }
   };
 
+  const downloadAttachment = async (att) => {
+    try {
+      const url = await getQuoteScanUrl(att.path);
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = att.name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error(err);
+      alert("圖片下載失敗，請稍後再試一次。");
+    }
+  };
+
   const removeAttachment = (att) => {
     askDelete(`確定要刪除附件「${att.name}」嗎？`, async () => {
       try {
@@ -1832,6 +1851,7 @@ function QuoteAttachments({ quote, onChange, askDelete }) {
                 <div style={{ fontSize: 11, color: THEME.muted }}>{fmtDate(att.uploadedAt)}</div>
               </div>
               <Btn size="sm" icon={Eye} onClick={() => openPreview(att)}>預覽</Btn>
+              <Btn size="sm" icon={Download} onClick={() => downloadAttachment(att)}>下載</Btn>
               <Btn size="sm" variant="danger" icon={Trash2} onClick={() => removeAttachment(att)} />
             </div>
           ))}
