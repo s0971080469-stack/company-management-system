@@ -535,6 +535,11 @@ function StatusBadge({ status }) {
     "待審核": { bg: THEME.warnSoft, fg: THEME.warn },
     "供應商": { bg: "#EEF0F4", fg: THEME.ink },
     "業主": { bg: THEME.brassSoft, fg: THEME.brassDeep },
+    "有": { bg: THEME.successSoft, fg: THEME.success },
+    "無": { bg: "#EEEEEE", fg: THEME.muted },
+    "估價中": { bg: THEME.warnSoft, fg: THEME.warn },
+    "未購買": { bg: THEME.dangerSoft, fg: THEME.danger },
+    "已購買": { bg: THEME.successSoft, fg: THEME.success },
   };
   const t = map[status] || { bg: "#EEEEEE", fg: THEME.muted };
   return (
@@ -1661,7 +1666,7 @@ function QuotesView({ ctx, setTab }) {
                 border: `1px solid ${companyFilter === c ? THEME.brass : THEME.line}`,
                 background: companyFilter === c ? THEME.brass : "#fff",
                 color: companyFilter === c ? "#fff" : THEME.text,
-              }}>{c}</button>
+              }}>{c === "全部" || c === "未填公司" ? c : c.slice(0, 4)}</button>
           ))}
         </div>
       )}
@@ -2958,7 +2963,10 @@ function VendorForm({ data, onSave, onCancel }) {
 /* =========================================================
    CONTRACTS (契約管理)
 ========================================================= */
-const emptyContract = (vendors) => ({ title: "", party: "", type: "服務", startDate: todayStr(), endDate: "", amount: "", status: "生效中", note: "" });
+const emptyContract = (vendors) => ({
+  title: "", party: "", type: "服務", startDate: todayStr(), endDate: "", amount: "", status: "生效中", note: "",
+  hasPerformanceBond: "無", performanceBondAmount: "", hasInsurance: "無", insurancePurchaseStatus: "估價中",
+});
 
 function ContractsView({ ctx }) {
   const { contracts, vendors, persist, askDelete } = ctx;
@@ -3016,7 +3024,7 @@ function ContractsView({ ctx }) {
           {filtered.length === 0 ? (
             <EmptyState icon={FileSignature} text="這個年度沒有契約。" />
           ) : (
-        <Table columns={["契約編號", "契約名稱", "對方單位", "類型", "起訖日期", "金額", "狀態", ""]}>
+        <Table columns={["契約編號", "契約名稱", "對方單位", "類型", "起訖日期", "金額", "履保金", "保險", "狀態", ""]}>
           {filtered.map((c) => (
             <tr key={c.id} style={isExpiringSoon(c) ? { background: THEME.warnSoft } : undefined}>
               <td style={{ ...td, fontFamily: FONT_NUM }}>{c.no}</td>
@@ -3025,6 +3033,23 @@ function ContractsView({ ctx }) {
               <td style={td}>{c.type}</td>
               <td style={td}>{fmtDate(c.startDate)} — {fmtDate(c.endDate)}</td>
               <td style={{ ...td, fontFamily: FONT_NUM }}>{fmtMoney(c.amount)}</td>
+              <td style={td}>
+                {c.hasPerformanceBond === "有" ? (
+                  <span style={{ fontFamily: FONT_NUM }}>{fmtMoney(c.performanceBondAmount)}</span>
+                ) : (
+                  <span style={{ color: THEME.muted }}>無</span>
+                )}
+              </td>
+              <td style={td}>
+                {c.hasInsurance === "有" ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}>
+                    <StatusBadge status="有" />
+                    <StatusBadge status={c.insurancePurchaseStatus || "估價中"} />
+                  </div>
+                ) : (
+                  <StatusBadge status="無" />
+                )}
+              </td>
               <td style={td}>
                 <Select value={c.status} onChange={(e) => persist.contracts(contracts.map((x) => x.id === c.id ? { ...x, status: e.target.value } : x))} style={{ padding: "4px 8px", fontSize: 12 }}>
                   <option value="草擬">草擬</option>
@@ -3057,7 +3082,7 @@ function ContractsView({ ctx }) {
 }
 
 function ContractForm({ data, vendors, onSave, onCancel }) {
-  const [f, setF] = useState(data);
+  const [f, setF] = useState({ hasPerformanceBond: "無", performanceBondAmount: "", hasInsurance: "無", insurancePurchaseStatus: "估價中", ...data });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
@@ -3088,6 +3113,33 @@ function ContractForm({ data, vendors, onSave, onCancel }) {
           <option value="已終止">已終止</option>
         </Select>
       </Field>
+
+      <Field label="是否有履保金">
+        <Select value={f.hasPerformanceBond} onChange={set("hasPerformanceBond")}>
+          <option value="無">無</option>
+          <option value="有">有</option>
+        </Select>
+      </Field>
+      {f.hasPerformanceBond === "有" && (
+        <Field label="履保金金額"><TextInput type="number" value={f.performanceBondAmount} onChange={set("performanceBondAmount")} placeholder="0" /></Field>
+      )}
+
+      <Field label="是否有保險">
+        <Select value={f.hasInsurance} onChange={set("hasInsurance")}>
+          <option value="無">無</option>
+          <option value="有">有</option>
+        </Select>
+      </Field>
+      {f.hasInsurance === "有" && (
+        <Field label="保險狀態">
+          <Select value={f.insurancePurchaseStatus} onChange={set("insurancePurchaseStatus")}>
+            <option value="估價中">估價中</option>
+            <option value="未購買">未購買</option>
+            <option value="已購買">已購買</option>
+          </Select>
+        </Field>
+      )}
+
       <Field label="備註" span={2}><TextArea value={f.note} onChange={set("note")} /></Field>
       <div style={{ gridColumn: "span 2", display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 6 }}>
         <Btn onClick={onCancel}>取消</Btn>
