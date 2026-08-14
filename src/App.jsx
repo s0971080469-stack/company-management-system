@@ -1157,7 +1157,7 @@ function quotesActivity(ctx) {
 ========================================================= */
 const emptyEmployee = {
   name: "", dept: "", title: "", phone: "", email: "", hireDate: todayStr(), baseSalary: "", status: "在職",
-  additions: [], deductions: [], laborInsurance: 0, healthInsurance: 0, pensionSelf: 0, advance: 0, insuranceStatus: "加保",
+  additions: [], deductions: [], laborInsurance: 0, healthInsurance: 0, pensionSelf: 0, advance: 0, insuranceStatus: "加保", insuranceGrade: "",
 };
 
 function EmployeesView({ ctx }) {
@@ -1191,7 +1191,7 @@ function EmployeesView({ ctx }) {
       {filtered.length === 0 ? (
         <EmptyState icon={Users} text="尚未建立任何員工資料。" action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptyEmployee })}>新增第一位員工</Btn>} />
       ) : (
-        <Table columns={["姓名", "部門", "職位", "到職日", "底薪", "聯絡方式", "狀態", ""]}>
+        <Table columns={["姓名", "部門", "職位", "到職日", "底薪", "聯絡方式", "投保級距", "狀態", ""]}>
           {filtered.map((e) => (
             <tr key={e.id}>
               <td style={td}><strong>{e.name}</strong></td>
@@ -1203,6 +1203,7 @@ function EmployeesView({ ctx }) {
                 <div style={{ fontSize: 12.5 }}>{e.phone || "—"}</div>
                 <div style={{ fontSize: 11.5, color: THEME.muted }}>{e.email || "—"}</div>
               </td>
+              <td style={{ ...td, fontFamily: FONT_NUM }}>{e.insuranceGrade || "—"}</td>
               <td style={td}><StatusBadge status={e.status} /></td>
               <td style={{ ...td, textAlign: "right" }}>
                 <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
@@ -1225,7 +1226,7 @@ function EmployeesView({ ctx }) {
 }
 
 function EmployeeForm({ data, onSave, onCancel }) {
-  const [f, setF] = useState({ additions: [], deductions: [], laborInsurance: 0, healthInsurance: 0, pensionSelf: 0, advance: 0, insuranceStatus: "加保", ...data });
+  const [f, setF] = useState({ additions: [], deductions: [], laborInsurance: 0, healthInsurance: 0, pensionSelf: 0, advance: 0, insuranceStatus: "加保", insuranceGrade: "", ...data });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   return (
     <div>
@@ -1258,14 +1259,17 @@ function EmployeeForm({ data, onSave, onCancel }) {
         <Field label="借支"><TextInput type="number" value={f.advance} onChange={set("advance")} /></Field>
       </div>
 
-      <Field label="保險狀態">
-        <Select value={f.insuranceStatus} onChange={set("insuranceStatus")}>
-          <option value="加保">加保</option>
-          <option value="在保">在保</option>
-          <option value="退保">退保</option>
-          <option value="停保">停保</option>
-        </Select>
-      </Field>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <Field label="保險狀態">
+          <Select value={f.insuranceStatus} onChange={set("insuranceStatus")}>
+            <option value="加保">加保</option>
+            <option value="在保">在保</option>
+            <option value="退保">退保</option>
+            <option value="停保">停保</option>
+          </Select>
+        </Field>
+        <Field label="投保級距"><TextInput value={f.insuranceGrade} onChange={set("insuranceGrade")} placeholder="不列入薪資計算，僅供參考" /></Field>
+      </div>
 
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
         <Btn onClick={onCancel}>取消</Btn>
@@ -1289,7 +1293,7 @@ const emptyPayrollRow = (e, month) => ({
   additions: (e.additions || []).map((it) => ({ ...it, id: uid() })),
   deductions: (e.deductions || []).map((it) => ({ ...it, id: uid() })),
   laborInsurance: Number(e.laborInsurance) || 0, healthInsurance: Number(e.healthInsurance) || 0,
-  pensionSelf: Number(e.pensionSelf) || 0, advance: Number(e.advance) || 0,
+  pensionSelf: Number(e.pensionSelf) || 0, advance: Number(e.advance) || 0, advanceDate: "",
   insuranceStatus: e.insuranceStatus || "加保", paymentDate: "", note: "",
   status: "待發放", posted: false,
 });
@@ -1361,10 +1365,10 @@ function PayrollView({ ctx }) {
       {allRows.length === 0 ? (
         <EmptyState icon={Wallet} text={`尚未建立 ${month} 的薪資表。`} action={<Btn variant="brass" icon={Plus} onClick={generate}>依在職員工產生薪資表</Btn>} />
       ) : (
-        <Table columns={["員工", "部門", "底薪", "加項", "減項／保費／借支", "實發淨額", "保險狀態", "付款日", "狀態", ""]}>
+        <Table columns={["員工", "部門", "底薪", "加項", "減項／保費", "借支", "實發淨額", "保險狀態", "付款日", "狀態", ""]}>
           {rows.map((r) => {
             const net = payrollNet(r);
-            const deductTotal = sumAmounts(r.deductions) + Number(r.laborInsurance || 0) + Number(r.healthInsurance || 0) + Number(r.pensionSelf || 0) + Number(r.advance || 0);
+            const deductTotal = sumAmounts(r.deductions) + Number(r.laborInsurance || 0) + Number(r.healthInsurance || 0) + Number(r.pensionSelf || 0);
             return (
               <tr key={r.id}>
                 <td style={td}><strong>{r.employeeName}</strong></td>
@@ -1372,6 +1376,14 @@ function PayrollView({ ctx }) {
                 <td style={{ ...td, fontFamily: FONT_NUM }}>{fmtMoney(r.baseSalary)}</td>
                 <td style={{ ...td, fontFamily: FONT_NUM, color: THEME.success }}>{sumAmounts(r.additions) ? "+" + fmtMoney(sumAmounts(r.additions)) : "—"}</td>
                 <td style={{ ...td, fontFamily: FONT_NUM, color: THEME.danger }}>{deductTotal ? "−" + fmtMoney(deductTotal) : "—"}</td>
+                <td style={td}>
+                  {Number(r.advance) ? (
+                    <>
+                      <div style={{ fontFamily: FONT_NUM, color: THEME.danger }}>−{fmtMoney(r.advance)}</div>
+                      <div style={{ fontSize: 11, color: THEME.muted }}>{r.advanceDate ? fmtDate(r.advanceDate) : "未填日期"}</div>
+                    </>
+                  ) : "—"}
+                </td>
                 <td style={{ ...td, fontFamily: FONT_NUM, fontWeight: 700 }}>{fmtMoney(net)}</td>
                 <td style={td}>{r.insuranceStatus || "—"}</td>
                 <td style={td}>{r.paymentDate ? fmtDate(r.paymentDate) : "—"}</td>
@@ -1423,7 +1435,7 @@ function AmountListEditor({ label, items, setItems, tone }) {
 }
 
 function PayrollForm({ data, onSave, onCancel }) {
-  const [f, setF] = useState(data);
+  const [f, setF] = useState({ advanceDate: "", ...data });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const net = payrollNet(f);
 
@@ -1440,12 +1452,17 @@ function PayrollForm({ data, onSave, onCancel }) {
         <AmountListEditor label="減項（遲到扣款等其他項目）" items={f.deductions} setItems={(v) => setF({ ...f, deductions: v })} tone="danger" />
       </div>
 
-      <div style={{ fontSize: 12, color: THEME.muted, fontWeight: 700, marginBottom: 8 }}>保費與借支</div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 18 }}>
+      <div style={{ fontSize: 12, color: THEME.muted, fontWeight: 700, marginBottom: 8 }}>保費</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 18 }}>
         <Field label="勞保自負額"><TextInput type="number" value={f.laborInsurance} onChange={set("laborInsurance")} /></Field>
         <Field label="健保自付額"><TextInput type="number" value={f.healthInsurance} onChange={set("healthInsurance")} /></Field>
         <Field label="勞退自付額"><TextInput type="number" value={f.pensionSelf} onChange={set("pensionSelf")} /></Field>
-        <Field label="借支"><TextInput type="number" value={f.advance} onChange={set("advance")} /></Field>
+      </div>
+
+      <div style={{ fontSize: 12, color: THEME.muted, fontWeight: 700, marginBottom: 8 }}>借支</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 18 }}>
+        <Field label="借支金額"><TextInput type="number" value={f.advance} onChange={set("advance")} /></Field>
+        <Field label="借支日期"><TextInput type="date" value={f.advanceDate} onChange={set("advanceDate")} /></Field>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 18 }}>
