@@ -8,7 +8,7 @@ import {
   Paperclip, Eye, Upload, Image as ImageIcon, Loader2, MapPin
 } from "lucide-react";
 import {
-  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis,
+  BarChart, Bar, LineChart, Line, ComposedChart, PieChart, Pie, Cell, XAxis, YAxis,
   CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from "recharts";
 import { loadKey, saveKey } from "./storage.js";
@@ -540,6 +540,7 @@ function StatusBadge({ status }) {
     "估價中": { bg: THEME.warnSoft, fg: THEME.warn },
     "未購買": { bg: THEME.dangerSoft, fg: THEME.danger },
     "已購買": { bg: THEME.successSoft, fg: THEME.success },
+    "已入帳": { bg: THEME.successSoft, fg: THEME.success },
   };
   const t = map[status] || { bg: "#EEEEEE", fg: THEME.muted };
   return (
@@ -1050,9 +1051,14 @@ function TopBar({ tab, now }) {
    DASHBOARD
 ========================================================= */
 function Dashboard({ ctx }) {
-  const { employees, invoices, billing, attendance, accounting, contracts, vendors } = ctx;
+  const { employees, invoices, billing, attendance, accounting, contracts, vendors, vehicles, payroll, quotes } = ctx;
   const soon = new Date(); soon.setDate(soon.getDate() + 30);
   const expiringContracts = (contracts || []).filter((c) => c.status === "生效中" && c.endDate && new Date(c.endDate) <= soon && new Date(c.endDate) >= new Date());
+
+  const isExpiringSoon = (d, days) => { const limit = new Date(); limit.setDate(limit.getDate() + days); return d && new Date(d) <= limit && new Date(d) >= new Date(); };
+  const expiringVehicles = (vehicles || []).filter((v) => isExpiringSoon(v.insuranceExpiry, 30) || isExpiringSoon(v.inspectionExpiry, 30));
+  const billingKind = (b) => b.expenseType === "零用金" ? "零用金" : b.expenseType === "銀行入帳" ? "銀行入帳" : b.expenseType === "公司付款" ? "公司付款" : (b.vendor !== undefined ? "公司付款" : "零用金");
+  const duePayments = (billing || []).filter((b) => billingKind(b) === "公司付款" && b.status !== "已付款" && isExpiringSoon(b.plannedPaymentDate, 5));
   const activeEmp = employees.filter((e) => e.status === "在職").length;
   const thisMonth = monthStr();
   const monthInvoiceTotal = invoices
@@ -1073,64 +1079,135 @@ function Dashboard({ ctx }) {
   const trend = months.map((m) => {
     const inc = accounting.filter((a) => a.type === "收入" && (a.date || "").startsWith(m)).reduce((s, a) => s + Number(a.amount || 0), 0);
     const exp = accounting.filter((a) => a.type === "支出" && (a.date || "").startsWith(m)).reduce((s, a) => s + Number(a.amount || 0), 0);
-    return { month: m.slice(5) + "月", 收入: Math.round(inc), 支出: Math.round(exp) };
+    return { month: m.slice(5) + "月", 收入: Math.round(inc), 支出: Math.round(exp), 淨額: Math.round(inc - exp) };
   });
+
+  const monthExpenseByCategory = useMemo(() => {
+    const map = {};
+    accounting.filter((a) => a.type === "支出" && (a.date || "").startsWith(thisMonth)).forEach((a) => {
+      const key = a.category || "其他";
+      map[key] = (map[key] || 0) + Number(a.amount || 0);
+    });
+    return Object.entries(map).map(([name, value]) => ({ name, value: Math.round(value) }));
+  }, [accounting, thisMonth]);
+
+  const unclockedToday = Math.max(activeEmp - clockedInCount, 0);
+  const pendingQuotes = (quotes || []).filter((q) => q.status === "已送出").length;
+  const todoItems = [
+    { label: "未付款發票", count: invoices.filter((i) => i.status === "未付款").length },
+    { label: "公司應付款項未付款", count: (billing || []).filter((b) => b.expenseType === "公司付款" && b.status !== "已付款").length },
+    { label: "估價單待審核（已送出）", count: pendingQuotes },
+    { label: "今日員工尚未打卡", count: unclockedToday },
+  ].filter((t) => t.count > 0);
 
   const recentActivity = [
     ...invoices.map((i) => ({ t: i.date, dt: i.createdAt, text: `發票 ${i.no} — ${i.client}`, tag: i.status, by: i.createdBy })),
-    ...billing.filter((b) => b.status).map((b) => ({ t: b.date, dt: b.createdAt, text: `公司付款 ${b.no} — ${b.vendor}`, tag: b.status, by: b.createdBy })),
+    ...billing.map((b) => {
+      const kind = billingKind(b);
+      if (kind === "零用金") return { t: b.date, dt: b.createdAt, text: `零用金 ${b.no} — ${b.item}`, tag: "已入帳", by: b.createdBy };
+      if (kind === "銀行入帳") return { t: b.date, dt: b.createdAt, text: `銀行入帳 ${b.no} — ${b.source}`, tag: "已入帳", by: b.createdBy };
+      return { t: b.date, dt: b.createdAt, text: `公司付款 ${b.no} — ${b.vendor}`, tag: b.status, by: b.createdBy };
+    }),
+    ...(payroll || []).filter((p) => p.status === "已發放").map((p) => ({ t: p.paymentDate || `${p.month}-01`, dt: p.createdAt, text: `薪資發放 — ${p.employeeName}（${p.month}）`, tag: p.status, by: p.createdBy })),
     ...quotesActivity(ctx),
-  ].filter((x) => x.t).sort((a, b) => (a.t < b.t ? 1 : -1)).slice(0, 6);
+  ].filter((x) => x.t).sort((a, b) => (a.t < b.t ? 1 : -1)).slice(0, 30);
 
   return (
     <div>
       <SectionHeader eyebrow="OVERVIEW · 01" title="總覽儀表板" />
 
-      {expiringContracts.length > 0 && (
-        <div style={{ background: THEME.warnSoft, border: `1px solid #E9D8AE`, borderRadius: 10, padding: "10px 16px", fontSize: 12.5, color: THEME.warn, marginBottom: 16, display: "flex", gap: 8, alignItems: "center" }}>
-          <AlertCircle size={14} />
-          有 {expiringContracts.length} 份契約將於 30 天內到期：{expiringContracts.map((c) => c.title).join("、")}
+      {(expiringContracts.length > 0 || expiringVehicles.length > 0 || duePayments.length > 0) && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 18 }}>
+          {expiringContracts.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, background: THEME.warnSoft, border: `1px solid #E9D8AE`, borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: THEME.warn }}>
+              <AlertCircle size={13} />{expiringContracts.length} 份契約 30 天內到期
+            </div>
+          )}
+          {expiringVehicles.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, background: THEME.warnSoft, border: `1px solid #E9D8AE`, borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: THEME.warn }}>
+              <AlertCircle size={13} />{expiringVehicles.length} 輛車保險／驗車 30 天內到期
+            </div>
+          )}
+          {duePayments.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, background: THEME.warnSoft, border: `1px solid #E9D8AE`, borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: THEME.warn }}>
+              <AlertCircle size={13} />{duePayments.length} 筆應付款項 5 天內到期
+            </div>
+          )}
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 22 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 14, marginBottom: 22 }}>
         <StatCard label="在職員工人數" value={activeEmp} sub={`共登錄 ${employees.length} 位`} icon={Users} tone="ink" />
         <StatCard label="本月發票金額" value={fmtMoney(monthInvoiceTotal)} sub={thisMonth} icon={Receipt} tone="brass" />
         <StatCard label="待付款金額" value={fmtMoney(pendingBilling)} sub="未付款（公司付款）" icon={HandCoins} tone="warn" />
         <StatCard label="今日已打卡" value={`${clockedInCount} / ${activeEmp}`} sub={todayStr()} icon={Clock} tone="success" />
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 14, marginBottom: 22 }}>
-        <StatCard label="供應商家數" value={(vendors || []).filter((v) => v.vendorType === "供應商").length} sub={`共登錄 ${(vendors || []).length} 家往來公司`} icon={Truck} tone="ink" />
-        <StatCard label="生效中契約" value={(contracts || []).filter((c) => c.status === "生效中").length} sub={`共登錄 ${(contracts || []).length} 份`} icon={FileSignature} tone="brass" />
+        <StatCard label="供應商家數" value={(vendors || []).filter((v) => v.vendorType === "供應商").length} sub={`共 ${(vendors || []).length} 家`} icon={Truck} tone="ink" />
+        <StatCard label="生效中契約" value={(contracts || []).filter((c) => c.status === "生效中").length} sub={`共 ${(contracts || []).length} 份`} icon={FileSignature} tone="brass" />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 16 }}>
-        <div style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 12, padding: "20px 22px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-            <h3 style={{ margin: 0, fontSize: 14.5, fontWeight: 700, color: THEME.text }}>近 6 個月收支趨勢</h3>
-            <div style={{ display: "flex", gap: 14, fontSize: 12, color: THEME.muted }}>
-              <span style={{ color: THEME.success }}>● 收入</span><span style={{ color: THEME.danger }}>● 支出</span>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 12, padding: "20px 22px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <h3 style={{ margin: 0, fontSize: 14.5, fontWeight: 700, color: THEME.text }}>近 6 個月收支趨勢</h3>
+              <div style={{ display: "flex", gap: 14, fontSize: 12, color: THEME.muted }}>
+                <span style={{ color: THEME.success }}>● 收入</span><span style={{ color: THEME.danger }}>● 支出</span><span style={{ color: THEME.brassDeep }}>● 淨額走勢</span>
+              </div>
+            </div>
+            <ResponsiveContainer width="100%" height={230}>
+              <ComposedChart data={trend} barGap={4}>
+                <CartesianGrid strokeDasharray="3 3" stroke={THEME.line} vertical={false} />
+                <XAxis dataKey="month" tick={{ fontSize: 12, fill: THEME.muted }} axisLine={{ stroke: THEME.line }} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: THEME.muted }} axisLine={false} tickLine={false} width={50} tickFormatter={(v) => (v >= 1000 ? `${v / 1000}k` : v)} />
+                <Tooltip formatter={(v) => fmtMoney(v)} contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${THEME.line}` }} />
+                <Bar dataKey="收入" fill={THEME.success} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="支出" fill={THEME.danger} radius={[4, 4, 0, 0]} />
+                <Line type="monotone" dataKey="淨額" stroke={THEME.brassDeep} strokeWidth={2} dot={{ r: 3, fill: THEME.brassDeep }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <div style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 12, padding: "20px 22px" }}>
+              <h3 style={{ margin: "0 0 14px", fontSize: 14.5, fontWeight: 700, color: THEME.text }}>本月支出分類</h3>
+              {monthExpenseByCategory.length === 0 ? (
+                <p style={{ fontSize: 13, color: THEME.muted }}>本月尚無支出紀錄。</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={190}>
+                  <PieChart>
+                    <Pie data={monthExpenseByCategory} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={65} label={(e) => e.name}>
+                      {monthExpenseByCategory.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip formatter={(v) => fmtMoney(v)} contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${THEME.line}` }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+
+            <div style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 12, padding: "20px 22px" }}>
+              <h3 style={{ margin: "0 0 14px", fontSize: 14.5, fontWeight: 700, color: THEME.text }}>待辦事項</h3>
+              {todoItems.length === 0 ? (
+                <p style={{ fontSize: 13, color: THEME.muted }}>目前沒有待處理事項。</p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {todoItems.map((t, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: 13, color: THEME.text }}>{t.label}</span>
+                      <span style={{ fontFamily: FONT_NUM, fontSize: 13, fontWeight: 700, color: THEME.warn }}>{t.count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={230}>
-            <BarChart data={trend} barGap={4}>
-              <CartesianGrid strokeDasharray="3 3" stroke={THEME.line} vertical={false} />
-              <XAxis dataKey="month" tick={{ fontSize: 12, fill: THEME.muted }} axisLine={{ stroke: THEME.line }} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: THEME.muted }} axisLine={false} tickLine={false} width={50} tickFormatter={(v) => (v >= 1000 ? `${v / 1000}k` : v)} />
-              <Tooltip formatter={(v) => fmtMoney(v)} contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${THEME.line}` }} />
-              <Bar dataKey="收入" fill={THEME.success} radius={[4, 4, 0, 0]} />
-              <Bar dataKey="支出" fill={THEME.danger} radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
         </div>
 
-        <div style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 12, padding: "20px 22px" }}>
+        <div style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 12, padding: "20px 22px", display: "flex", flexDirection: "column", height: 588 }}>
           <h3 style={{ margin: "0 0 14px", fontSize: 14.5, fontWeight: 700, color: THEME.text }}>最近動態</h3>
           {recentActivity.length === 0 ? (
             <p style={{ fontSize: 13, color: THEME.muted }}>目前尚無資料，建立估價單、發票或支出紀錄後會顯示於此。</p>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, flex: 1, minHeight: 0, overflowY: "auto", paddingRight: 4 }}>
               {recentActivity.map((a, i) => (
                 <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                   <div style={{ minWidth: 0 }}>
