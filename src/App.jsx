@@ -2052,14 +2052,15 @@ function QuoteForm({ data, onSave, onCancel }) {
 const emptyInvoice = () => ({
   no: "", quoteNo: "", client: "", workName: "", paymentMethod: "", date: todayStr(), dueDate: "",
   items: [{ id: uid(), desc: "", unit: "", qty: 1, price: 0, note: "" }],
-  taxRate: 5, status: "未付款", note: "", posted: false, ...emptyLetterhead(),
+  taxRate: 5, status: "未付款", note: "", posted: false, addedToBankDeposit: false, ...emptyLetterhead(),
 });
 
 function InvoicesView({ ctx }) {
-  const { invoices, quotes, persist, addAccountingEntry, askDelete } = ctx;
+  const { invoices, quotes, billing, persist, addAccountingEntry, askDelete } = ctx;
   const [modal, setModal] = useState(null);
   const [companyFilter, setCompanyFilter] = useState("全部");
   const [month, setMonth] = useState(monthStr());
+  const [checkedIds, setCheckedIds] = useState(new Set());
 
   const KNOWN_COMPANIES = BILLING_COMPANY_OPTIONS.filter((o) => o !== "其他");
   const companyTabs = ["全部", ...KNOWN_COMPANIES, "其他"];
@@ -2096,10 +2097,45 @@ function InvoicesView({ ctx }) {
     }
   };
 
+  const toggleChecked = (id) => {
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const addSelectedToBankDeposits = () => {
+    const selected = invoices.filter((inv) => checkedIds.has(inv.id));
+    if (!selected.length) return;
+    const year = new Date().getFullYear();
+    const existingCount = billing.filter((b) => (b.no || "").startsWith(`BD-${year}`)).length;
+    const entries = selected.map((inv, i) => {
+      const total = inv.total ?? sumItems(inv.items) * (1 + Number(inv.taxRate) / 100);
+      const no = `BD-${year}-${String(existingCount + i + 1).padStart(3, "0")}`;
+      return {
+        id: uid(), no, expenseType: "銀行入帳", date: todayStr(), source: `發票 ${inv.no} — ${inv.client}`,
+        amount: total, note: "", companyName: inv.companyName || "", posted: true,
+        createdBy: actorName(ctx), createdAt: new Date().toISOString(),
+      };
+    });
+    persist.billing([...entries, ...billing]);
+    entries.forEach((entry) => {
+      addAccountingEntry({ type: "收入", category: "銀行入帳", amount: entry.amount, desc: `銀行入帳 — ${entry.source}`, date: entry.date });
+    });
+    persist.invoices(invoices.map((inv) => checkedIds.has(inv.id) ? { ...inv, addedToBankDeposit: true } : inv));
+    setCheckedIds(new Set());
+  };
+
   return (
     <div>
       <SectionHeader eyebrow="INVOICE · 06" title="發票"
-        action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: { ...emptyInvoice(), no: nextNo("INV", invoices) } })}>開立發票</Btn>} />
+        action={
+          <div style={{ display: "flex", gap: 8 }}>
+            <Btn icon={Landmark} disabled={checkedIds.size === 0} onClick={addSelectedToBankDeposits}>新增至銀行入帳紀錄{checkedIds.size ? `（${checkedIds.size}）` : ""}</Btn>
+            <Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: { ...emptyInvoice(), no: nextNo("INV", invoices) } })}>開立發票</Btn>
+          </div>
+        } />
 
       {invoices.length > 0 && (
         <>
@@ -2123,20 +2159,22 @@ function InvoicesView({ ctx }) {
       ) : filtered.length === 0 ? (
         <EmptyState icon={Receipt} text="這個篩選條件下沒有發票。" />
       ) : (
-        <Table columns={["發票號碼", "開票公司", "估價單號碼", "客戶", "開立日", "入帳日", "含稅金額", "狀態", ""]}>
+        <Table columns={["發票號碼", "開票公司", "估價單號碼", "客戶", "含稅金額", "開立日", "入帳日", "等待天數", "狀態", "選取", ""]}>
           {filtered.map((inv) => {
             const total = inv.total ?? sumItems(inv.items) * (1 + Number(inv.taxRate) / 100);
+            const waitDays = inv.date && inv.dueDate ? Math.round((new Date(inv.dueDate) - new Date(inv.date)) / (1000 * 60 * 60 * 24)) : null;
             return (
               <tr key={inv.id}>
                 <td style={{ ...td, fontFamily: FONT_NUM }}>{inv.no}</td>
                 <td style={td}>{inv.companyName ? <StatusBadge status={KNOWN_COMPANIES.includes(inv.companyName) ? inv.companyName : "其他"} /> : "—"}</td>
                 <td style={{ ...td, fontFamily: FONT_NUM, color: THEME.muted }}>{inv.quoteNo || "—"}</td>
                 <td style={td}><strong>{inv.client}</strong></td>
+                <td style={{ ...td, fontFamily: FONT_NUM, fontWeight: 700 }}>{fmtMoney(total)}</td>
                 <td style={td}>{fmtDate(inv.date)}</td>
                 <td style={td}>
                   <DatePickerButton value={inv.dueDate} onChange={(v) => setDueDate(inv, v)} />
                 </td>
-                <td style={{ ...td, fontFamily: FONT_NUM, fontWeight: 700 }}>{fmtMoney(total)}</td>
+                <td style={{ ...td, fontFamily: FONT_NUM }}>{waitDays !== null ? `${waitDays} 天` : "—"}</td>
                 <td style={td}>
                   <Select value={inv.status} onChange={(e) => setStatus(inv, e.target.value)} style={{ padding: "4px 8px", fontSize: 12 }}>
                     <option value="未付款">未付款</option>
@@ -2144,6 +2182,11 @@ function InvoicesView({ ctx }) {
                     <option value="逾期">逾期</option>
                     <option value="已作廢">已作廢</option>
                   </Select>
+                </td>
+                <td style={{ ...td, textAlign: "center" }}>
+                  <input type="checkbox" checked={inv.addedToBankDeposit || checkedIds.has(inv.id)} disabled={inv.addedToBankDeposit} onChange={() => toggleChecked(inv.id)}
+                    style={{ width: 16, height: 16, cursor: inv.addedToBankDeposit ? "not-allowed" : "pointer" }}
+                    title={inv.addedToBankDeposit ? "已新增至銀行入帳紀錄" : undefined} />
                 </td>
                 <td style={{ ...td, textAlign: "right" }}>
                   <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
@@ -2411,7 +2454,7 @@ function AttendanceView({ ctx }) {
 ========================================================= */
 const emptyPettyCash = () => ({ expenseType: "零用金", date: todayStr(), item: "", amount: "", handler: "", note: "" });
 const emptyCompanyPayment = () => ({ expenseType: "公司付款", vendor: "", category: "", amount: "", date: todayStr(), plannedPaymentDate: "", status: "未付款", note: "", posted: false, companyName: "", paymentDate: "" });
-const emptyBankDeposit = () => ({ expenseType: "銀行入帳", date: todayStr(), source: "", amount: "", note: "" });
+const emptyBankDeposit = () => ({ expenseType: "銀行入帳", date: todayStr(), source: "", amount: "", note: "", companyName: "" });
 
 function BillingView({ ctx }) {
   const { billing, persist, addAccountingEntry, askDelete } = ctx;
@@ -2431,7 +2474,7 @@ function BillingView({ ctx }) {
   const list = expenseTab === "零用金" ? pettyCash : expenseTab === "銀行入帳" ? bankDeposits : companyPayments;
   const filtered = list.filter((b) => {
     if (month && !(b.date || "").startsWith(month)) return false;
-    if (expenseTab === "公司付款" && companyFilter !== "全部") {
+    if ((expenseTab === "公司付款" || expenseTab === "銀行入帳") && companyFilter !== "全部") {
       if (companyFilter === "其他") return !KNOWN_COMPANIES.includes(b.companyName);
       return b.companyName === companyFilter;
     }
@@ -2562,7 +2605,7 @@ function BillingView({ ctx }) {
       ) : (
         <>
           <MonthFilterBar month={month} setMonth={setMonth} label="日期月份" />
-          {expenseTab === "公司付款" && (
+          {(expenseTab === "公司付款" || expenseTab === "銀行入帳") && (
             <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
               {companyTabs.map((c) => (
                 <button key={c} onClick={() => setCompanyFilter(c)}
@@ -2597,13 +2640,14 @@ function BillingView({ ctx }) {
               ))}
             </Table>
           ) : expenseTab === "銀行入帳" ? (
-            <Table columns={["單號", "日期", "來源／說明", "金額", "備註", ""]}>
+            <Table columns={["單號", "日期", "來源／說明", "金額", "入帳公司", "備註", ""]}>
               {filtered.map((b) => (
                 <tr key={b.id}>
                   <td style={{ ...td, fontFamily: FONT_NUM }}>{b.no}</td>
                   <td style={td}>{fmtDate(b.date)}</td>
                   <td style={td}><strong>{b.source}</strong></td>
                   <td style={{ ...td, fontFamily: FONT_NUM, fontWeight: 700, color: THEME.success }}>{fmtMoney(b.amount)}</td>
+                  <td style={td}>{b.companyName ? <StatusBadge status={KNOWN_COMPANIES.includes(b.companyName) ? b.companyName : "其他"} /> : "—"}</td>
                   <td style={td}>{b.note || "—"}</td>
                   <td style={{ ...td, textAlign: "right" }}>
                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
@@ -2684,11 +2728,17 @@ function PettyCashForm({ data, onSave, onCancel }) {
 }
 
 function BankDepositForm({ data, onSave, onCancel }) {
-  const [f, setF] = useState(data);
+  const [f, setF] = useState({ companyName: "", ...data });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
       <Field label="來源／說明" span={2}><TextInput value={f.source} onChange={set("source")} placeholder="如：客戶匯款、銀行利息" /></Field>
+      <Field label="入帳公司">
+        <Select value={f.companyName} onChange={set("companyName")}>
+          <option value="">請選擇</option>
+          {BILLING_COMPANY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+        </Select>
+      </Field>
       <Field label="金額"><TextInput type="number" value={f.amount} onChange={set("amount")} placeholder="0" /></Field>
       <Field label="日期"><TextInput type="date" value={f.date} onChange={set("date")} /></Field>
       <Field label="備註" span={2}><TextArea value={f.note} onChange={set("note")} placeholder="選填" /></Field>
