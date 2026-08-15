@@ -50,7 +50,7 @@ const NAV = [
   { key: "quotes", label: "估價單", icon: FileText },
   { key: "invoices", label: "發票", icon: Receipt },
   { key: "attendance", label: "打卡上下班", icon: Clock },
-  { key: "billing", label: "支出管理", icon: HandCoins },
+  { key: "billing", label: "收支管理", icon: HandCoins },
   { key: "contracts", label: "契約管理", icon: FileSignature },
   { key: "vehicles", label: "車輛管理", icon: Car },
   { key: "accounting", label: "帳務入口", icon: Landmark },
@@ -2410,20 +2410,33 @@ function AttendanceView({ ctx }) {
    COMPANY EXPENSES (公司支出) — 零用金紀錄 / 公司付款
 ========================================================= */
 const emptyPettyCash = () => ({ expenseType: "零用金", date: todayStr(), item: "", amount: "", handler: "", note: "" });
-const emptyCompanyPayment = () => ({ expenseType: "公司付款", vendor: "", category: "", amount: "", date: todayStr(), plannedPaymentDate: "", status: "未付款", note: "", posted: false });
+const emptyCompanyPayment = () => ({ expenseType: "公司付款", vendor: "", category: "", amount: "", date: todayStr(), plannedPaymentDate: "", status: "未付款", note: "", posted: false, companyName: "", paymentDate: "" });
+const emptyBankDeposit = () => ({ expenseType: "銀行入帳", date: todayStr(), source: "", amount: "", note: "" });
 
 function BillingView({ ctx }) {
   const { billing, persist, addAccountingEntry, askDelete } = ctx;
-  const [expenseTab, setExpenseTab] = useState("公司付款");
+  const [expenseTab, setExpenseTab] = useState("銀行入帳");
   const [modal, setModal] = useState(null);
   const [month, setMonth] = useState(monthStr());
+  const [companyFilter, setCompanyFilter] = useState("全部");
+
+  const KNOWN_COMPANIES = VENDOR_COMPANY_OPTIONS.filter((o) => o !== "其他");
+  const companyTabs = ["全部", ...KNOWN_COMPANIES, "其他"];
 
   // backward-compatible classification: pre-existing 請款 records have no expenseType but do have a `vendor` field
-  const expenseKind = (b) => b.expenseType === "零用金" ? "零用金" : b.expenseType === "公司付款" ? "公司付款" : (b.vendor !== undefined ? "公司付款" : "零用金");
+  const expenseKind = (b) => b.expenseType === "零用金" ? "零用金" : b.expenseType === "銀行入帳" ? "銀行入帳" : b.expenseType === "公司付款" ? "公司付款" : (b.vendor !== undefined ? "公司付款" : "零用金");
   const pettyCash = billing.filter((b) => expenseKind(b) === "零用金");
   const companyPayments = billing.filter((b) => expenseKind(b) === "公司付款");
-  const list = expenseTab === "零用金" ? pettyCash : companyPayments;
-  const filtered = list.filter((b) => !month || (b.date || "").startsWith(month));
+  const bankDeposits = billing.filter((b) => expenseKind(b) === "銀行入帳");
+  const list = expenseTab === "零用金" ? pettyCash : expenseTab === "銀行入帳" ? bankDeposits : companyPayments;
+  const filtered = list.filter((b) => {
+    if (month && !(b.date || "").startsWith(month)) return false;
+    if (expenseTab === "公司付款" && companyFilter !== "全部") {
+      if (companyFilter === "其他") return !KNOWN_COMPANIES.includes(b.companyName);
+      return b.companyName === companyFilter;
+    }
+    return true;
+  });
 
   const savePettyCash = (data) => {
     if (data.id) {
@@ -2447,9 +2460,28 @@ function BillingView({ ctx }) {
     setModal(null);
   };
 
+  const saveBankDeposit = (data) => {
+    if (data.id) {
+      persist.billing(billing.map((b) => (b.id === data.id ? data : b)));
+    } else {
+      const no = nextNo("BD", bankDeposits);
+      const entry = { ...data, id: uid(), no, posted: true, createdBy: actorName(ctx), createdAt: new Date().toISOString() };
+      persist.billing([entry, ...billing]);
+      addAccountingEntry({ type: "收入", category: "銀行入帳", amount: entry.amount, desc: `銀行入帳 — ${entry.source}`, date: entry.date });
+    }
+    setModal(null);
+  };
+
   const setStatus = (b, status) => {
-    persist.billing(billing.map((x) => x.id === b.id ? { ...x, status, posted: status === "已付款" ? true : x.posted } : x));
+    persist.billing(billing.map((x) => x.id === b.id ? { ...x, status, posted: status === "已付款" } : x));
     if (status === "已付款" && !b.posted) {
+      addAccountingEntry({ type: "支出", category: b.category || "公司付款", amount: b.amount, desc: `公司付款 ${b.no} — ${b.vendor}` });
+    }
+  };
+
+  const setPaymentDate = (b, paymentDate) => {
+    persist.billing(billing.map((x) => x.id === b.id ? { ...x, paymentDate, status: "已付款", posted: true } : x));
+    if (!b.posted) {
       addAccountingEntry({ type: "支出", category: b.category || "公司付款", amount: b.amount, desc: `公司付款 ${b.no} — ${b.vendor}` });
     }
   };
@@ -2457,19 +2489,42 @@ function BillingView({ ctx }) {
   const pendingTotal = companyPayments.filter((b) => b.status !== "已付款").reduce((s, b) => s + Number(b.amount || 0), 0);
   const pettyCashTotal = pettyCash.reduce((s, b) => s + Number(b.amount || 0), 0);
   const pettyCashMonthTotal = pettyCash.filter((b) => (b.date || "").startsWith(monthStr())).reduce((s, b) => s + Number(b.amount || 0), 0);
+  const bankDepositTotal = bankDeposits.reduce((s, b) => s + Number(b.amount || 0), 0);
+  const bankDepositMonthTotal = bankDeposits.filter((b) => (b.date || "").startsWith(monthStr())).reduce((s, b) => s + Number(b.amount || 0), 0);
 
   const openNew = () => {
     if (expenseTab === "零用金") setModal({ mode: "new", data: emptyPettyCash() });
+    else if (expenseTab === "銀行入帳") setModal({ mode: "new", data: emptyBankDeposit() });
     else setModal({ mode: "new", data: emptyCompanyPayment() });
   };
 
+  const newLabel = expenseTab === "零用金" ? "新增零用金紀錄" : expenseTab === "銀行入帳" ? "新增銀行入帳紀錄" : "新增公司應付款項";
+  const emptyIcon = expenseTab === "零用金" ? Wallet : expenseTab === "銀行入帳" ? Landmark : HandCoins;
+
+  const soon = new Date(); soon.setDate(soon.getDate() + 5);
+  const isDueSoon = (d) => d && new Date(d) <= soon && new Date(d) >= new Date();
+  const daysUntil = (d) => Math.ceil((new Date(d) - new Date()) / (1000 * 60 * 60 * 24));
+  const duePayments = companyPayments.filter((b) => b.status !== "已付款" && isDueSoon(b.plannedPaymentDate));
+
   return (
     <div>
-      <SectionHeader eyebrow="EXPENSE MANAGEMENT · 08" title="支出管理"
-        action={<Btn variant="brass" icon={Plus} onClick={openNew}>{expenseTab === "零用金" ? "新增零用金紀錄" : "新增公司付款"}</Btn>} />
+      <SectionHeader eyebrow="EXPENSE MANAGEMENT · 08" title="收支管理"
+        action={<Btn variant="brass" icon={Plus} onClick={openNew}>{newLabel}</Btn>} />
 
-      <div style={{ display: "flex", gap: 6, marginBottom: 18 }}>
-        {[{ key: "公司付款", label: "公司付款", icon: HandCoins }, { key: "零用金", label: "零用金紀錄", icon: Wallet }].map((t) => (
+      {duePayments.length > 0 && (
+        <div style={{ background: THEME.warnSoft, border: `1px solid #E9D8AE`, borderRadius: 10, padding: "12px 16px", marginBottom: 18, display: "flex", gap: 8, alignItems: "flex-start" }}>
+          <AlertCircle size={14} color={THEME.warn} style={{ marginTop: 2, flexShrink: 0 }} />
+          <div style={{ fontSize: 12.5, color: THEME.warn, lineHeight: 1.8 }}>
+            <strong>{duePayments.length} 筆公司應付款項將於 5 天內到期：</strong>
+            {duePayments.map((b) => (
+              <div key={b.id}>{b.vendor}（{fmtMoney(b.amount)}）— 剩 {daysUntil(b.plannedPaymentDate)} 天</div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 6, marginBottom: 18, flexWrap: "wrap" }}>
+        {[{ key: "銀行入帳", label: "銀行入帳紀錄", icon: Landmark }, { key: "公司付款", label: "公司應付款項", icon: HandCoins }, { key: "零用金", label: "零用金紀錄", icon: Wallet }].map((t) => (
           <button key={t.key} onClick={() => setExpenseTab(t.key)}
             style={{
               display: "flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 999, fontSize: 13, fontWeight: 700, cursor: "pointer",
@@ -2488,21 +2543,40 @@ function BillingView({ ctx }) {
           <StatCard label="累計零用金支出" value={fmtMoney(pettyCashTotal)} icon={Landmark} tone="ink" />
           <StatCard label="紀錄筆數" value={pettyCash.length} icon={Check} tone="success" />
         </div>
+      ) : expenseTab === "銀行入帳" ? (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
+          <StatCard label="本月入帳金額" value={fmtMoney(bankDepositMonthTotal)} icon={Landmark} tone="brass" />
+          <StatCard label="累計入帳金額" value={fmtMoney(bankDepositTotal)} icon={TrendingUp} tone="success" />
+          <StatCard label="紀錄筆數" value={bankDeposits.length} icon={Check} tone="ink" />
+        </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
-          <StatCard label="公司付款總數" value={companyPayments.length} icon={HandCoins} tone="ink" />
+          <StatCard label="公司應付款項總數" value={companyPayments.length} icon={HandCoins} tone="ink" />
           <StatCard label="未付款金額" value={fmtMoney(pendingTotal)} icon={AlertCircle} tone="warn" />
           <StatCard label="已付款件數" value={companyPayments.filter((b) => b.status === "已付款").length} icon={Check} tone="success" />
         </div>
       )}
 
       {list.length === 0 ? (
-        <EmptyState icon={expenseTab === "零用金" ? Wallet : HandCoins} text={expenseTab === "零用金" ? "尚未建立任何零用金紀錄。" : "尚未建立任何公司付款。"} action={<Btn variant="brass" icon={Plus} onClick={openNew}>{expenseTab === "零用金" ? "建立第一筆零用金紀錄" : "建立第一筆公司付款"}</Btn>} />
+        <EmptyState icon={emptyIcon} text={`尚未建立任何${expenseTab === "零用金" ? "零用金紀錄" : expenseTab === "銀行入帳" ? "銀行入帳紀錄" : "公司應付款項"}。`} action={<Btn variant="brass" icon={Plus} onClick={openNew}>{newLabel}</Btn>} />
       ) : (
         <>
           <MonthFilterBar month={month} setMonth={setMonth} label="日期月份" />
+          {expenseTab === "公司付款" && (
+            <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+              {companyTabs.map((c) => (
+                <button key={c} onClick={() => setCompanyFilter(c)}
+                  style={{
+                    padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
+                    border: `1px solid ${companyFilter === c ? THEME.brass : THEME.line}`,
+                    background: companyFilter === c ? THEME.brass : "#fff",
+                    color: companyFilter === c ? "#fff" : THEME.text,
+                  }}>{c}</button>
+              ))}
+            </div>
+          )}
           {filtered.length === 0 ? (
-            <EmptyState icon={expenseTab === "零用金" ? Wallet : HandCoins} text="這個月份沒有紀錄。" />
+            <EmptyState icon={emptyIcon} text="這個月份沒有紀錄。" />
           ) : expenseTab === "零用金" ? (
             <Table columns={["單號", "日期", "項目／用途", "金額", "經手人", "備註", ""]}>
               {filtered.map((b) => (
@@ -2522,8 +2596,26 @@ function BillingView({ ctx }) {
                 </tr>
               ))}
             </Table>
+          ) : expenseTab === "銀行入帳" ? (
+            <Table columns={["單號", "日期", "來源／說明", "金額", "備註", ""]}>
+              {filtered.map((b) => (
+                <tr key={b.id}>
+                  <td style={{ ...td, fontFamily: FONT_NUM }}>{b.no}</td>
+                  <td style={td}>{fmtDate(b.date)}</td>
+                  <td style={td}><strong>{b.source}</strong></td>
+                  <td style={{ ...td, fontFamily: FONT_NUM, fontWeight: 700, color: THEME.success }}>{fmtMoney(b.amount)}</td>
+                  <td style={td}>{b.note || "—"}</td>
+                  <td style={{ ...td, textAlign: "right" }}>
+                    <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                      <Btn size="sm" icon={Pencil} onClick={() => setModal({ mode: "edit", data: b })} />
+                      <Btn size="sm" variant="danger" icon={Trash2} onClick={() => askDelete(`確定要刪除這筆銀行入帳紀錄嗎？`, () => persist.billing(billing.filter((x) => x.id !== b.id)))} />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </Table>
           ) : (
-            <Table columns={["單號", "廠商／申請人", "項目類別", "申請日期", "預訂付款日", "金額", "狀態", ""]}>
+            <Table columns={["單號", "廠商／申請人", "項目類別", "申請日期", "預訂付款日", "金額", "付款公司", "付款日", "狀態", ""]}>
               {filtered.map((b) => (
                 <tr key={b.id}>
                   <td style={{ ...td, fontFamily: FONT_NUM }}>{b.no}</td>
@@ -2532,6 +2624,10 @@ function BillingView({ ctx }) {
                   <td style={td}>{fmtDate(b.date)}</td>
                   <td style={td}>{b.plannedPaymentDate ? fmtDate(b.plannedPaymentDate) : "—"}</td>
                   <td style={{ ...td, fontFamily: FONT_NUM, fontWeight: 700 }}>{fmtMoney(b.amount)}</td>
+                  <td style={td}>{b.companyName ? <StatusBadge status={KNOWN_COMPANIES.includes(b.companyName) ? b.companyName : "其他"} /> : "—"}</td>
+                  <td style={td}>
+                    <DatePickerButton value={b.paymentDate} onChange={(v) => setPaymentDate(b, v)} />
+                  </td>
                   <td style={td}>
                     <Select value={b.status} onChange={(e) => setStatus(b, e.target.value)} style={{ padding: "4px 8px", fontSize: 12 }}>
                       <option value="未付款">未付款</option>
@@ -2541,7 +2637,7 @@ function BillingView({ ctx }) {
                   <td style={{ ...td, textAlign: "right" }}>
                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                       <Btn size="sm" icon={Pencil} onClick={() => setModal({ mode: "edit", data: b })} />
-                      <Btn size="sm" variant="danger" icon={Trash2} onClick={() => askDelete(`確定要刪除公司付款 ${b.no} 嗎？`, () => persist.billing(billing.filter((x) => x.id !== b.id)))} />
+                      <Btn size="sm" variant="danger" icon={Trash2} onClick={() => askDelete(`確定要刪除公司應付款項 ${b.no} 嗎？`, () => persist.billing(billing.filter((x) => x.id !== b.id)))} />
                     </div>
                   </td>
                 </tr>
@@ -2554,11 +2650,13 @@ function BillingView({ ctx }) {
       {modal && (
         <Modal title={
           modal.mode === "new"
-            ? (expenseTab === "零用金" ? "新增零用金紀錄" : "新增公司付款")
-            : (expenseKind(modal.data) === "公司付款" ? `編輯公司付款 ${modal.data.no}` : `編輯零用金紀錄 ${modal.data.no}`)
+            ? newLabel
+            : (expenseKind(modal.data) === "公司付款" ? `編輯公司應付款項 ${modal.data.no}` : expenseKind(modal.data) === "銀行入帳" ? `編輯銀行入帳紀錄 ${modal.data.no}` : `編輯零用金紀錄 ${modal.data.no}`)
         } onClose={() => setModal(null)}>
           {expenseKind(modal.data) === "公司付款"
             ? <CompanyPaymentForm data={modal.data} onSave={saveCompanyPayment} onCancel={() => setModal(null)} />
+            : expenseKind(modal.data) === "銀行入帳"
+            ? <BankDepositForm data={modal.data} onSave={saveBankDeposit} onCancel={() => setModal(null)} />
             : <PettyCashForm data={modal.data} onSave={savePettyCash} onCancel={() => setModal(null)} />
           }
         </Modal>
@@ -2585,13 +2683,36 @@ function PettyCashForm({ data, onSave, onCancel }) {
   );
 }
 
+function BankDepositForm({ data, onSave, onCancel }) {
+  const [f, setF] = useState(data);
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+      <Field label="來源／說明" span={2}><TextInput value={f.source} onChange={set("source")} placeholder="如：客戶匯款、銀行利息" /></Field>
+      <Field label="金額"><TextInput type="number" value={f.amount} onChange={set("amount")} placeholder="0" /></Field>
+      <Field label="日期"><TextInput type="date" value={f.date} onChange={set("date")} /></Field>
+      <Field label="備註" span={2}><TextArea value={f.note} onChange={set("note")} placeholder="選填" /></Field>
+      <div style={{ gridColumn: "span 2", display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 6 }}>
+        <Btn onClick={onCancel}>取消</Btn>
+        <Btn variant="primary" icon={Check} onClick={() => f.source && f.amount && onSave(f)} disabled={!f.source || !f.amount}>儲存</Btn>
+      </div>
+    </div>
+  );
+}
+
 function CompanyPaymentForm({ data, onSave, onCancel }) {
-  const [f, setF] = useState({ plannedPaymentDate: "", ...data });
+  const [f, setF] = useState({ plannedPaymentDate: "", companyName: "", ...data });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
       <Field label="廠商／申請人" span={2}><TextInput value={f.vendor} onChange={set("vendor")} placeholder="廠商名稱或申請人" /></Field>
       <Field label="項目類別"><TextInput value={f.category} onChange={set("category")} placeholder="如：辦公用品、差旅費" /></Field>
+      <Field label="付款公司">
+        <Select value={f.companyName} onChange={set("companyName")}>
+          <option value="">請選擇</option>
+          {VENDOR_COMPANY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+        </Select>
+      </Field>
       <Field label="金額"><TextInput type="number" value={f.amount} onChange={set("amount")} placeholder="0" /></Field>
       <Field label="申請日期"><TextInput type="date" value={f.date} onChange={set("date")} /></Field>
       <Field label="預訂付款日"><TextInput type="date" value={f.plannedPaymentDate} onChange={set("plannedPaymentDate")} /></Field>
@@ -2656,7 +2777,7 @@ function AccountingView({ ctx }) {
 
       <div style={{ background: "#FBF7EC", border: `1px solid ${THEME.brassSoft}`, borderRadius: 10, padding: "10px 16px", fontSize: 12.5, color: THEME.brassDeep, marginBottom: 16, display: "flex", gap: 8, alignItems: "center" }}>
         <AlertCircle size={14} />
-        發票收款、支出管理付款與已發放薪資會自動登錄於此帳冊，亦可手動新增其他收支項目。
+        發票收款、收支管理內的紀錄與已發放薪資會自動登錄於此帳冊，亦可手動新增其他收支項目。
       </div>
 
       {accounting.length > 0 && (
@@ -3237,7 +3358,8 @@ function VehiclesView({ ctx }) {
 
   const soon = new Date(); soon.setDate(soon.getDate() + 30);
   const isExpiringSoon = (d) => d && new Date(d) <= soon && new Date(d) >= new Date();
-  const expiringCount = vehicles.filter((v) => isExpiringSoon(v.insuranceExpiry) || isExpiringSoon(v.inspectionExpiry)).length;
+  const daysUntil = (d) => Math.ceil((new Date(d) - new Date()) / (1000 * 60 * 60 * 24));
+  const expiringVehicles = vehicles.filter((v) => isExpiringSoon(v.insuranceExpiry) || isExpiringSoon(v.inspectionExpiry));
 
   return (
     <div>
@@ -3247,8 +3369,23 @@ function VehiclesView({ ctx }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
         <StatCard label="車輛總數" value={vehicles.length} icon={Car} tone="ink" />
         <StatCard label="使用中" value={vehicles.filter((v) => v.status === "使用中").length} icon={Check} tone="success" />
-        <StatCard label="保險／驗車 30 天內到期" value={expiringCount} icon={AlertCircle} tone="warn" />
+        <StatCard label="保險／驗車 30 天內到期" value={expiringVehicles.length} icon={AlertCircle} tone="warn" />
       </div>
+
+      {expiringVehicles.length > 0 && (
+        <div style={{ background: THEME.warnSoft, border: `1px solid #E9D8AE`, borderRadius: 10, padding: "12px 16px", marginBottom: 18, display: "flex", gap: 8, alignItems: "flex-start" }}>
+          <AlertCircle size={14} color={THEME.warn} style={{ marginTop: 2, flexShrink: 0 }} />
+          <div style={{ fontSize: 12.5, color: THEME.warn, lineHeight: 1.8 }}>
+            <strong>{expiringVehicles.length} 輛車保險或驗車將於 30 天內到期：</strong>
+            {expiringVehicles.map((v) => {
+              const parts = [];
+              if (isExpiringSoon(v.insuranceExpiry)) parts.push(`保險剩 ${daysUntil(v.insuranceExpiry)} 天`);
+              if (isExpiringSoon(v.inspectionExpiry)) parts.push(`驗車剩 ${daysUntil(v.inspectionExpiry)} 天`);
+              return <div key={v.id}>{v.plate}（{v.model || "未填車型"}）— {parts.join("、")}</div>;
+            })}
+          </div>
+        </div>
+      )}
 
       <div style={{ marginBottom: 16, position: "relative", maxWidth: 280 }}>
         <Search size={14} style={{ position: "absolute", left: 10, top: 10, color: THEME.muted }} />
