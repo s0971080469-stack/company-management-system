@@ -3601,7 +3601,7 @@ function PermissionsView({ ctx }) {
   return (
     <div>
       <SectionHeader eyebrow="ACCESS · 13" title="權限設定"
-        action={<Btn variant="brass" icon={Plus} onClick={() => setModal(true)}>新增系統帳號</Btn>} />
+        action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptySysUser(roles) })}>新增系統帳號</Btn>} />
 
       <div style={{ background: "#FBF7EC", border: `1px solid ${THEME.brassSoft}`, borderRadius: 10, padding: "10px 16px", fontSize: 12.5, color: THEME.brassDeep, marginBottom: 16, display: "flex", gap: 8, alignItems: "center" }}>
         <AlertCircle size={14} />
@@ -3610,7 +3610,7 @@ function PermissionsView({ ctx }) {
 
       <h3 style={{ fontSize: 14.5, fontWeight: 700, color: THEME.text, marginBottom: 12 }}>系統帳號</h3>
       {sysUsers.length === 0 ? (
-        <EmptyState icon={UserCog} text="尚未建立任何系統帳號。" action={<Btn variant="brass" icon={Plus} onClick={() => setModal(true)}>新增第一個帳號</Btn>} />
+        <EmptyState icon={UserCog} text="尚未建立任何系統帳號。" action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptySysUser(roles) })}>新增第一個帳號</Btn>} />
       ) : (
         <Table columns={["姓名", "Email", "角色", "綁定員工", "狀態", ""]}>
           {sysUsers.map((u) => (
@@ -3635,7 +3635,10 @@ function PermissionsView({ ctx }) {
                 </Select>
               </td>
               <td style={{ ...td, textAlign: "right" }}>
-                <Btn size="sm" variant="danger" icon={Trash2} onClick={() => askDelete(`確定要刪除帳號「${u.name}」嗎？`, () => persist.sysUsers(sysUsers.filter((x) => x.id !== u.id)))} />
+                <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                  <Btn size="sm" icon={Pencil} onClick={() => setModal({ mode: "edit", data: u })} />
+                  <Btn size="sm" variant="danger" icon={Trash2} onClick={() => askDelete(`確定要刪除帳號「${u.name}」嗎？`, () => persist.sysUsers(sysUsers.filter((x) => x.id !== u.id)))} />
+                </div>
               </td>
             </tr>
           ))}
@@ -3688,8 +3691,8 @@ function PermissionsView({ ctx }) {
       </div>
 
       {modal && (
-        <Modal title="新增系統帳號" onClose={() => setModal(null)}>
-          <SysUserForm data={emptySysUser(roles)} roles={roles} employees={employees} onSave={saveUser} onCancel={() => setModal(null)} />
+        <Modal title={modal.mode === "new" ? "新增系統帳號" : `編輯系統帳號「${modal.data.name}」`} onClose={() => setModal(null)}>
+          <SysUserForm data={modal.data} roles={roles} employees={employees} onSave={saveUser} onCancel={() => setModal(null)} />
         </Modal>
       )}
     </div>
