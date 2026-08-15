@@ -1940,11 +1940,11 @@ function TemplateManager({ templates, onAdd, onEdit, onDelete }) {
 
 function LetterheadFields({ f, set, companyDropdown }) {
   const [companyChoice, setCompanyChoice] = useState(
-    VENDOR_COMPANY_OPTIONS.includes(f.companyName) ? f.companyName : (f.companyName ? "其他" : "")
+    BILLING_COMPANY_OPTIONS.includes(f.companyName) ? f.companyName : (f.companyName ? "其他" : "")
   );
   useEffect(() => {
     if (!companyDropdown) return;
-    setCompanyChoice(VENDOR_COMPANY_OPTIONS.includes(f.companyName) ? f.companyName : (f.companyName ? "其他" : ""));
+    setCompanyChoice(BILLING_COMPANY_OPTIONS.includes(f.companyName) ? f.companyName : (f.companyName ? "其他" : ""));
   }, [f.companyName, companyDropdown]);
 
   const onCompanyChoiceChange = (e) => {
@@ -1962,7 +1962,7 @@ function LetterheadFields({ f, set, companyDropdown }) {
             <Field label="開票公司" span={companyChoice === "其他" ? 1 : 2}>
               <Select value={companyChoice} onChange={onCompanyChoiceChange}>
                 <option value="">請選擇</option>
-                {VENDOR_COMPANY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                {BILLING_COMPANY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
               </Select>
             </Field>
             {companyChoice === "其他" && (
@@ -2061,7 +2061,7 @@ function InvoicesView({ ctx }) {
   const [companyFilter, setCompanyFilter] = useState("全部");
   const [month, setMonth] = useState(monthStr());
 
-  const KNOWN_COMPANIES = VENDOR_COMPANY_OPTIONS.filter((o) => o !== "其他");
+  const KNOWN_COMPANIES = BILLING_COMPANY_OPTIONS.filter((o) => o !== "其他");
   const companyTabs = ["全部", ...KNOWN_COMPANIES, "其他"];
   const filtered = invoices.filter((inv) => {
     if (month && !(inv.date || "").startsWith(month)) return false;
@@ -2420,7 +2420,7 @@ function BillingView({ ctx }) {
   const [month, setMonth] = useState(monthStr());
   const [companyFilter, setCompanyFilter] = useState("全部");
 
-  const KNOWN_COMPANIES = VENDOR_COMPANY_OPTIONS.filter((o) => o !== "其他");
+  const KNOWN_COMPANIES = BILLING_COMPANY_OPTIONS.filter((o) => o !== "其他");
   const companyTabs = ["全部", ...KNOWN_COMPANIES, "其他"];
 
   // backward-compatible classification: pre-existing 請款 records have no expenseType but do have a `vendor` field
@@ -2710,7 +2710,7 @@ function CompanyPaymentForm({ data, onSave, onCancel }) {
       <Field label="付款公司">
         <Select value={f.companyName} onChange={set("companyName")}>
           <option value="">請選擇</option>
-          {VENDOR_COMPANY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+          {BILLING_COMPANY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
         </Select>
       </Field>
       <Field label="金額"><TextInput type="number" value={f.amount} onChange={set("amount")} placeholder="0" /></Field>
@@ -2997,6 +2997,9 @@ function ChartCard({ title, children }) {
    VENDORS (廠商管理 — 供應商 / 業主)
 ========================================================= */
 const VENDOR_COMPANY_OPTIONS = ["綠石環保", "歐克環境", "上藝除蟲", "維娜科技", "禾豐國際", "其他"];
+// 發票開票公司／公司應付款項付款公司只從這幾家挑，「禾豐國際」不列入這兩處的選項
+// （廠商管理的往來公司清單維持完整，不受影響）
+const BILLING_COMPANY_OPTIONS = VENDOR_COMPANY_OPTIONS.filter((o) => o !== "禾豐國際");
 const PAYMENT_METHODS = ["現金", "匯款", "支票", "月結30天", "月結60天", "其他"];
 const VENDOR_TYPES = ["供應商", "業主"];
 
@@ -3141,19 +3144,30 @@ function VendorForm({ data, onSave, onCancel }) {
 const emptyContract = (vendors) => ({
   title: "", party: "", type: "服務", startDate: todayStr(), endDate: "", amount: "", status: "生效中", note: "",
   hasPerformanceBond: "無", performanceBondAmount: "", hasInsurance: "無", insurancePurchaseStatus: "估價中", owner: "",
+  contractorCompany: "",
 });
 
 function ContractsView({ ctx }) {
   const { contracts, vendors, sysUsers, persist, askDelete } = ctx;
   const [modal, setModal] = useState(null);
   const [year, setYear] = useState(String(new Date().getFullYear()));
+  const [companyFilter, setCompanyFilter] = useState("全部");
 
   const years = Array.from(new Set([
     String(new Date().getFullYear()),
     ...contracts.map((c) => (c.startDate || "").slice(0, 4)).filter(Boolean),
   ])).sort((a, b) => b.localeCompare(a));
   const yearTabs = ["全部", ...years];
-  const filtered = contracts.filter((c) => year === "全部" || (c.startDate || "").startsWith(year));
+  const KNOWN_COMPANIES = BILLING_COMPANY_OPTIONS.filter((o) => o !== "其他");
+  const companyTabs = ["全部", ...KNOWN_COMPANIES, "其他"];
+  const filtered = contracts.filter((c) => {
+    if (year !== "全部" && !(c.startDate || "").startsWith(year)) return false;
+    if (companyFilter !== "全部") {
+      if (companyFilter === "其他") return !KNOWN_COMPANIES.includes(c.contractorCompany);
+      return c.contractorCompany === companyFilter;
+    }
+    return true;
+  });
 
   const save = (data) => {
     if (data.id) {
@@ -3196,15 +3210,28 @@ function ContractsView({ ctx }) {
                 }}>{y === "全部" ? y : `${y} 年`}</button>
             ))}
           </div>
+          <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+            <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600, marginRight: 4 }}>承攬公司</span>
+            {companyTabs.map((c) => (
+              <button key={c} onClick={() => setCompanyFilter(c)}
+                style={{
+                  padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
+                  border: `1px solid ${companyFilter === c ? THEME.brass : THEME.line}`,
+                  background: companyFilter === c ? THEME.brass : "#fff",
+                  color: companyFilter === c ? "#fff" : THEME.text,
+                }}>{c}</button>
+            ))}
+          </div>
           {filtered.length === 0 ? (
-            <EmptyState icon={FileSignature} text="這個年度沒有契約。" />
+            <EmptyState icon={FileSignature} text="這個篩選條件下沒有契約。" />
           ) : (
-        <Table columns={["契約編號", "契約名稱", "對方單位", "類型", "起訖日期", "金額", "履保金", "保險", "負責人員", "狀態", ""]}>
+        <Table columns={["契約編號", "契約名稱", "對方單位", "承攬公司", "類型", "起訖日期", "金額", "履保金", "保險", "負責人員", "狀態", ""]}>
           {filtered.map((c) => (
             <tr key={c.id} style={isExpiringSoon(c) ? { background: THEME.warnSoft } : undefined}>
               <td style={{ ...td, fontFamily: FONT_NUM }}>{c.no}</td>
               <td style={td}><strong>{c.title}</strong></td>
               <td style={td}>{c.party || "—"}</td>
+              <td style={td}>{c.contractorCompany ? <StatusBadge status={BILLING_COMPANY_OPTIONS.includes(c.contractorCompany) ? c.contractorCompany : "其他"} /> : "—"}</td>
               <td style={td}>{c.type}</td>
               <td style={td}>{fmtDate(c.startDate)} — {fmtDate(c.endDate)}</td>
               <td style={{ ...td, fontFamily: FONT_NUM }}>{fmtMoney(c.amount)}</td>
@@ -3263,7 +3290,7 @@ function ContractsView({ ctx }) {
 }
 
 function ContractForm({ data, vendors, sysUsers, onSave, onCancel }) {
-  const [f, setF] = useState({ hasPerformanceBond: "無", performanceBondAmount: "", hasInsurance: "無", insurancePurchaseStatus: "估價中", owner: "", ...data });
+  const [f, setF] = useState({ hasPerformanceBond: "無", performanceBondAmount: "", hasInsurance: "無", insurancePurchaseStatus: "估價中", owner: "", contractorCompany: "", ...data });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
@@ -3271,6 +3298,12 @@ function ContractForm({ data, vendors, sysUsers, onSave, onCancel }) {
       <Field label="對方單位">
         <TextInput value={f.party} onChange={set("party")} placeholder="客戶或廠商名稱" list="vendor-list" />
         <datalist id="vendor-list">{vendors.map((v) => <option key={v.id} value={v.name} />)}</datalist>
+      </Field>
+      <Field label="承攬公司">
+        <Select value={f.contractorCompany} onChange={set("contractorCompany")}>
+          <option value="">請選擇</option>
+          {BILLING_COMPANY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+        </Select>
       </Field>
       <Field label="契約類型">
         <Select value={f.type} onChange={set("type")}>
