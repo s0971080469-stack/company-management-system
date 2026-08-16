@@ -5,7 +5,7 @@ import {
   Landmark, BarChart3, Plus, Trash2, Pencil, X, Check, Search,
   LogIn, LogOut, Building2, TrendingUp, TrendingDown, CalendarDays,
   ChevronRight, RotateCcw, ArrowRight, AlertCircle, FileSignature, Truck, ShieldCheck, UserCog, Download, Car,
-  Paperclip, Eye, Upload, Image as ImageIcon, Loader2, MapPin
+  Paperclip, Eye, Upload, Image as ImageIcon, Loader2, MapPin, Printer
 } from "lucide-react";
 import {
   BarChart, Bar, LineChart, Line, ComposedChart, PieChart, Pie, Cell, XAxis, YAxis,
@@ -548,8 +548,8 @@ function StatusBadge({ status }) {
     "已作廢": { bg: "#EEEEEE", fg: THEME.muted },
     "逾期": { bg: THEME.dangerSoft, fg: THEME.danger },
     "待審核": { bg: THEME.warnSoft, fg: THEME.warn },
-    "供應商": { bg: "#EEF0F4", fg: THEME.ink },
-    "業主": { bg: THEME.brassSoft, fg: THEME.brassDeep },
+    "供應商": { bg: "#E4E9F0", fg: "#3E5872" },
+    "業主": { bg: "#F5E9EE", fg: "#8B3A5C" },
     "有": { bg: THEME.successSoft, fg: THEME.success },
     "無": { bg: "#EEEEEE", fg: THEME.muted },
     "估價中": { bg: THEME.warnSoft, fg: THEME.warn },
@@ -563,6 +563,7 @@ function StatusBadge({ status }) {
     "歐克環境": { bg: "#E5EDF9", fg: "#2A5199" },
     "上藝除蟲": { bg: "#F1E7F5", fg: "#6B3F82" },
     "維娜科技": { bg: "#FBEADB", fg: "#B5651D" },
+    "禾豐國際": { bg: "#EAF0DE", fg: "#5C7A2E" },
     "其他": { bg: "#E9EBF0", fg: "#454C5C" },
   };
   const t = map[status] || { bg: "#EEEEEE", fg: THEME.muted };
@@ -932,20 +933,27 @@ export default function CompanyManagementSystem({ session }) {
   };
 
   return (
-    <div style={{ fontFamily: FONT_BODY, background: THEME.canvas, minHeight: 700, display: "flex", borderRadius: 16, overflow: "hidden", border: `1px solid ${THEME.line}` }}>
+    <div className="app-shell" style={{ fontFamily: FONT_BODY, background: THEME.canvas, minHeight: 700, display: "flex", borderRadius: 16, overflow: "hidden", border: `1px solid ${THEME.line}` }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@700;900&display=swap');
         * { box-sizing: border-box; }
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-thumb { background: #D8D5C8; border-radius: 8px; }
         @keyframes spin { to { transform: rotate(360deg); } }
+        @media print {
+          .app-sidebar, .app-topbar, .no-print { display: none !important; }
+          .app-shell { border: none !important; border-radius: 0 !important; overflow: visible !important; min-height: 0 !important; }
+          .app-content { overflow: visible !important; padding: 0 !important; }
+        }
       `}</style>
 
-      <Sidebar tab={tab} setTab={setTab} nav={allowedNav} employees={employees} sysUsers={sysUsers} currentUserId={currentUserId} setCurrentUserId={persist.currentUserId} realIsAdmin={realIsAdmin} matchedUser={matchedUser} session={session} />
+      <div className="app-sidebar">
+        <Sidebar tab={tab} setTab={setTab} nav={allowedNav} employees={employees} sysUsers={sysUsers} currentUserId={currentUserId} setCurrentUserId={persist.currentUserId} realIsAdmin={realIsAdmin} matchedUser={matchedUser} session={session} />
+      </div>
 
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-        <TopBar tab={tab} now={now} />
-        <div style={{ padding: "26px 32px", flex: 1, overflow: "auto" }}>
+        <div className="app-topbar"><TopBar tab={tab} now={now} /></div>
+        <div className="app-content" style={{ padding: "26px 32px", flex: 1, overflow: "auto" }}>
           {tab === "dashboard" && <Dashboard ctx={ctx} />}
           {tab === "employees" && <EmployeesView ctx={ctx} />}
           {tab === "payroll" && <PayrollView ctx={ctx} />}
@@ -1301,7 +1309,12 @@ function EmployeesView({ ctx }) {
   return (
     <div>
       <SectionHeader eyebrow="PERSONNEL · 02" title="人員管理"
-        action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptyEmployee })}>新增員工</Btn>} />
+        action={
+          <div style={{ display: "flex", gap: 8 }}>
+            <Btn icon={Printer} onClick={() => window.print()}>列印</Btn>
+            <Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptyEmployee })}>新增員工</Btn>
+          </div>
+        } />
 
       <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
         <div style={{ position: "relative", maxWidth: 280 }}>
@@ -1491,6 +1504,7 @@ function PayrollView({ ctx }) {
         action={
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <TextInput type="month" value={month} onChange={(e) => setMonth(e.target.value)} style={{ width: 150 }} />
+            <Btn icon={Printer} onClick={() => window.print()}>列印</Btn>
             <Btn variant="brass" icon={Plus} onClick={generate}>產生本月薪資表</Btn>
           </div>
         } />
@@ -3287,7 +3301,12 @@ function VendorsView({ ctx }) {
   return (
     <div>
       <SectionHeader eyebrow="VENDOR · 04" title="廠商管理"
-        action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptyVendor })}>新增廠商</Btn>} />
+        action={
+          <div style={{ display: "flex", gap: 8 }}>
+            <Btn icon={Printer} onClick={() => window.print()}>列印</Btn>
+            <Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptyVendor })}>新增廠商</Btn>
+          </div>
+        } />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 14, marginBottom: 18 }}>
         <StatCard label="供應商家數" value={supplierCount} icon={Truck} tone="ink" />
@@ -3328,7 +3347,7 @@ function VendorsView({ ctx }) {
               </td>
               <td style={{ ...td, fontFamily: FONT_NUM }}>{v.taxId || "—"}</td>
               <td style={td}>{v.paymentMethod || "—"}</td>
-              <td style={td}>{v.tradingCompany || "—"}</td>
+              <td style={td}>{v.tradingCompany ? <StatusBadge status={v.tradingCompany} /> : "—"}</td>
               <td style={{ ...td, textAlign: "right" }}>
                 <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                   <Btn size="sm" icon={Pencil} onClick={() => setModal({ mode: "edit", data: v })}>編輯</Btn>
