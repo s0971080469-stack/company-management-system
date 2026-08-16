@@ -175,23 +175,18 @@ const SEED_QUOTE_TEMPLATES = [
 const uid = () => Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4);
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const monthStr = (d = new Date()) => d.toISOString().slice(0, 7);
+// 系統內所有西元年顯示（含日期、月份標籤、流水編號）一律改用民國年。
+const toROCYear = (gregorianYear) => Number(gregorianYear) - 1911;
 const fmtMonthLabel = (key) => {
   const m = /^(\d{4})-(\d{2})$/.exec(key);
-  return m ? `${m[1]}年${Number(m[2])}月` : key;
+  return m ? `${toROCYear(m[1])}年${Number(m[2])}月` : key;
 };
 const fmtMoney = (n) => "NT$ " + Math.round(Number(n) || 0).toLocaleString("zh-TW");
 const fmtDate = (s) => {
   if (!s) return "—";
   const d = new Date(s);
   if (isNaN(d)) return s;
-  return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
-};
-const fmtDateROC = (s) => {
-  if (!s) return "—";
-  const d = new Date(s);
-  if (isNaN(d)) return s;
-  const rocYear = d.getFullYear() - 1911;
-  return `${rocYear}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
+  return `${toROCYear(d.getFullYear())}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
 };
 const fmtDateTime = (s) => {
   if (!s) return "—";
@@ -200,7 +195,7 @@ const fmtDateTime = (s) => {
   return `${fmtDate(s)} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
 };
 const nextNo = (prefix, list, dateKey = "date") => {
-  const y = new Date().getFullYear();
+  const y = toROCYear(new Date().getFullYear());
   const count = list.filter((x) => (x.no || "").startsWith(`${prefix}-${y}`)).length + 1;
   return `${prefix}-${y}-${String(count).padStart(3, "0")}`;
 };
@@ -563,6 +558,12 @@ function StatusBadge({ status }) {
     "已入帳": { bg: THEME.successSoft, fg: THEME.success },
     "已請款": { bg: THEME.successSoft, fg: THEME.success },
     "未請款": { bg: THEME.warnSoft, fg: THEME.warn },
+    // 公司標籤色——同一間公司在系統各處（人員、契約、發票、收支管理…）都用同一個顏色，方便一眼辨識
+    "綠石環保": { bg: "#E1F0EE", fg: "#1B6B63" },
+    "歐克環境": { bg: "#E5EDF9", fg: "#2A5199" },
+    "上藝除蟲": { bg: "#F1E7F5", fg: "#6B3F82" },
+    "維娜科技": { bg: "#FBEADB", fg: "#B5651D" },
+    "其他": { bg: "#E9EBF0", fg: "#454C5C" },
   };
   const t = map[status] || { bg: "#EEEEEE", fg: THEME.muted };
   return (
@@ -761,7 +762,7 @@ function DatePickerButton({ value, onChange, placeholder = "選擇日期" }) {
         <div ref={popRef} style={{ position: "fixed", zIndex: 300, top: pos.top, left: pos.left, background: "#fff", border: `1px solid ${THEME.line}`, borderRadius: 10, boxShadow: "0 12px 32px rgba(0,0,0,0.18)", padding: 12, width: 240 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
             <button type="button" onClick={prevMonth} style={{ border: "none", background: "transparent", cursor: "pointer", color: THEME.muted, padding: 4, fontSize: 15 }}>‹</button>
-            <div style={{ fontSize: 13, fontWeight: 700, color: THEME.text }}>{viewYear}年{viewMonth + 1}月</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: THEME.text }}>{toROCYear(viewYear)}年{viewMonth + 1}月</div>
             <button type="button" onClick={nextMonth} style={{ border: "none", background: "transparent", cursor: "pointer", color: THEME.muted, padding: 4, fontSize: 15 }}>›</button>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 2, fontSize: 11, color: THEME.muted, textAlign: "center", marginBottom: 4 }}>
@@ -1067,7 +1068,7 @@ function TopBar({ tab, now }) {
           {now.toLocaleTimeString("zh-TW", { hour12: false })}
         </div>
         <div style={{ fontSize: 11.5, color: THEME.muted }}>
-          {now.getFullYear()}/{String(now.getMonth() + 1).padStart(2, "0")}/{String(now.getDate()).padStart(2, "0")}（週{weekday}）
+          {toROCYear(now.getFullYear())}/{String(now.getMonth() + 1).padStart(2, "0")}/{String(now.getDate()).padStart(2, "0")}（週{weekday}）
         </div>
       </div>
     </div>
@@ -1264,17 +1265,29 @@ function quotesActivity(ctx) {
 /* =========================================================
    EMPLOYEES
 ========================================================= */
+const SITE_FIXED_OPTIONS = ["公司總部", "機動組"];
 const emptyEmployee = {
-  name: "", dept: "", title: "", phone: "", email: "", hireDate: todayStr(), baseSalary: "", status: "在職",
+  name: "", company: "", dept: "", title: "", phone: "", email: "", hireDate: todayStr(), baseSalary: "", status: "在職", siteName: "",
   additions: [], deductions: [], laborInsurance: 0, healthInsurance: 0, pensionSelf: 0, advance: 0, insuranceStatus: "加保", insuranceGrade: "",
 };
 
 function EmployeesView({ ctx }) {
-  const { employees, persist, askDelete } = ctx;
+  const { employees, contracts, persist, askDelete } = ctx;
+  const siteOptions = [...SITE_FIXED_OPTIONS, ...Array.from(new Set(contracts.map((c) => c.title).filter(Boolean)))];
   const [modal, setModal] = useState(null); // {mode, data}
   const [query, setQuery] = useState("");
+  const [companyFilter, setCompanyFilter] = useState("全部");
 
-  const filtered = employees.filter((e) => (e.name + e.dept + e.title).toLowerCase().includes(query.toLowerCase()));
+  const KNOWN_COMPANIES = BILLING_COMPANY_OPTIONS.filter((o) => o !== "其他");
+  const companyTabs = ["全部", ...KNOWN_COMPANIES, "其他"];
+  const filtered = employees.filter((e) => {
+    if (!(e.name + e.dept + e.title).toLowerCase().includes(query.toLowerCase())) return false;
+    if (companyFilter !== "全部") {
+      if (companyFilter === "其他") return e.company && !KNOWN_COMPANIES.includes(e.company);
+      return e.company === companyFilter;
+    }
+    return true;
+  });
 
   const save = (data) => {
     if (data.id) {
@@ -1297,15 +1310,31 @@ function EmployeesView({ ctx }) {
         </div>
       </div>
 
+      {employees.length > 0 && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+          <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600, marginRight: 4 }}>投保公司</span>
+          {companyTabs.map((c) => (
+            <button key={c} onClick={() => setCompanyFilter(c)}
+              style={{
+                padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
+                border: `1px solid ${companyFilter === c ? THEME.brass : THEME.line}`,
+                background: companyFilter === c ? THEME.brass : "#fff",
+                color: companyFilter === c ? "#fff" : THEME.text,
+              }}>{c}</button>
+          ))}
+        </div>
+      )}
+
       {filtered.length === 0 ? (
         <EmptyState icon={Users} text="尚未建立任何員工資料。" action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptyEmployee })}>新增第一位員工</Btn>} />
       ) : (
-        <Table columns={["姓名", "部門", "職位", "到職日", "底薪", "聯絡方式", "投保級距", "狀態", ""]}>
+        <Table columns={["姓名", "部門", "職位", "投保公司", "到職日", "底薪", "聯絡方式", "投保級距", "狀態", "所屬案場", ""]}>
           {filtered.map((e) => (
             <tr key={e.id}>
               <td style={td}><strong>{e.name}</strong></td>
               <td style={td}>{e.dept || "—"}</td>
               <td style={td}>{e.title || "—"}</td>
+              <td style={td}>{e.company ? <StatusBadge status={BILLING_COMPANY_OPTIONS.includes(e.company) ? e.company : "其他"} /> : "—"}</td>
               <td style={td}>{fmtDate(e.hireDate)}</td>
               <td style={{ ...td, fontFamily: FONT_NUM }}>{fmtMoney(e.baseSalary)}</td>
               <td style={td}>
@@ -1314,6 +1343,7 @@ function EmployeesView({ ctx }) {
               </td>
               <td style={{ ...td, fontFamily: FONT_NUM }}>{e.insuranceGrade || "—"}</td>
               <td style={td}><StatusBadge status={e.status} /></td>
+              <td style={td}>{e.siteName || "—"}</td>
               <td style={{ ...td, textAlign: "right" }}>
                 <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                   <Btn size="sm" icon={Pencil} onClick={() => setModal({ mode: "edit", data: e })}>編輯</Btn>
@@ -1327,14 +1357,14 @@ function EmployeesView({ ctx }) {
 
       {modal && (
         <Modal title={modal.mode === "new" ? "新增員工" : "編輯員工資料"} onClose={() => setModal(null)} width={680}>
-          <EmployeeForm data={modal.data} onSave={save} onCancel={() => setModal(null)} />
+          <EmployeeForm data={modal.data} siteOptions={siteOptions} onSave={save} onCancel={() => setModal(null)} />
         </Modal>
       )}
     </div>
   );
 }
 
-function EmployeeForm({ data, onSave, onCancel }) {
+function EmployeeForm({ data, siteOptions, onSave, onCancel }) {
   const [f, setF] = useState({ additions: [], deductions: [], laborInsurance: 0, healthInsurance: 0, pensionSelf: 0, advance: 0, insuranceStatus: "加保", insuranceGrade: "", ...data });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   return (
@@ -1343,12 +1373,24 @@ function EmployeeForm({ data, onSave, onCancel }) {
         <Field label="姓名"><TextInput value={f.name} onChange={set("name")} placeholder="王小明" /></Field>
         <Field label="部門"><TextInput value={f.dept} onChange={set("dept")} placeholder="業務部" /></Field>
         <Field label="職位"><TextInput value={f.title} onChange={set("title")} placeholder="專案經理" /></Field>
+        <Field label="投保公司">
+          <Select value={f.company || ""} onChange={set("company")}>
+            <option value="">未指定</option>
+            {BILLING_COMPANY_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+          </Select>
+        </Field>
         <Field label="到職日"><TextInput type="date" value={f.hireDate} onChange={set("hireDate")} /></Field>
         <Field label="底薪"><TextInput type="number" value={f.baseSalary} onChange={set("baseSalary")} placeholder="40000" /></Field>
         <Field label="狀態">
           <Select value={f.status} onChange={set("status")}>
             <option value="在職">在職</option>
             <option value="離職">離職</option>
+          </Select>
+        </Field>
+        <Field label="所屬案場">
+          <Select value={f.siteName || ""} onChange={set("siteName")}>
+            <option value="">未指定</option>
+            {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
           </Select>
         </Field>
         <Field label="聯絡電話"><TextInput value={f.phone} onChange={set("phone")} placeholder="0912-345-678" /></Field>
@@ -1397,7 +1439,7 @@ const payrollNet = (r) =>
   - Number(r.laborInsurance || 0) - Number(r.healthInsurance || 0) - Number(r.pensionSelf || 0) - Number(r.advance || 0);
 
 const emptyPayrollRow = (e, month) => ({
-  id: uid(), month, employeeId: e.id, employeeName: e.name, department: e.dept || "",
+  id: uid(), month, employeeId: e.id, employeeName: e.name, department: e.dept || "", siteName: e.siteName || "", company: e.company || "",
   baseSalary: Number(e.baseSalary) || 0,
   additions: (e.additions || []).map((it) => ({ ...it, id: uid() })),
   deductions: (e.deductions || []).map((it) => ({ ...it, id: uid() })),
@@ -1411,12 +1453,14 @@ function PayrollView({ ctx }) {
   const { employees, payroll, persist, addAccountingEntry, askDelete } = ctx;
   const [month, setMonth] = useState(monthStr());
   const [modal, setModal] = useState(null);
-  const [deptFilter, setDeptFilter] = useState("全部");
+  const [siteFilter, setSiteFilter] = useState("全部");
 
   const deptOf = (r) => r.department || employees.find((e) => e.id === r.employeeId)?.dept || "";
+  const siteOf = (r) => r.siteName || employees.find((e) => e.id === r.employeeId)?.siteName || "";
+  const companyOf = (r) => r.company || employees.find((e) => e.id === r.employeeId)?.company || "";
   const allRows = payroll.filter((p) => p.month === month);
-  const departments = ["全部", ...Array.from(new Set(allRows.map(deptOf).filter(Boolean)))];
-  const rows = allRows.filter((r) => deptFilter === "全部" || deptOf(r) === deptFilter);
+  const sites = ["全部", ...Array.from(new Set(allRows.map(siteOf).filter(Boolean)))];
+  const rows = allRows.filter((r) => siteFilter === "全部" || siteOf(r) === siteFilter);
   const activeEmployees = employees.filter((e) => e.status === "在職");
 
   const generate = () => {
@@ -1457,16 +1501,17 @@ function PayrollView({ ctx }) {
         <StatCard label="已發放" value={rows.filter((r) => r.status === "已發放").length + " / " + rows.length} icon={Check} tone="success" />
       </div>
 
-      {allRows.length > 0 && departments.length > 2 && (
-        <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
-          {departments.map((d) => (
-            <button key={d} onClick={() => setDeptFilter(d)}
+      {allRows.length > 0 && sites.length > 2 && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+          <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600, marginRight: 4 }}>所屬案場</span>
+          {sites.map((s) => (
+            <button key={s} onClick={() => setSiteFilter(s)}
               style={{
                 padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-                border: `1px solid ${deptFilter === d ? THEME.brass : THEME.line}`,
-                background: deptFilter === d ? THEME.brass : "#fff",
-                color: deptFilter === d ? "#fff" : THEME.text,
-              }}>{d}</button>
+                border: `1px solid ${siteFilter === s ? THEME.brass : THEME.line}`,
+                background: siteFilter === s ? THEME.brass : "#fff",
+                color: siteFilter === s ? "#fff" : THEME.text,
+              }}>{s}</button>
           ))}
         </div>
       )}
@@ -1474,7 +1519,7 @@ function PayrollView({ ctx }) {
       {allRows.length === 0 ? (
         <EmptyState icon={Wallet} text={`尚未建立 ${month} 的薪資表。`} action={<Btn variant="brass" icon={Plus} onClick={generate}>依在職員工產生薪資表</Btn>} />
       ) : (
-        <Table columns={["員工", "部門", "底薪", "加項", "減項／保費", "借支", "實發淨額", "保險狀態", "付款日", "狀態", ""]}>
+        <Table columns={["員工", "部門", "所屬案場", "底薪", "加項", "減項／保費", "借支", "實發淨額", "保險狀態", "加保公司", "付款日", "狀態", ""]}>
           {rows.map((r) => {
             const net = payrollNet(r);
             const deductTotal = sumAmounts(r.deductions) + Number(r.laborInsurance || 0) + Number(r.healthInsurance || 0) + Number(r.pensionSelf || 0);
@@ -1482,6 +1527,7 @@ function PayrollView({ ctx }) {
               <tr key={r.id}>
                 <td style={td}><strong>{r.employeeName}</strong></td>
                 <td style={td}>{deptOf(r) || "—"}</td>
+                <td style={td}>{siteOf(r) || "—"}</td>
                 <td style={{ ...td, fontFamily: FONT_NUM }}>{fmtMoney(r.baseSalary)}</td>
                 <td style={{ ...td, fontFamily: FONT_NUM, color: THEME.success }}>{sumAmounts(r.additions) ? "+" + fmtMoney(sumAmounts(r.additions)) : "—"}</td>
                 <td style={{ ...td, fontFamily: FONT_NUM, color: THEME.danger }}>{deductTotal ? "−" + fmtMoney(deductTotal) : "—"}</td>
@@ -1495,6 +1541,7 @@ function PayrollView({ ctx }) {
                 </td>
                 <td style={{ ...td, fontFamily: FONT_NUM, fontWeight: 700 }}>{fmtMoney(net)}</td>
                 <td style={td}>{r.insuranceStatus || "—"}</td>
+                <td style={td}>{companyOf(r) ? <StatusBadge status={BILLING_COMPANY_OPTIONS.includes(companyOf(r)) ? companyOf(r) : "其他"} /> : "—"}</td>
                 <td style={td}>{r.paymentDate ? fmtDate(r.paymentDate) : "—"}</td>
                 <td style={td}><StatusBadge status={r.status} /></td>
                 <td style={{ ...td, textAlign: "right" }}>
@@ -2271,7 +2318,7 @@ function InvoicesView({ ctx }) {
   const addSelectedToBankDeposits = () => {
     const selected = invoices.filter((inv) => checkedIds.has(inv.id));
     if (!selected.length) return;
-    const year = new Date().getFullYear();
+    const year = toROCYear(new Date().getFullYear());
     const existingCount = billing.filter((b) => (b.no || "").startsWith(`BD-${year}`)).length;
     const entries = selected.map((inv, i) => {
       const total = inv.total ?? sumItems(inv.items) * (1 + Number(inv.taxRate) / 100);
@@ -3127,18 +3174,18 @@ function ReportsView({ ctx }) {
               border: `1px solid ${year === y ? THEME.brass : THEME.line}`,
               background: year === y ? THEME.brass : "#fff",
               color: year === y ? "#fff" : THEME.text,
-            }}>{y} 年</button>
+            }}>{toROCYear(y)} 年</button>
         ))}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
-        <StatCard label={`${year} 年營收總額`} value={fmtMoney(yearRevenueTotal)} icon={TrendingUp} tone="success" />
-        <StatCard label={`${year} 年支出總額`} value={fmtMoney(yearExpenseTotal)} icon={TrendingDown} tone="danger" />
-        <StatCard label={`${year} 年薪資成本`} value={fmtMoney(yearPayrollTotal)} icon={Wallet} tone="brass" />
+        <StatCard label={`${toROCYear(year)} 年營收總額`} value={fmtMoney(yearRevenueTotal)} icon={TrendingUp} tone="success" />
+        <StatCard label={`${toROCYear(year)} 年支出總額`} value={fmtMoney(yearExpenseTotal)} icon={TrendingDown} tone="danger" />
+        <StatCard label={`${toROCYear(year)} 年薪資成本`} value={fmtMoney(yearPayrollTotal)} icon={Wallet} tone="brass" />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-        <ChartCard title={`營收趨勢（${year} 年，依月份）`}>
+        <ChartCard title={`營收趨勢（${toROCYear(year)} 年，依月份）`}>
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={revenueTrend}>
               <CartesianGrid strokeDasharray="3 3" stroke={THEME.line} vertical={false} />
@@ -3150,7 +3197,7 @@ function ReportsView({ ctx }) {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title={`薪資成本趨勢（${year} 年，依月份）`}>
+        <ChartCard title={`薪資成本趨勢（${toROCYear(year)} 年，依月份）`}>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={payrollTrend}>
               <CartesianGrid strokeDasharray="3 3" stroke={THEME.line} vertical={false} />
@@ -3162,7 +3209,7 @@ function ReportsView({ ctx }) {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title={`支出類別分布（${year} 年）`}>
+        <ChartCard title={`支出類別分布（${toROCYear(year)} 年）`}>
           {expenseByCategory.length === 0 ? (
             <div style={{ height: 220, display: "flex", alignItems: "center", justifyContent: "center", color: THEME.muted, fontSize: 13 }}>這個年度尚無支出資料</div>
           ) : (
@@ -3402,7 +3449,7 @@ function ContractsView({ ctx }) {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 18 }}>
         <StatCard label="契約總數" value={contracts.length} icon={FileSignature} tone="ink" />
-        <StatCard label={year === "全部" ? "承攬總金額" : `${year} 年度承攬總金額`} value={fmtMoney(filtered.reduce((s, c) => s + Number(c.amount || 0), 0))} icon={Landmark} tone="brass" />
+        <StatCard label={year === "全部" ? "承攬總金額" : `${toROCYear(year)} 年度承攬總金額`} value={fmtMoney(filtered.reduce((s, c) => s + Number(c.amount || 0), 0))} icon={Landmark} tone="brass" />
         <StatCard label="生效中" value={contracts.filter((c) => c.status === "生效中").length} icon={Check} tone="success" />
         <StatCard label="30 天內到期" value={contracts.filter(isExpiringSoon).length} icon={AlertCircle} tone="warn" />
       </div>
@@ -3420,7 +3467,7 @@ function ContractsView({ ctx }) {
                   border: `1px solid ${year === y ? THEME.brass : THEME.line}`,
                   background: year === y ? THEME.brass : "#fff",
                   color: year === y ? "#fff" : THEME.text,
-                }}>{y === "全部" ? y : `${y} 年`}</button>
+                }}>{y === "全部" ? y : `${toROCYear(y)} 年`}</button>
             ))}
           </div>
           <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
@@ -3446,7 +3493,7 @@ function ContractsView({ ctx }) {
               <td style={td}>{c.party || "—"}</td>
               <td style={td}>{c.contractorCompany ? <StatusBadge status={BILLING_COMPANY_OPTIONS.includes(c.contractorCompany) ? c.contractorCompany : "其他"} /> : "—"}</td>
               <td style={td}>{c.type}</td>
-              <td style={td}>{fmtDateROC(c.startDate)} — {fmtDateROC(c.endDate)}</td>
+              <td style={td}>{fmtDate(c.startDate)} — {fmtDate(c.endDate)}</td>
               <td style={{ ...td, fontFamily: FONT_NUM }}>{fmtMoney(c.amount)}</td>
               <td style={td}>
                 {c.hasPerformanceBond === "有" ? (
@@ -3627,7 +3674,7 @@ function ContractBillingView({ ctx }) {
                 <td style={td}><strong>{c.title}</strong></td>
                 <td style={td}>{c.contractorCompany ? <StatusBadge status={BILLING_COMPANY_OPTIONS.includes(c.contractorCompany) ? c.contractorCompany : "其他"} /> : "—"}</td>
                 <td style={td}>{c.type}</td>
-                <td style={td}>{fmtDateROC(c.startDate)} — {fmtDateROC(c.endDate)}</td>
+                <td style={td}>{fmtDate(c.startDate)} — {fmtDate(c.endDate)}</td>
                 <td style={{ ...td, fontFamily: FONT_NUM }}>{fmtMoney(c.amount)}</td>
                 <td style={td}>
                   <TextInput type="number" value={rec?.amount ?? ""} disabled={!month || locked}
