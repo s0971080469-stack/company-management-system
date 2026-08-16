@@ -214,8 +214,17 @@ const DEFAULT_COMPANY_LOCATION = { lat: 22.708703, lng: 120.326208 };
 /* ---------------- 估價單附件（掃描檔）— 存到 Supabase Storage ---------------- */
 const QUOTE_SCAN_BUCKET = "quote-scans";
 
+// Supabase Storage 的 key 不接受中文、空白、括號等字元（會丟出 "Invalid key" 錯誤），
+// 所以路徑只用清過的安全檔名；使用者看到、下載用的檔名仍然是 file.name 原始值。
+const safeStorageFileName = (name) => {
+  const dot = name.lastIndexOf(".");
+  const ext = (dot >= 0 ? name.slice(dot) : "").replace(/[^a-zA-Z0-9.]/g, "");
+  const base = (dot >= 0 ? name.slice(0, dot) : name).replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
+  return (base || "file") + ext;
+};
+
 async function uploadQuoteScan(quoteId, file) {
-  const path = `${quoteId}/${Date.now()}-${uid()}-${file.name}`;
+  const path = `${quoteId}/${Date.now()}-${uid()}-${safeStorageFileName(file.name)}`;
   const { error } = await supabase.storage.from(QUOTE_SCAN_BUCKET).upload(path, file);
   if (error) throw error;
   return { id: uid(), name: file.name, path, uploadedAt: new Date().toISOString() };
