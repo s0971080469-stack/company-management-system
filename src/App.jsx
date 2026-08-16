@@ -51,6 +51,7 @@ const NAV = [
   { key: "invoices", label: "發票", icon: Receipt },
   { key: "billing", label: "收支管理", icon: HandCoins },
   { key: "contracts", label: "契約管理", icon: FileSignature },
+  { key: "contractBilling", label: "每月請款追蹤", icon: CalendarDays },
   { key: "vehicles", label: "車輛管理", icon: Car },
   { key: "attendance", label: "打卡上下班", icon: Clock },
   { key: "accounting", label: "帳務入口", icon: Landmark },
@@ -74,6 +75,7 @@ const STORAGE_KEYS = {
   vehicles: "vehicles",
   currentUser: "current_user_id",
   companyLocation: "company_location",
+  contractBilling: "contract_billing_tracking",
 };
 
 const DEFAULT_ROLES = ["管理員", "財務", "人資", "一般員工"];
@@ -183,6 +185,13 @@ const fmtDate = (s) => {
   const d = new Date(s);
   if (isNaN(d)) return s;
   return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
+};
+const fmtDateROC = (s) => {
+  if (!s) return "—";
+  const d = new Date(s);
+  if (isNaN(d)) return s;
+  const rocYear = d.getFullYear() - 1911;
+  return `${rocYear}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
 };
 const fmtDateTime = (s) => {
   if (!s) return "—";
@@ -541,6 +550,8 @@ function StatusBadge({ status }) {
     "未購買": { bg: THEME.dangerSoft, fg: THEME.danger },
     "已購買": { bg: THEME.successSoft, fg: THEME.success },
     "已入帳": { bg: THEME.successSoft, fg: THEME.success },
+    "已請款": { bg: THEME.successSoft, fg: THEME.success },
+    "未請款": { bg: THEME.warnSoft, fg: THEME.warn },
   };
   const t = map[status] || { bg: "#EEEEEE", fg: THEME.muted };
   return (
@@ -793,6 +804,7 @@ export default function CompanyManagementSystem({ session }) {
   const [currentUserId, setCurrentUserId] = useState("");
   const [vehicles, setVehicles] = useState([]);
   const [companyLocation, setCompanyLocation] = useState(null);
+  const [contractBilling, setContractBilling] = useState([]);
 
   const [confirmState, setConfirmState] = useState(null);
 
@@ -803,7 +815,7 @@ export default function CompanyManagementSystem({ session }) {
 
   useEffect(() => {
     (async () => {
-      const [emp, att, pay, qt, inv, bil, acc, ven, con, usr, rp, qtpl, cuid, veh, cloc] = await Promise.all([
+      const [emp, att, pay, qt, inv, bil, acc, ven, con, usr, rp, qtpl, cuid, veh, cloc, cbil] = await Promise.all([
         loadKey(STORAGE_KEYS.employees, []),
         loadKey(STORAGE_KEYS.attendance, []),
         loadKey(STORAGE_KEYS.payroll, []),
@@ -819,6 +831,7 @@ export default function CompanyManagementSystem({ session }) {
         loadKey(STORAGE_KEYS.currentUser, ""),
         loadKey(STORAGE_KEYS.vehicles, []),
         loadKey(STORAGE_KEYS.companyLocation, null),
+        loadKey(STORAGE_KEYS.contractBilling, []),
       ]);
       setEmployees(emp); setAttendance(att); setPayroll(pay); setQuotes(qt);
       setInvoices(inv); setBilling(bil); setAccounting(acc);
@@ -833,6 +846,7 @@ export default function CompanyManagementSystem({ session }) {
       const loc = cloc || DEFAULT_COMPANY_LOCATION;
       if (!cloc) saveKey(STORAGE_KEYS.companyLocation, loc);
       setCompanyLocation(loc);
+      setContractBilling(cbil);
       setLoading(false);
     })();
   }, []);
@@ -854,6 +868,7 @@ export default function CompanyManagementSystem({ session }) {
     currentUserId: (v) => { setCurrentUserId(v); saveKey(STORAGE_KEYS.currentUser, v); },
     vehicles: (v) => { setVehicles(v); saveKey(STORAGE_KEYS.vehicles, v); },
     companyLocation: (v) => { setCompanyLocation(v); saveKey(STORAGE_KEYS.companyLocation, v); },
+    contractBilling: (v) => { setContractBilling(v); saveKey(STORAGE_KEYS.contractBilling, v); },
   };
 
   const addAccountingEntry = useCallback((entry) => {
@@ -899,7 +914,7 @@ export default function CompanyManagementSystem({ session }) {
 
   const ctx = {
     employees, attendance, payroll, quotes, invoices, billing, accounting,
-    vendors, contracts, sysUsers, rolePerms, quoteTemplates, vehicles, companyLocation,
+    vendors, contracts, sysUsers, rolePerms, quoteTemplates, vehicles, companyLocation, contractBilling,
     currentUser, isAdmin, realIsAdmin,
     persist, addAccountingEntry, askDelete, now,
   };
@@ -928,6 +943,7 @@ export default function CompanyManagementSystem({ session }) {
           {tab === "attendance" && <AttendanceView ctx={ctx} />}
           {tab === "billing" && <BillingView ctx={ctx} />}
           {tab === "contracts" && <ContractsView ctx={ctx} />}
+          {tab === "contractBilling" && <ContractBillingView ctx={ctx} />}
           {tab === "vehicles" && <VehiclesView ctx={ctx} />}
           {tab === "accounting" && <AccountingView ctx={ctx} />}
           {tab === "reports" && <ReportsView ctx={ctx} />}
@@ -2409,7 +2425,7 @@ function AttendanceView({ ctx }) {
   if (restricted && !myEmployeeId) {
     return (
       <div>
-        <SectionHeader eyebrow="ATTENDANCE · 07" title="打卡上下班" />
+        <SectionHeader eyebrow="ATTENDANCE · 11" title="打卡上下班" />
         <div style={{ background: THEME.warnSoft, border: `1px solid #E9D8AE`, borderRadius: 10, padding: "14px 18px", fontSize: 13, color: THEME.warn, display: "flex", gap: 8, alignItems: "center" }}>
           <AlertCircle size={16} />
           您目前的帳號尚未綁定員工資料，請聯絡管理員到「權限設定」→「系統帳號」設定綁定的員工後才能打卡。
@@ -2420,7 +2436,7 @@ function AttendanceView({ ctx }) {
 
   return (
     <div>
-      <SectionHeader eyebrow="ATTENDANCE · 07" title="打卡上下班" />
+      <SectionHeader eyebrow="ATTENDANCE · 11" title="打卡上下班" />
 
       <div style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 12, padding: "16px 18px", marginBottom: 18 }}>
         <div style={{ fontSize: 12.5, fontWeight: 700, color: THEME.text, marginBottom: 6 }}>打卡地點限制</div>
@@ -2628,7 +2644,7 @@ function BillingView({ ctx }) {
 
   return (
     <div>
-      <SectionHeader eyebrow="EXPENSE MANAGEMENT · 08" title="收支管理"
+      <SectionHeader eyebrow="EXPENSE MANAGEMENT · 07" title="收支管理"
         action={<Btn variant="brass" icon={Plus} onClick={openNew}>{newLabel}</Btn>} />
 
       {duePayments.length > 0 && (
@@ -2893,7 +2909,7 @@ function AccountingView({ ctx }) {
 
   return (
     <div>
-      <SectionHeader eyebrow="LEDGER · 11" title="帳務入口"
+      <SectionHeader eyebrow="LEDGER · 12" title="帳務入口"
         action={<Btn variant="brass" icon={Plus} onClick={() => setModal(true)}>新增帳務紀錄</Btn>} />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
@@ -3030,7 +3046,7 @@ function ReportsView({ ctx }) {
 
   return (
     <div>
-      <SectionHeader eyebrow="REPORTS · 12" title="公司報表" />
+      <SectionHeader eyebrow="REPORTS · 13" title="公司報表" />
 
       <div style={{ display: "flex", gap: 6, marginBottom: 18, flexWrap: "wrap", alignItems: "center" }}>
         <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600, marginRight: 4 }}>年度</span>
@@ -3311,7 +3327,7 @@ function ContractsView({ ctx }) {
 
   return (
     <div>
-      <SectionHeader eyebrow="CONTRACT · 09" title="契約管理"
+      <SectionHeader eyebrow="CONTRACT · 08" title="契約管理"
         action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptyContract(vendors) })}>新增契約</Btn>} />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 18 }}>
@@ -3352,7 +3368,7 @@ function ContractsView({ ctx }) {
           {filtered.length === 0 ? (
             <EmptyState icon={FileSignature} text="這個篩選條件下沒有契約。" />
           ) : (
-        <Table columns={["契約編號", "契約名稱", "對方單位", "承攬公司", "類型", "起訖日期", "金額", "履保金", "保險", "負責人員", "狀態", ""]}>
+        <Table columns={["契約編號", "契約名稱", "對方單位", "承攬公司", "類型", "起訖日期", "契約金額", "履保金", "保險", "負責人員", "狀態", ""]}>
           {filtered.map((c) => (
             <tr key={c.id} style={isExpiringSoon(c) ? { background: THEME.warnSoft } : undefined}>
               <td style={{ ...td, fontFamily: FONT_NUM }}>{c.no}</td>
@@ -3360,7 +3376,7 @@ function ContractsView({ ctx }) {
               <td style={td}>{c.party || "—"}</td>
               <td style={td}>{c.contractorCompany ? <StatusBadge status={BILLING_COMPANY_OPTIONS.includes(c.contractorCompany) ? c.contractorCompany : "其他"} /> : "—"}</td>
               <td style={td}>{c.type}</td>
-              <td style={td}>{fmtDate(c.startDate)} — {fmtDate(c.endDate)}</td>
+              <td style={td}>{fmtDateROC(c.startDate)} — {fmtDateROC(c.endDate)}</td>
               <td style={{ ...td, fontFamily: FONT_NUM }}>{fmtMoney(c.amount)}</td>
               <td style={td}>
                 {c.hasPerformanceBond === "有" ? (
@@ -3411,6 +3427,304 @@ function ContractsView({ ctx }) {
         <Modal title={modal.mode === "new" ? "新增契約" : `編輯契約 ${modal.data.no || ""}`} onClose={() => setModal(null)}>
           <ContractForm data={modal.data} vendors={vendors} sysUsers={sysUsers} onSave={save} onCancel={() => setModal(null)} />
         </Modal>
+      )}
+    </div>
+  );
+}
+
+function ContractBillingView({ ctx }) {
+  const { contracts, contractBilling, persist, isAdmin, askDelete } = ctx;
+  const [month, setMonth] = useState(monthStr());
+  const [companyFilter, setCompanyFilter] = useState("全部");
+  const [attachModal, setAttachModal] = useState(null); // { contractId }
+  const [preview, setPreview] = useState(null); // { name, url } | { name, loading: true }
+
+  const inMonth = (c) => {
+    if (!month) return true;
+    if (!c.startDate && !c.endDate) return true;
+    const start = c.startDate || "0000-01-01";
+    const end = c.endDate || "9999-12-31";
+    const monthStart = `${month}-01`;
+    const monthEnd = `${month}-31`;
+    return start <= monthEnd && end >= monthStart;
+  };
+  const KNOWN_COMPANIES = BILLING_COMPANY_OPTIONS.filter((o) => o !== "其他");
+  const companyTabs = ["全部", ...KNOWN_COMPANIES, "其他"];
+  const filtered = contracts.filter((c) => {
+    if (!inMonth(c)) return false;
+    if (companyFilter !== "全部") {
+      if (companyFilter === "其他") return !KNOWN_COMPANIES.includes(c.contractorCompany);
+      return c.contractorCompany === companyFilter;
+    }
+    return true;
+  });
+
+  const recordFor = (contractId) => contractBilling.find((b) => b.contractId === contractId && b.month === month);
+  const updateRecord = (contractId, patch) => {
+    const existing = recordFor(contractId);
+    if (existing) {
+      persist.contractBilling(contractBilling.map((b) => b.id === existing.id ? { ...b, ...patch } : b));
+    } else {
+      persist.contractBilling([{ id: uid(), contractId, month, billed: false, billedAt: "", amount: "", ...patch }, ...contractBilling]);
+    }
+  };
+  const toggleBilled = (contractId) => {
+    const existing = recordFor(contractId);
+    const nextBilled = !existing?.billed;
+    updateRecord(contractId, { billed: nextBilled, billedAt: nextBilled ? todayStr() : "" });
+  };
+
+  const billedCount = filtered.filter((c) => recordFor(c.id)?.billed).length;
+
+  const openPreview = async (att) => {
+    setPreview({ name: att.name, loading: true });
+    try {
+      const url = await getQuoteScanUrl(att.path);
+      setPreview({ name: att.name, url });
+    } catch (err) {
+      console.error(err);
+      setPreview(null);
+      alert("檔案預覽失敗，請稍後再試一次。");
+    }
+  };
+
+  const downloadAttachment = async (att) => {
+    try {
+      const url = await getQuoteScanUrl(att.path);
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = att.name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error(err);
+      alert("檔案下載失敗，請稍後再試一次。");
+    }
+  };
+
+  return (
+    <div>
+      <SectionHeader eyebrow="CONTRACT · 09" title="每月請款追蹤" />
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
+        <StatCard label="本月契約數" value={filtered.length} icon={FileSignature} tone="ink" />
+        <StatCard label="已請款" value={billedCount} icon={Check} tone="success" />
+        <StatCard label="未請款" value={filtered.length - billedCount} icon={AlertCircle} tone="warn" />
+      </div>
+
+      <MonthFilterBar month={month} setMonth={setMonth} label="請款月份" />
+
+      <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+        <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600, marginRight: 4 }}>承攬公司</span>
+        {companyTabs.map((c) => (
+          <button key={c} onClick={() => setCompanyFilter(c)}
+            style={{
+              padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
+              border: `1px solid ${companyFilter === c ? THEME.brass : THEME.line}`,
+              background: companyFilter === c ? THEME.brass : "#fff",
+              color: companyFilter === c ? "#fff" : THEME.text,
+            }}>{c}</button>
+        ))}
+      </div>
+
+      {filtered.length === 0 ? (
+        <EmptyState icon={FileSignature} text="這個篩選條件下沒有契約。" />
+      ) : (
+        <Table columns={["契約編號", "契約名稱", "承攬公司", "類型", "起訖日期", "契約金額", "本期請款金額", "負責人員", "狀態", "掃描檔上傳", "本月請款", "預覽", "下載掃描檔"]}>
+          {filtered.map((c) => {
+            const rec = recordFor(c.id);
+            const billed = !!rec?.billed;
+            const locked = billed && !isAdmin;
+            const attachments = rec?.attachments || [];
+            const hasAttachment = attachments.length > 0;
+            const latestAttachment = hasAttachment ? attachments[attachments.length - 1] : null;
+            const handleToggle = () => {
+              if (!month || locked) return;
+              if (!billed && !hasAttachment) {
+                alert("掃描檔案尚未上傳，不可以打勾");
+                return;
+              }
+              toggleBilled(c.id);
+            };
+            return (
+              <tr key={c.id}>
+                <td style={{ ...td, fontFamily: FONT_NUM }}>{c.no}</td>
+                <td style={td}><strong>{c.title}</strong></td>
+                <td style={td}>{c.contractorCompany ? <StatusBadge status={BILLING_COMPANY_OPTIONS.includes(c.contractorCompany) ? c.contractorCompany : "其他"} /> : "—"}</td>
+                <td style={td}>{c.type}</td>
+                <td style={td}>{fmtDateROC(c.startDate)} — {fmtDateROC(c.endDate)}</td>
+                <td style={{ ...td, fontFamily: FONT_NUM }}>{fmtMoney(c.amount)}</td>
+                <td style={td}>
+                  <TextInput type="number" value={rec?.amount ?? ""} disabled={!month || locked}
+                    onChange={(e) => month && updateRecord(c.id, { amount: e.target.value })}
+                    placeholder="自行填寫" style={{ width: 120, padding: "4px 8px", fontSize: 12 }} />
+                </td>
+                <td style={td}>{c.owner || "—"}</td>
+                <td style={td}>
+                  {c.status === "生效中" ? (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, color: THEME.success }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: THEME.success, boxShadow: `0 0 0 3px ${THEME.successSoft}` }} />
+                      {c.status}
+                    </span>
+                  ) : (
+                    <StatusBadge status={c.status} />
+                  )}
+                </td>
+                <td style={td}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}>
+                    <Btn size="sm" icon={Upload} disabled={!month} onClick={() => month && setAttachModal({ contractId: c.id })}>
+                      {hasAttachment ? `掃描檔（${attachments.length}）` : "上傳掃描檔"}
+                    </Btn>
+                    {!hasAttachment && <span style={{ fontSize: 11, color: THEME.warn }}>尚未上傳</span>}
+                  </div>
+                </td>
+                <td style={td}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: (!month || locked) ? "not-allowed" : "pointer", opacity: (!month || locked) ? 0.7 : 1 }}>
+                    <input type="checkbox" checked={billed} disabled={!month || locked} onChange={handleToggle} style={{ width: 16, height: 16, cursor: (!month || locked) ? "not-allowed" : "pointer" }} />
+                    <StatusBadge status={billed ? "已請款" : "未請款"} />
+                  </label>
+                </td>
+                <td style={td}>
+                  <Btn size="sm" icon={Eye} disabled={!hasAttachment} onClick={() => hasAttachment && openPreview(latestAttachment)}>預覽</Btn>
+                </td>
+                <td style={td}>
+                  <Btn size="sm" icon={Download} disabled={!hasAttachment} onClick={() => hasAttachment && downloadAttachment(latestAttachment)}>下載</Btn>
+                </td>
+              </tr>
+            );
+          })}
+        </Table>
+      )}
+
+      {attachModal && (
+        <Modal title="請款掃描檔上傳" onClose={() => setAttachModal(null)} width={520}>
+          <ContractBillingAttachments
+            folderKey={`billing-${attachModal.contractId}-${month}`}
+            attachments={recordFor(attachModal.contractId)?.attachments || []}
+            onChange={(next) => updateRecord(attachModal.contractId, { attachments: next })}
+            askDelete={askDelete}
+          />
+        </Modal>
+      )}
+
+      {preview && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(27,35,51,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 24 }} onClick={() => setPreview(null)}>
+          {preview.loading ? (
+            <Loader2 color="#fff" size={28} style={{ animation: "spin 1s linear infinite" }} />
+          ) : (
+            <img src={preview.url} alt={preview.name} style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 8, boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }} onClick={(e) => e.stopPropagation()} />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ContractBillingAttachments({ folderKey, attachments, onChange, askDelete }) {
+  const [uploading, setUploading] = useState(false);
+  const [preview, setPreview] = useState(null); // { name, url } | { name, loading: true }
+  const fileInputRef = React.useRef(null);
+
+  const handleFiles = async (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (!files.length) return;
+    setUploading(true);
+    try {
+      const uploaded = [];
+      for (const file of files) {
+        uploaded.push(await uploadQuoteScan(folderKey, file));
+      }
+      onChange([...(attachments || []), ...uploaded]);
+    } catch (err) {
+      console.error(err);
+      alert("檔案上傳失敗，請稍後再試一次。");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const openPreview = async (att) => {
+    setPreview({ name: att.name, loading: true });
+    try {
+      const url = await getQuoteScanUrl(att.path);
+      setPreview({ name: att.name, url });
+    } catch (err) {
+      console.error(err);
+      setPreview(null);
+      alert("檔案預覽失敗，請稍後再試一次。");
+    }
+  };
+
+  const downloadAttachment = async (att) => {
+    try {
+      const url = await getQuoteScanUrl(att.path);
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = att.name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error(err);
+      alert("檔案下載失敗，請稍後再試一次。");
+    }
+  };
+
+  const removeAttachment = (att) => {
+    askDelete(`確定要刪除掃描檔「${att.name}」嗎？`, async () => {
+      try {
+        await deleteQuoteScan(att.path);
+      } catch (err) {
+        console.error(err);
+      }
+      onChange((attachments || []).filter((a) => a.id !== att.id));
+    });
+  };
+
+  return (
+    <div>
+      <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFiles} disabled={uploading} style={{ display: "none" }} />
+      <Btn variant="brass" icon={uploading ? Loader2 : Upload} disabled={uploading} onClick={() => fileInputRef.current?.click()}>
+        {uploading ? "上傳中…" : "上傳掃描檔"}
+      </Btn>
+
+      {(attachments || []).length === 0 ? (
+        <div style={{ fontSize: 12.5, color: THEME.muted, marginTop: 14 }}>尚未上傳任何掃描檔，需先上傳本月請款單掃描檔才能勾選「本月請款」。</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 16 }}>
+          {(attachments || []).map((att) => (
+            <div key={att.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, border: `1px solid ${THEME.line}` }}>
+              <IconBadge icon={ImageIcon} tone="ink" />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, color: THEME.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{att.name}</div>
+                <div style={{ fontSize: 11, color: THEME.muted }}>{fmtDate(att.uploadedAt)}</div>
+              </div>
+              <Btn size="sm" icon={Eye} onClick={() => openPreview(att)}>預覽</Btn>
+              <Btn size="sm" icon={Download} onClick={() => downloadAttachment(att)}>下載</Btn>
+              <Btn size="sm" variant="danger" icon={Trash2} onClick={() => removeAttachment(att)} />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {preview && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(27,35,51,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 24 }} onClick={() => setPreview(null)}>
+          {preview.loading ? (
+            <Loader2 color="#fff" size={28} style={{ animation: "spin 1s linear infinite" }} />
+          ) : (
+            <img src={preview.url} alt={preview.name} style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 8, boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }} onClick={(e) => e.stopPropagation()} />
+          )}
+        </div>
       )}
     </div>
   );
@@ -3677,7 +3991,7 @@ function PermissionsView({ ctx }) {
 
   return (
     <div>
-      <SectionHeader eyebrow="ACCESS · 13" title="權限設定"
+      <SectionHeader eyebrow="ACCESS · 14" title="權限設定"
         action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptySysUser(roles) })}>新增系統帳號</Btn>} />
 
       <div style={{ background: "#FBF7EC", border: `1px solid ${THEME.brassSoft}`, borderRadius: 10, padding: "10px 16px", fontSize: 12.5, color: THEME.brassDeep, marginBottom: 16, display: "flex", gap: 8, alignItems: "center" }}>
