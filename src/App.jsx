@@ -1675,6 +1675,7 @@ function QuotesView({ ctx, setTab }) {
   const [templateModal, setTemplateModal] = useState(null);
   const [attachModal, setAttachModal] = useState(null);
   const [companyFilter, setCompanyFilter] = useState("全部");
+  const [preview, setPreview] = useState(null); // { name, url } | { name, loading: true }
 
   // 估價單的報價公司是自由輸入欄位（不像發票鎖定固定公司清單），
   // 所以標籤要直接從實際填過的公司名稱產生，而不是比對固定選項，
@@ -1705,7 +1706,6 @@ function QuotesView({ ctx, setTab }) {
       const no = nextNo("Q", quotes);
       const newQuote = { ...data, id: uid(), no, total: sumItems(data.items), createdBy: actorName(ctx), createdAt: new Date().toISOString() };
       persist.quotes([newQuote, ...quotes]);
-      downloadQuotePdf(newQuote);
     }
     setModal(null);
   };
@@ -1740,6 +1740,37 @@ function QuotesView({ ctx, setTab }) {
     };
     ctx.persist.invoices([newInv, ...invoices]);
     setTab("invoices");
+  };
+
+  const openPreview = async (att) => {
+    setPreview({ name: att.name, loading: true, isPdf: isPdfFile(att.name) });
+    try {
+      const url = await getQuoteScanUrl(att.path);
+      setPreview({ name: att.name, url, isPdf: isPdfFile(att.name) });
+    } catch (err) {
+      console.error(err);
+      setPreview(null);
+      alert("檔案預覽失敗，請稍後再試一次。");
+    }
+  };
+
+  const downloadAttachment = async (att) => {
+    try {
+      const url = await getQuoteScanUrl(att.path);
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = att.name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error(err);
+      alert("檔案下載失敗，請稍後再試一次。");
+    }
   };
 
   return (
@@ -1777,8 +1808,12 @@ function QuotesView({ ctx, setTab }) {
               <span style={{ fontSize: 14.5, fontWeight: 700, color: THEME.text }}>{fmtMonthLabel(key)}</span>
               <span style={{ fontSize: 12.5, color: THEME.muted }}>共 {list.length} 張・小計 <span style={{ fontFamily: FONT_NUM, color: THEME.text }}>{fmtMoney(list.reduce((s, q) => s + sumItems(q.items), 0))}</span></span>
             </div>
-            <Table columns={["單號", "客戶", "日期", "有效期限", "金額", "報價公司", "狀態", ""]}>
-              {list.map((q) => (
+            <Table columns={["單號", "客戶", "日期", "有效期限", "金額", "報價公司", "狀態", "掃描檔上傳", "預覽", "下載掃描檔", ""]}>
+              {list.map((q) => {
+                const attachments = q.attachments || [];
+                const hasAttachment = attachments.length > 0;
+                const latestAttachment = hasAttachment ? attachments[attachments.length - 1] : null;
+                return (
                 <tr key={q.id}>
                   <td style={{ ...td, fontFamily: FONT_NUM }}>{q.no}</td>
                   <td style={td}><strong>{q.client}</strong></td>
@@ -1794,17 +1829,27 @@ function QuotesView({ ctx, setTab }) {
                       <option value="已拒絕">已拒絕</option>
                     </Select>
                   </td>
+                  <td style={td}>
+                    <Btn size="sm" icon={Upload} onClick={() => setAttachModal(q)}>
+                      {hasAttachment ? `掃描檔（${attachments.length}）` : "上傳掃描檔"}
+                    </Btn>
+                  </td>
+                  <td style={td}>
+                    <Btn size="sm" icon={Eye} disabled={!hasAttachment} onClick={() => hasAttachment && openPreview(latestAttachment)}>預覽</Btn>
+                  </td>
+                  <td style={td}>
+                    <Btn size="sm" icon={Download} disabled={!hasAttachment} onClick={() => hasAttachment && downloadAttachment(latestAttachment)}>下載</Btn>
+                  </td>
                   <td style={{ ...td, textAlign: "right" }}>
                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                      <Btn size="sm" icon={Paperclip} onClick={() => setAttachModal(q)}>附件{(q.attachments || []).length ? ` ${(q.attachments || []).length}` : ""}</Btn>
-                      <Btn size="sm" icon={Download} onClick={() => downloadQuotePdf(q)}>下載PDF</Btn>
                       <Btn size="sm" icon={ArrowRight} onClick={() => convertToInvoice(q)}>轉發票</Btn>
                       <Btn size="sm" icon={Pencil} onClick={() => setModal({ mode: "edit", data: q })} />
                       <Btn size="sm" variant="danger" icon={Trash2} onClick={() => askDelete(`確定要刪除估價單 ${q.no} 嗎？`, () => persist.quotes(quotes.filter((x) => x.id !== q.id)))} />
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </Table>
           </div>
         ))
@@ -1855,6 +1900,18 @@ function QuotesView({ ctx, setTab }) {
             }}
           />
         </Modal>
+      )}
+
+      {preview && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(27,35,51,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 24 }} onClick={() => setPreview(null)}>
+          {preview.loading ? (
+            <Loader2 color="#fff" size={28} style={{ animation: "spin 1s linear infinite" }} />
+          ) : preview.isPdf ? (
+            <embed src={preview.url} type="application/pdf" style={{ width: "90vw", height: "88vh", borderRadius: 8, boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }} onClick={(e) => e.stopPropagation()} />
+          ) : (
+            <img src={preview.url} alt={preview.name} style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 8, boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }} onClick={(e) => e.stopPropagation()} />
+          )}
+        </div>
       )}
     </div>
   );
