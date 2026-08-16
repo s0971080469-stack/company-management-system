@@ -227,6 +227,8 @@ async function getQuoteScanUrl(path) {
   return data.signedUrl;
 }
 
+const isPdfFile = (name) => /\.pdf$/i.test(name || "");
+
 async function deleteQuoteScan(path) {
   const { error } = await supabase.storage.from(QUOTE_SCAN_BUCKET).remove([path]);
   if (error) throw error;
@@ -1884,14 +1886,14 @@ function QuoteAttachments({ quote, onChange, askDelete }) {
   };
 
   const openPreview = async (att) => {
-    setPreview({ name: att.name, loading: true });
+    setPreview({ name: att.name, loading: true, isPdf: isPdfFile(att.name) });
     try {
       const url = await getQuoteScanUrl(att.path);
-      setPreview({ name: att.name, url });
+      setPreview({ name: att.name, url, isPdf: isPdfFile(att.name) });
     } catch (err) {
       console.error(err);
       setPreview(null);
-      alert("圖片預覽失敗，請稍後再試一次。");
+      alert("檔案預覽失敗，請稍後再試一次。");
     }
   };
 
@@ -1927,18 +1929,18 @@ function QuoteAttachments({ quote, onChange, askDelete }) {
 
   return (
     <div>
-      <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFiles} disabled={uploading} style={{ display: "none" }} />
+      <input ref={fileInputRef} type="file" accept="image/*,application/pdf" multiple onChange={handleFiles} disabled={uploading} style={{ display: "none" }} />
       <Btn variant="brass" icon={uploading ? Loader2 : Upload} disabled={uploading} onClick={() => fileInputRef.current?.click()}>
-        {uploading ? "上傳中…" : "上傳掃描圖片"}
+        {uploading ? "上傳中…" : "上傳掃描檔（圖片／PDF）"}
       </Btn>
 
       {attachments.length === 0 ? (
-        <div style={{ fontSize: 12.5, color: THEME.muted, marginTop: 14 }}>尚未上傳任何附件，開好的估價單掃描檔可以在這裡上傳保存。</div>
+        <div style={{ fontSize: 12.5, color: THEME.muted, marginTop: 14 }}>尚未上傳任何附件，開好的估價單掃描檔（圖片或 PDF）可以在這裡上傳保存。</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 16 }}>
           {attachments.map((att) => (
             <div key={att.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, border: `1px solid ${THEME.line}` }}>
-              <IconBadge icon={ImageIcon} tone="ink" />
+              <IconBadge icon={isPdfFile(att.name) ? FileText : ImageIcon} tone="ink" />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, color: THEME.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{att.name}</div>
                 <div style={{ fontSize: 11, color: THEME.muted }}>{fmtDate(att.uploadedAt)}</div>
@@ -1955,6 +1957,8 @@ function QuoteAttachments({ quote, onChange, askDelete }) {
         <div style={{ position: "fixed", inset: 0, background: "rgba(27,35,51,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 24 }} onClick={() => setPreview(null)}>
           {preview.loading ? (
             <Loader2 color="#fff" size={28} style={{ animation: "spin 1s linear infinite" }} />
+          ) : preview.isPdf ? (
+            <embed src={preview.url} type="application/pdf" style={{ width: "90vw", height: "88vh", borderRadius: 8, boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }} onClick={(e) => e.stopPropagation()} />
           ) : (
             <img src={preview.url} alt={preview.name} style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 8, boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }} onClick={(e) => e.stopPropagation()} />
           )}
@@ -3477,10 +3481,10 @@ function ContractBillingView({ ctx }) {
   const billedCount = filtered.filter((c) => recordFor(c.id)?.billed).length;
 
   const openPreview = async (att) => {
-    setPreview({ name: att.name, loading: true });
+    setPreview({ name: att.name, loading: true, isPdf: isPdfFile(att.name) });
     try {
       const url = await getQuoteScanUrl(att.path);
-      setPreview({ name: att.name, url });
+      setPreview({ name: att.name, url, isPdf: isPdfFile(att.name) });
     } catch (err) {
       console.error(err);
       setPreview(null);
@@ -3616,6 +3620,8 @@ function ContractBillingView({ ctx }) {
         <div style={{ position: "fixed", inset: 0, background: "rgba(27,35,51,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 24 }} onClick={() => setPreview(null)}>
           {preview.loading ? (
             <Loader2 color="#fff" size={28} style={{ animation: "spin 1s linear infinite" }} />
+          ) : preview.isPdf ? (
+            <embed src={preview.url} type="application/pdf" style={{ width: "90vw", height: "88vh", borderRadius: 8, boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }} onClick={(e) => e.stopPropagation()} />
           ) : (
             <img src={preview.url} alt={preview.name} style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 8, boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }} onClick={(e) => e.stopPropagation()} />
           )}
@@ -3650,10 +3656,10 @@ function ContractBillingAttachments({ folderKey, attachments, onChange, askDelet
   };
 
   const openPreview = async (att) => {
-    setPreview({ name: att.name, loading: true });
+    setPreview({ name: att.name, loading: true, isPdf: isPdfFile(att.name) });
     try {
       const url = await getQuoteScanUrl(att.path);
-      setPreview({ name: att.name, url });
+      setPreview({ name: att.name, url, isPdf: isPdfFile(att.name) });
     } catch (err) {
       console.error(err);
       setPreview(null);
@@ -3693,18 +3699,18 @@ function ContractBillingAttachments({ folderKey, attachments, onChange, askDelet
 
   return (
     <div>
-      <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFiles} disabled={uploading} style={{ display: "none" }} />
+      <input ref={fileInputRef} type="file" accept="image/*,application/pdf" multiple onChange={handleFiles} disabled={uploading} style={{ display: "none" }} />
       <Btn variant="brass" icon={uploading ? Loader2 : Upload} disabled={uploading} onClick={() => fileInputRef.current?.click()}>
-        {uploading ? "上傳中…" : "上傳掃描檔"}
+        {uploading ? "上傳中…" : "上傳掃描檔（圖片／PDF）"}
       </Btn>
 
       {(attachments || []).length === 0 ? (
-        <div style={{ fontSize: 12.5, color: THEME.muted, marginTop: 14 }}>尚未上傳任何掃描檔，需先上傳本月請款單掃描檔才能勾選「本月請款」。</div>
+        <div style={{ fontSize: 12.5, color: THEME.muted, marginTop: 14 }}>尚未上傳任何掃描檔，需先上傳本月請款單掃描檔（圖片或 PDF）才能勾選「本月請款」。</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 16 }}>
           {(attachments || []).map((att) => (
             <div key={att.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, border: `1px solid ${THEME.line}` }}>
-              <IconBadge icon={ImageIcon} tone="ink" />
+              <IconBadge icon={isPdfFile(att.name) ? FileText : ImageIcon} tone="ink" />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, color: THEME.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{att.name}</div>
                 <div style={{ fontSize: 11, color: THEME.muted }}>{fmtDate(att.uploadedAt)}</div>
@@ -3721,6 +3727,8 @@ function ContractBillingAttachments({ folderKey, attachments, onChange, askDelet
         <div style={{ position: "fixed", inset: 0, background: "rgba(27,35,51,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 24 }} onClick={() => setPreview(null)}>
           {preview.loading ? (
             <Loader2 color="#fff" size={28} style={{ animation: "spin 1s linear infinite" }} />
+          ) : preview.isPdf ? (
+            <embed src={preview.url} type="application/pdf" style={{ width: "90vw", height: "88vh", borderRadius: 8, boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }} onClick={(e) => e.stopPropagation()} />
           ) : (
             <img src={preview.url} alt={preview.name} style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 8, boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }} onClick={(e) => e.stopPropagation()} />
           )}
