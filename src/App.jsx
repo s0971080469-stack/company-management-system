@@ -2447,6 +2447,7 @@ function InvoicesView({ ctx }) {
       return {
         id: uid(), no, expenseType: "銀行入帳", date: todayStr(), source: `發票 ${inv.no} — ${inv.client}`,
         amount: total, note: "", companyName: inv.companyName || "", posted: true,
+        sourceInvoiceId: inv.id,
         createdBy: actorName(ctx), createdAt: new Date().toISOString(),
       };
     });
@@ -2522,7 +2523,15 @@ function InvoicesView({ ctx }) {
                 <td style={{ ...td, textAlign: "right" }}>
                   <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                     <Btn size="sm" icon={Pencil} onClick={() => setModal({ mode: "edit", data: inv })} />
-                    <Btn size="sm" variant="danger" icon={Trash2} onClick={() => askDelete(`確定要刪除發票 ${inv.no} 嗎？`, () => { persist.invoices(invoices.filter((x) => x.id !== inv.id)); removeAccountingBySource("invoice", inv.id); })} />
+                    <Btn size="sm" variant="danger" icon={Trash2} onClick={() => askDelete(`確定要刪除發票 ${inv.no} 嗎？`, () => {
+                      persist.invoices(invoices.filter((x) => x.id !== inv.id));
+                      removeAccountingBySource("invoice", inv.id);
+                      const linkedDeposits = billing.filter((b) => b.sourceInvoiceId === inv.id);
+                      if (linkedDeposits.length) {
+                        persist.billing(billing.filter((b) => b.sourceInvoiceId !== inv.id));
+                        linkedDeposits.forEach((b) => removeAccountingBySource("billing", b.id));
+                      }
+                    })} />
                   </div>
                 </td>
               </tr>
