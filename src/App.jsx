@@ -2412,20 +2412,14 @@ function InvoicesView({ ctx }) {
     setModal(null);
   };
 
+  // 發票本身不再自動登記到帳務入口，避免和「新增至銀行入帳紀錄」的收入重複計算；
+  // 實際收款請透過「新增至銀行入帳紀錄」登記，帳務入口才會有對應的收入。
   const setStatus = (inv, status) => {
-    const total = inv.total ?? sumItems(inv.items) * (1 + Number(inv.taxRate) / 100);
     persist.invoices(invoices.map((x) => x.id === inv.id ? { ...x, status, posted: status === "已付款" } : x));
-    if (status === "已付款" && !inv.posted) {
-      addAccountingEntry({ type: "收入", category: "發票收款", amount: total, desc: `發票 ${inv.no} — ${inv.client}`, sourceType: "invoice", sourceId: inv.id });
-    }
   };
 
   const setDueDate = (inv, dueDate) => {
-    const total = inv.total ?? sumItems(inv.items) * (1 + Number(inv.taxRate) / 100);
     persist.invoices(invoices.map((x) => x.id === inv.id ? { ...x, dueDate, status: "已付款", posted: true } : x));
-    if (!inv.posted) {
-      addAccountingEntry({ type: "收入", category: "發票收款", amount: total, desc: `發票 ${inv.no} — ${inv.client}`, sourceType: "invoice", sourceId: inv.id });
-    }
   };
 
   const toggleChecked = (id) => {
@@ -3127,10 +3121,21 @@ function CompanyPaymentForm({ data, onSave, onCancel }) {
 const emptyAccounting = () => ({ type: "收入", category: "", amount: "", date: todayStr(), desc: "" });
 
 function AccountingView({ ctx }) {
-  const { accounting, persist, askDelete } = ctx;
+  const { accounting, invoices, persist, askDelete } = ctx;
   const [modal, setModal] = useState(null);
   const [month, setMonth] = useState("");
   const [typeFilter, setTypeFilter] = useState("全部");
+
+  // 一次性清理：發票不再自動記「發票收款」收入，但過去已經產生過、
+  // 且該發票也被加入過銀行入帳紀錄的舊資料會重複計算收入，這裡把重複的「發票收款」那筆移除，保留銀行入帳的紀錄。
+  useEffect(() => {
+    const bankDepositedInvoiceIds = new Set(invoices.filter((inv) => inv.addedToBankDeposit).map((inv) => inv.id));
+    if (!bankDepositedInvoiceIds.size) return;
+    const hasDuplicate = accounting.some((a) => a.sourceType === "invoice" && bankDepositedInvoiceIds.has(a.sourceId));
+    if (hasDuplicate) {
+      persist.accounting(accounting.filter((a) => !(a.sourceType === "invoice" && bankDepositedInvoiceIds.has(a.sourceId))));
+    }
+  }, [accounting.length, invoices.length]);
 
   const save = (data) => {
     persist.accounting([{ ...data, id: uid(), createdAt: new Date().toISOString() }, ...accounting]);
@@ -3167,7 +3172,7 @@ function AccountingView({ ctx }) {
 
       <div style={{ background: "#FBF7EC", border: `1px solid ${THEME.brassSoft}`, borderRadius: 10, padding: "10px 16px", fontSize: 12.5, color: THEME.brassDeep, marginBottom: 16, display: "flex", gap: 8, alignItems: "center" }}>
         <AlertCircle size={14} />
-        發票收款、收支管理內的紀錄與已發放薪資會自動登錄於此帳冊，亦可手動新增其他收支項目。
+收支管理內的紀錄（含發票加入的銀行入帳）與已發放薪資會自動登錄於此帳冊，亦可手動新增其他收支項目。
       </div>
 
       {accounting.length > 0 && (
