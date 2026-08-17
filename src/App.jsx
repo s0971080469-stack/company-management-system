@@ -5,7 +5,7 @@ import {
   Landmark, BarChart3, Plus, Trash2, Pencil, X, Check, Search,
   LogIn, LogOut, Building2, TrendingUp, TrendingDown, CalendarDays,
   ChevronRight, RotateCcw, ArrowRight, AlertCircle, FileSignature, Truck, ShieldCheck, UserCog, Download, Car,
-  Paperclip, Eye, Upload, Image as ImageIcon, Loader2, MapPin, Printer
+  Paperclip, Eye, Upload, Image as ImageIcon, Loader2, MapPin, Printer, Menu
 } from "lucide-react";
 import {
   BarChart, Bar, LineChart, Line, ComposedChart, PieChart, Pie, Cell, XAxis, YAxis,
@@ -801,6 +801,7 @@ export default function CompanyManagementSystem({ session }) {
   const [tab, setTab] = useState("dashboard");
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(new Date());
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const [employees, setEmployees] = useState([]);
   const [attendance, setAttendance] = useState([]);
@@ -892,6 +893,15 @@ export default function CompanyManagementSystem({ session }) {
     });
   }, []);
 
+  // 來源紀錄（發票／薪資／收支管理）被刪除時，一併移除帳務入口內對應自動產生的紀錄，避免留下孤兒數字
+  const removeAccountingBySource = useCallback((sourceType, sourceId) => {
+    setAccounting((prev) => {
+      const next = prev.filter((a) => !(a.sourceType === sourceType && a.sourceId === sourceId));
+      saveKey(STORAGE_KEYS.accounting, next);
+      return next;
+    });
+  }, []);
+
   const askDelete = (message, onConfirm) => setConfirmState({ message, onConfirm });
 
   // 「真實身分」以登入帳號的 Email 對應到系統帳號清單為準，不是側邊欄下拉選單
@@ -929,7 +939,7 @@ export default function CompanyManagementSystem({ session }) {
     employees, attendance, payroll, quotes, invoices, billing, accounting,
     vendors, contracts, sysUsers, rolePerms, quoteTemplates, vehicles, companyLocation, contractBilling,
     currentUser, isAdmin, realIsAdmin,
-    persist, addAccountingEntry, askDelete, now,
+    persist, addAccountingEntry, removeAccountingBySource, askDelete, now,
   };
 
   return (
@@ -945,14 +955,37 @@ export default function CompanyManagementSystem({ session }) {
           .app-shell { border: none !important; border-radius: 0 !important; overflow: visible !important; min-height: 0 !important; }
           .app-content { overflow: visible !important; padding: 0 !important; }
         }
+        .mobile-nav-toggle { display: none; }
+        .mobile-nav-backdrop { display: none; }
+        @media (max-width: 900px) {
+          .app-shell { position: relative; }
+          .mobile-nav-toggle {
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+            width: 34px; height: 34px; border-radius: 8px; border: none; cursor: pointer;
+            background: ${THEME.canvas}; color: ${THEME.text};
+          }
+          .app-topbar > div { padding: 14px 16px !important; }
+          .app-sidebar {
+            position: fixed; top: 0; left: 0; height: 100vh; z-index: 40;
+            transform: translateX(-100%); transition: transform .2s ease;
+            box-shadow: 0 8px 28px rgba(0,0,0,.3);
+          }
+          .app-sidebar.nav-open { transform: translateX(0); }
+          .mobile-nav-backdrop.nav-open {
+            display: block; position: fixed; inset: 0; background: rgba(15,18,28,.45); z-index: 39;
+          }
+          .app-content { padding: 20px 16px !important; }
+        }
       `}</style>
 
-      <div className="app-sidebar">
-        <Sidebar tab={tab} setTab={setTab} nav={allowedNav} employees={employees} sysUsers={sysUsers} currentUserId={currentUserId} setCurrentUserId={persist.currentUserId} realIsAdmin={realIsAdmin} matchedUser={matchedUser} session={session} />
+      <div className={"mobile-nav-backdrop" + (mobileNavOpen ? " nav-open" : "")} onClick={() => setMobileNavOpen(false)} />
+
+      <div className={"app-sidebar" + (mobileNavOpen ? " nav-open" : "")}>
+        <Sidebar tab={tab} setTab={(k) => { setTab(k); setMobileNavOpen(false); }} nav={allowedNav} employees={employees} sysUsers={sysUsers} currentUserId={currentUserId} setCurrentUserId={persist.currentUserId} realIsAdmin={realIsAdmin} matchedUser={matchedUser} session={session} />
       </div>
 
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-        <div className="app-topbar"><TopBar tab={tab} now={now} /></div>
+        <div className="app-topbar"><TopBar tab={tab} now={now} onMenuClick={() => setMobileNavOpen((v) => !v)} /></div>
         <div className="app-content" style={{ padding: "26px 32px", flex: 1, overflow: "auto" }}>
           {tab === "dashboard" && <Dashboard ctx={ctx} />}
           {tab === "employees" && <EmployeesView ctx={ctx} />}
@@ -1060,12 +1093,13 @@ function Sidebar({ tab, setTab, nav, employees, sysUsers, currentUserId, setCurr
   );
 }
 
-function TopBar({ tab, now }) {
+function TopBar({ tab, now, onMenuClick }) {
   const current = NAV.find((n) => n.key === tab);
   const weekday = ["日", "一", "二", "三", "四", "五", "六"][now.getDay()];
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 32px", borderBottom: `1px solid ${THEME.line}`, background: THEME.surface }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <button className="mobile-nav-toggle" aria-label="開啟選單" onClick={onMenuClick}><Menu size={18} /></button>
         <IconBadge icon={current.icon} tone="ink" />
         <div>
           <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18, color: THEME.text }}>{current.label}</div>
@@ -1493,7 +1527,7 @@ const emptyPayrollRow = (e, month) => ({
 });
 
 function PayrollView({ ctx }) {
-  const { employees, payroll, persist, addAccountingEntry, askDelete } = ctx;
+  const { employees, payroll, persist, addAccountingEntry, removeAccountingBySource, askDelete } = ctx;
   const [month, setMonth] = useState(monthStr());
   const [modal, setModal] = useState(null);
   const [siteFilter, setSiteFilter] = useState("全部");
@@ -1539,7 +1573,7 @@ function PayrollView({ ctx }) {
     const paymentDate = r.paymentDate || todayStr();
     persist.payroll(payroll.map((x) => (x.id === r.id ? { ...x, status: "已發放", posted: true, paymentDate } : x)));
     if (!r.posted) {
-      addAccountingEntry({ type: "支出", category: "薪資", amount: net, desc: `${r.month} 薪資 — ${r.employeeName}`, date: paymentDate });
+      addAccountingEntry({ type: "支出", category: "薪資", amount: net, desc: `${r.month} 薪資 — ${r.employeeName}`, date: paymentDate, sourceType: "payroll", sourceId: r.id });
     }
   };
 
@@ -1615,7 +1649,7 @@ function PayrollView({ ctx }) {
                   <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                     <Btn size="sm" icon={Pencil} onClick={() => setModal(r)}>編輯</Btn>
                     {r.status !== "已發放" && <Btn size="sm" variant="success" icon={Check} onClick={() => markPaid(r)}>標記已發放</Btn>}
-                    <Btn size="sm" variant="danger" icon={Trash2} onClick={() => askDelete(`確定要刪除 ${r.employeeName} 的薪資紀錄嗎？`, () => persist.payroll(payroll.filter((x) => x.id !== r.id)))} />
+                    <Btn size="sm" variant="danger" icon={Trash2} onClick={() => askDelete(`確定要刪除 ${r.employeeName} 的薪資紀錄嗎？`, () => { persist.payroll(payroll.filter((x) => x.id !== r.id)); removeAccountingBySource("payroll", r.id); })} />
                   </div>
                 </td>
               </tr>
@@ -2353,7 +2387,7 @@ const emptyInvoice = () => ({
 });
 
 function InvoicesView({ ctx }) {
-  const { invoices, quotes, billing, persist, addAccountingEntry, askDelete } = ctx;
+  const { invoices, quotes, billing, persist, addAccountingEntry, removeAccountingBySource, askDelete } = ctx;
   const [modal, setModal] = useState(null);
   const [companyFilter, setCompanyFilter] = useState("全部");
   const [month, setMonth] = useState(monthStr());
@@ -2382,7 +2416,7 @@ function InvoicesView({ ctx }) {
     const total = inv.total ?? sumItems(inv.items) * (1 + Number(inv.taxRate) / 100);
     persist.invoices(invoices.map((x) => x.id === inv.id ? { ...x, status, posted: status === "已付款" } : x));
     if (status === "已付款" && !inv.posted) {
-      addAccountingEntry({ type: "收入", category: "發票收款", amount: total, desc: `發票 ${inv.no} — ${inv.client}` });
+      addAccountingEntry({ type: "收入", category: "發票收款", amount: total, desc: `發票 ${inv.no} — ${inv.client}`, sourceType: "invoice", sourceId: inv.id });
     }
   };
 
@@ -2390,7 +2424,7 @@ function InvoicesView({ ctx }) {
     const total = inv.total ?? sumItems(inv.items) * (1 + Number(inv.taxRate) / 100);
     persist.invoices(invoices.map((x) => x.id === inv.id ? { ...x, dueDate, status: "已付款", posted: true } : x));
     if (!inv.posted) {
-      addAccountingEntry({ type: "收入", category: "發票收款", amount: total, desc: `發票 ${inv.no} — ${inv.client}` });
+      addAccountingEntry({ type: "收入", category: "發票收款", amount: total, desc: `發票 ${inv.no} — ${inv.client}`, sourceType: "invoice", sourceId: inv.id });
     }
   };
 
@@ -2418,7 +2452,7 @@ function InvoicesView({ ctx }) {
     });
     persist.billing([...entries, ...billing]);
     entries.forEach((entry) => {
-      addAccountingEntry({ type: "收入", category: "銀行入帳", amount: entry.amount, desc: `銀行入帳 — ${entry.source}`, date: entry.date });
+      addAccountingEntry({ type: "收入", category: "銀行入帳", amount: entry.amount, desc: `銀行入帳 — ${entry.source}`, date: entry.date, sourceType: "billing", sourceId: entry.id });
     });
     persist.invoices(invoices.map((inv) => checkedIds.has(inv.id) ? { ...inv, addedToBankDeposit: true } : inv));
     setCheckedIds(new Set());
@@ -2488,7 +2522,7 @@ function InvoicesView({ ctx }) {
                 <td style={{ ...td, textAlign: "right" }}>
                   <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                     <Btn size="sm" icon={Pencil} onClick={() => setModal({ mode: "edit", data: inv })} />
-                    <Btn size="sm" variant="danger" icon={Trash2} onClick={() => askDelete(`確定要刪除發票 ${inv.no} 嗎？`, () => persist.invoices(invoices.filter((x) => x.id !== inv.id)))} />
+                    <Btn size="sm" variant="danger" icon={Trash2} onClick={() => askDelete(`確定要刪除發票 ${inv.no} 嗎？`, () => { persist.invoices(invoices.filter((x) => x.id !== inv.id)); removeAccountingBySource("invoice", inv.id); })} />
                   </div>
                 </td>
               </tr>
@@ -2754,7 +2788,7 @@ const emptyCompanyPayment = () => ({ expenseType: "公司付款", vendor: "", ca
 const emptyBankDeposit = () => ({ expenseType: "銀行入帳", date: todayStr(), source: "", amount: "", note: "", companyName: "" });
 
 function BillingView({ ctx }) {
-  const { billing, persist, addAccountingEntry, askDelete } = ctx;
+  const { billing, persist, addAccountingEntry, removeAccountingBySource, askDelete } = ctx;
   const [expenseTab, setExpenseTab] = useState("銀行入帳");
   const [modal, setModal] = useState(null);
   const [month, setMonth] = useState(monthStr());
@@ -2785,7 +2819,7 @@ function BillingView({ ctx }) {
       const no = nextNo("PC", pettyCash);
       const entry = { ...data, id: uid(), no, posted: true, createdBy: actorName(ctx), createdAt: new Date().toISOString() };
       persist.billing([entry, ...billing]);
-      addAccountingEntry({ type: "支出", category: "零用金", amount: entry.amount, desc: `零用金 — ${entry.item}`, date: entry.date });
+      addAccountingEntry({ type: "支出", category: "零用金", amount: entry.amount, desc: `零用金 — ${entry.item}`, date: entry.date, sourceType: "billing", sourceId: entry.id });
     }
     setModal(null);
   };
@@ -2807,7 +2841,7 @@ function BillingView({ ctx }) {
       const no = nextNo("BD", bankDeposits);
       const entry = { ...data, id: uid(), no, posted: true, createdBy: actorName(ctx), createdAt: new Date().toISOString() };
       persist.billing([entry, ...billing]);
-      addAccountingEntry({ type: "收入", category: "銀行入帳", amount: entry.amount, desc: `銀行入帳 — ${entry.source}`, date: entry.date });
+      addAccountingEntry({ type: "收入", category: "銀行入帳", amount: entry.amount, desc: `銀行入帳 — ${entry.source}`, date: entry.date, sourceType: "billing", sourceId: entry.id });
     }
     setModal(null);
   };
@@ -2815,14 +2849,14 @@ function BillingView({ ctx }) {
   const setStatus = (b, status) => {
     persist.billing(billing.map((x) => x.id === b.id ? { ...x, status, posted: status === "已付款" } : x));
     if (status === "已付款" && !b.posted) {
-      addAccountingEntry({ type: "支出", category: b.category || "公司付款", amount: b.amount, desc: `公司付款 ${b.no} — ${b.vendor}` });
+      addAccountingEntry({ type: "支出", category: b.category || "公司付款", amount: b.amount, desc: `公司付款 ${b.no} — ${b.vendor}`, sourceType: "billing", sourceId: b.id });
     }
   };
 
   const setPaymentDate = (b, paymentDate) => {
     persist.billing(billing.map((x) => x.id === b.id ? { ...x, paymentDate, status: "已付款", posted: true } : x));
     if (!b.posted) {
-      addAccountingEntry({ type: "支出", category: b.category || "公司付款", amount: b.amount, desc: `公司付款 ${b.no} — ${b.vendor}` });
+      addAccountingEntry({ type: "支出", category: b.category || "公司付款", amount: b.amount, desc: `公司付款 ${b.no} — ${b.vendor}`, sourceType: "billing", sourceId: b.id });
     }
   };
 
@@ -2930,7 +2964,7 @@ function BillingView({ ctx }) {
                   <td style={{ ...td, textAlign: "right" }}>
                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                       <Btn size="sm" icon={Pencil} onClick={() => setModal({ mode: "edit", data: b })} />
-                      <Btn size="sm" variant="danger" icon={Trash2} onClick={() => askDelete(`確定要刪除這筆零用金紀錄嗎？`, () => persist.billing(billing.filter((x) => x.id !== b.id)))} />
+                      <Btn size="sm" variant="danger" icon={Trash2} onClick={() => askDelete(`確定要刪除這筆零用金紀錄嗎？`, () => { persist.billing(billing.filter((x) => x.id !== b.id)); removeAccountingBySource("billing", b.id); })} />
                     </div>
                   </td>
                 </tr>
@@ -2949,7 +2983,7 @@ function BillingView({ ctx }) {
                   <td style={{ ...td, textAlign: "right" }}>
                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                       <Btn size="sm" icon={Pencil} onClick={() => setModal({ mode: "edit", data: b })} />
-                      <Btn size="sm" variant="danger" icon={Trash2} onClick={() => askDelete(`確定要刪除這筆銀行入帳紀錄嗎？`, () => persist.billing(billing.filter((x) => x.id !== b.id)))} />
+                      <Btn size="sm" variant="danger" icon={Trash2} onClick={() => askDelete(`確定要刪除這筆銀行入帳紀錄嗎？`, () => { persist.billing(billing.filter((x) => x.id !== b.id)); removeAccountingBySource("billing", b.id); })} />
                     </div>
                   </td>
                 </tr>
@@ -2978,7 +3012,7 @@ function BillingView({ ctx }) {
                   <td style={{ ...td, textAlign: "right" }}>
                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                       <Btn size="sm" icon={Pencil} onClick={() => setModal({ mode: "edit", data: b })} />
-                      <Btn size="sm" variant="danger" icon={Trash2} onClick={() => askDelete(`確定要刪除公司應付款項 ${b.no} 嗎？`, () => persist.billing(billing.filter((x) => x.id !== b.id)))} />
+                      <Btn size="sm" variant="danger" icon={Trash2} onClick={() => askDelete(`確定要刪除公司應付款項 ${b.no} 嗎？`, () => { persist.billing(billing.filter((x) => x.id !== b.id)); removeAccountingBySource("billing", b.id); })} />
                     </div>
                   </td>
                 </tr>
