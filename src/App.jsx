@@ -3350,7 +3350,7 @@ const BILLING_COMPANY_OPTIONS = VENDOR_COMPANY_OPTIONS.filter((o) => o !== "禾�
 const PAYMENT_METHODS = ["現金", "匯款", "支票", "月結30天", "月結60天", "其他"];
 const VENDOR_TYPES = ["供應商", "業主"];
 
-const emptyVendor = { name: "", vendorType: "供應商", contact: "", phone: "", email: "", category: "", taxId: "", paymentMethod: "匯款", tradingCompany: "", note: "" };
+const emptyVendor = { name: "", vendorType: "供應商", contact: "", phone: "", email: "", category: "", taxId: "", paymentMethod: "匯款", tradingCompany: "", address: "", note: "" };
 
 function VendorsView({ ctx }) {
   const { vendors, persist, askDelete } = ctx;
@@ -3407,7 +3407,7 @@ function VendorsView({ ctx }) {
       {filtered.length === 0 ? (
         <EmptyState icon={Truck} text="尚未建立任何廠商資料。" action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptyVendor })}>新增第一家廠商</Btn>} />
       ) : (
-        <Table columns={["名稱", "類型", "業務類別", "聯絡人", "聯絡方式", "統一編號", "付款方式", "往來公司", ""]}>
+        <Table columns={["名稱", "類型", "業務類別", "聯絡人", "聯絡方式", "統一編號", "付款方式", "往來公司", "聯絡地址", ""]}>
           {filtered.map((v) => (
             <tr key={v.id}>
               <td style={td}><strong>{v.name}</strong></td>
@@ -3421,6 +3421,7 @@ function VendorsView({ ctx }) {
               <td style={{ ...td, fontFamily: FONT_NUM }}>{v.taxId || "—"}</td>
               <td style={td}>{v.paymentMethod || "—"}</td>
               <td style={td}>{v.tradingCompany ? <StatusBadge status={v.tradingCompany} /> : "—"}</td>
+              <td style={td}>{v.address || "—"}</td>
               <td style={{ ...td, textAlign: "right" }}>
                 <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                   <Btn size="sm" icon={Pencil} onClick={() => setModal({ mode: "edit", data: v })}>編輯</Btn>
@@ -3479,6 +3480,7 @@ function VendorForm({ data, onSave, onCancel }) {
       {companyChoice === "其他" && (
         <Field label="自訂往來公司名稱"><TextInput value={f.tradingCompany} onChange={set("tradingCompany")} placeholder="輸入公司名稱" /></Field>
       )}
+      <Field label="聯絡地址" span={2}><TextInput value={f.address} onChange={set("address")} placeholder="市／區／路／號" /></Field>
       <Field label="聯絡電話"><TextInput value={f.phone} onChange={set("phone")} placeholder="02-1234-5678" /></Field>
       <Field label="Email"><TextInput value={f.email} onChange={set("email")} placeholder="contact@company.com" /></Field>
       <Field label="備註" span={2}><TextArea value={f.note} onChange={set("note")} /></Field>
