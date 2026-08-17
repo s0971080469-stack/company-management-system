@@ -1287,7 +1287,7 @@ function quotesActivity(ctx) {
 const SITE_FIXED_OPTIONS = ["公司總部", "機動組"];
 const emptyEmployee = {
   name: "", company: "", dept: "", title: "", phone: "", email: "", hireDate: todayStr(), baseSalary: "", status: "在職", siteName: "",
-  additions: [], deductions: [], laborInsurance: 0, healthInsurance: 0, pensionSelf: 0, advance: 0, insuranceStatus: "加保", insuranceGrade: "",
+  additions: [], deductions: [], laborInsurance: 0, healthInsurance: 0, pensionSelf: 0, advances: [], insuranceStatus: "加保", insuranceGrade: "",
 };
 
 function EmployeesView({ ctx }) {
@@ -1296,6 +1296,23 @@ function EmployeesView({ ctx }) {
   const [modal, setModal] = useState(null); // {mode, data}
   const [query, setQuery] = useState("");
   const [companyFilter, setCompanyFilter] = useState("全部");
+
+  // 數據遷移：將舊格式的 advance 轉換為新格式 advances
+  useEffect(() => {
+    const needsMigration = employees.some((e) => e.advance !== undefined && !e.advances);
+    if (needsMigration) {
+      const migratedEmployees = employees.map((e) => {
+        if (e.advance !== undefined && !e.advances) {
+          return {
+            ...e,
+            advances: Number(e.advance) ? [{ id: uid(), amount: Number(e.advance), date: "" }] : [],
+          };
+        }
+        return e;
+      });
+      persist.employees(migratedEmployees);
+    }
+  }, [employees.length]);
 
   const KNOWN_COMPANIES = BILLING_COMPANY_OPTIONS.filter((o) => o !== "其他");
   const companyTabs = ["全部", ...KNOWN_COMPANIES, "其他"];
@@ -1389,7 +1406,7 @@ function EmployeesView({ ctx }) {
 }
 
 function EmployeeForm({ data, siteOptions, onSave, onCancel }) {
-  const [f, setF] = useState({ additions: [], deductions: [], laborInsurance: 0, healthInsurance: 0, pensionSelf: 0, advance: 0, insuranceStatus: "加保", insuranceGrade: "", ...data });
+  const [f, setF] = useState({ additions: [], deductions: [], laborInsurance: 0, healthInsurance: 0, pensionSelf: 0, advances: [], insuranceStatus: "加保", insuranceGrade: "", ...data });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   return (
     <div>
@@ -1427,14 +1444,15 @@ function EmployeeForm({ data, siteOptions, onSave, onCancel }) {
         <AmountListEditor label="減項（遲到扣款等其他項目）" items={f.deductions} setItems={(v) => setF({ ...f, deductions: v })} tone="danger" />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 18 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 18 }}>
         <Field label="勞保自負額"><TextInput type="number" value={f.laborInsurance} onChange={set("laborInsurance")} /></Field>
         <Field label="健保自付額"><TextInput type="number" value={f.healthInsurance} onChange={set("healthInsurance")} /></Field>
         <Field label="勞退自付額"><TextInput type="number" value={f.pensionSelf} onChange={set("pensionSelf")} /></Field>
-        <Field label="借支"><TextInput type="number" value={f.advance} onChange={set("advance")} /></Field>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+      <AdvanceListEditor label="預設借支" items={f.advances} setItems={(v) => setF({ ...f, advances: v })} />
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 18 }}>
         <Field label="保險狀態">
           <Select value={f.insuranceStatus} onChange={set("insuranceStatus")}>
             <option value="加保">加保</option>
@@ -1458,9 +1476,10 @@ function EmployeeForm({ data, siteOptions, onSave, onCancel }) {
    PAYROLL
 ========================================================= */
 const sumAmounts = (items = []) => items.reduce((s, it) => s + (Number(it.amount) || 0), 0);
+const sumAdvances = (advances = []) => advances.reduce((s, adv) => s + (Number(adv.amount) || 0), 0);
 const payrollNet = (r) =>
   Number(r.baseSalary || 0) + sumAmounts(r.additions) - sumAmounts(r.deductions)
-  - Number(r.laborInsurance || 0) - Number(r.healthInsurance || 0) - Number(r.pensionSelf || 0) - Number(r.advance || 0);
+  - Number(r.laborInsurance || 0) - Number(r.healthInsurance || 0) - Number(r.pensionSelf || 0) - sumAdvances(r.advances);
 
 const emptyPayrollRow = (e, month) => ({
   id: uid(), month, employeeId: e.id, employeeName: e.name, department: e.dept || "", siteName: e.siteName || "", company: e.company || "",
@@ -1468,7 +1487,7 @@ const emptyPayrollRow = (e, month) => ({
   additions: (e.additions || []).map((it) => ({ ...it, id: uid() })),
   deductions: (e.deductions || []).map((it) => ({ ...it, id: uid() })),
   laborInsurance: Number(e.laborInsurance) || 0, healthInsurance: Number(e.healthInsurance) || 0,
-  pensionSelf: Number(e.pensionSelf) || 0, advance: Number(e.advance) || 0, advanceDate: "",
+  pensionSelf: Number(e.pensionSelf) || 0, advances: Number(e.advance) ? [{ id: uid(), amount: Number(e.advance), date: "" }] : [],
   insuranceStatus: e.insuranceStatus || "加保", paymentDate: "", note: "",
   status: "待發放", posted: false,
 });
@@ -1478,6 +1497,23 @@ function PayrollView({ ctx }) {
   const [month, setMonth] = useState(monthStr());
   const [modal, setModal] = useState(null);
   const [siteFilter, setSiteFilter] = useState("全部");
+
+  // 數據遷移：將舊格式的 advance/advanceDate 轉換為新格式 advances
+  useEffect(() => {
+    const needsMigration = payroll.some((p) => p.advance !== undefined || p.advanceDate !== undefined);
+    if (needsMigration) {
+      const migratedPayroll = payroll.map((p) => {
+        if (p.advance !== undefined && !p.advances) {
+          return {
+            ...p,
+            advances: Number(p.advance) ? [{ id: uid(), amount: Number(p.advance), date: p.advanceDate || "" }] : [],
+          };
+        }
+        return p;
+      });
+      persist.payroll(migratedPayroll);
+    }
+  }, [payroll.length]);
 
   const deptOf = (r) => r.department || employees.find((e) => e.id === r.employeeId)?.dept || "";
   const siteOf = (r) => r.siteName || employees.find((e) => e.id === r.employeeId)?.siteName || "";
@@ -1557,10 +1593,16 @@ function PayrollView({ ctx }) {
                 <td style={{ ...td, fontFamily: FONT_NUM, color: THEME.success }}>{sumAmounts(r.additions) ? "+" + fmtMoney(sumAmounts(r.additions)) : "—"}</td>
                 <td style={{ ...td, fontFamily: FONT_NUM, color: THEME.danger }}>{deductTotal ? "−" + fmtMoney(deductTotal) : "—"}</td>
                 <td style={td}>
-                  {Number(r.advance) ? (
+                  {sumAdvances(r.advances) ? (
                     <>
-                      <div style={{ fontFamily: FONT_NUM, color: THEME.danger }}>−{fmtMoney(r.advance)}</div>
-                      <div style={{ fontSize: 11, color: THEME.muted }}>{r.advanceDate ? fmtDate(r.advanceDate) : "未填日期"}</div>
+                      <div style={{ fontFamily: FONT_NUM, color: THEME.danger }}>−{fmtMoney(sumAdvances(r.advances))}</div>
+                      {r.advances && r.advances.length > 0 && (
+                        <div style={{ fontSize: 11, color: THEME.muted }}>
+                          {r.advances.map((adv, i) => (
+                            <div key={i}>{fmtDate(adv.date || "")}</div>
+                          ))}
+                        </div>
+                      )}
                     </>
                   ) : "—"}
                 </td>
@@ -1615,8 +1657,32 @@ function AmountListEditor({ label, items, setItems, tone }) {
   );
 }
 
+function AdvanceListEditor({ label, items, setItems }) {
+  const update = (idx, key, val) => { const next = items.slice(); next[idx] = { ...next[idx], [key]: val }; setItems(next); };
+  const remove = (idx) => setItems(items.filter((_, i) => i !== idx));
+  const add = () => setItems([...items, { id: uid(), amount: 0, date: "" }]);
+  const total = sumAdvances(items);
+  return (
+    <div>
+      <div style={{ fontSize: 12, color: THEME.muted, fontWeight: 700, marginBottom: 8 }}>{label}</div>
+      {items.length === 0 && <div style={{ fontSize: 12.5, color: THEME.muted, marginBottom: 8 }}>尚無項目</div>}
+      {items.map((it, i) => (
+        <div key={it.id} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
+          <input type="number" value={it.amount} onChange={(e) => update(i, "amount", e.target.value)} placeholder="金額" style={{ ...inputStyle, flex: 1, fontFamily: FONT_NUM }} />
+          <input type="date" value={it.date} onChange={(e) => update(i, "date", e.target.value)} style={{ ...inputStyle, width: 130 }} />
+          <button onClick={() => remove(i)} style={{ border: "none", background: "transparent", cursor: "pointer", color: THEME.danger, padding: "6px 4px" }}><X size={15} /></button>
+        </div>
+      ))}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <Btn size="sm" icon={Plus} onClick={add}>新增借支</Btn>
+        <span style={{ fontSize: 12.5, color: THEME.muted }}>小計：<span style={{ fontFamily: FONT_NUM, color: THEME.danger, fontWeight: 700 }}>−{fmtMoney(total)}</span></span>
+      </div>
+    </div>
+  );
+}
+
 function PayrollForm({ data, onSave, onCancel }) {
-  const [f, setF] = useState({ advanceDate: "", ...data });
+  const [f, setF] = useState({ advances: [], ...data });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const net = payrollNet(f);
 
@@ -1640,13 +1706,9 @@ function PayrollForm({ data, onSave, onCancel }) {
         <Field label="勞退自付額"><TextInput type="number" value={f.pensionSelf} onChange={set("pensionSelf")} /></Field>
       </div>
 
-      <div style={{ fontSize: 12, color: THEME.muted, fontWeight: 700, marginBottom: 8 }}>借支</div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 18 }}>
-        <Field label="借支金額"><TextInput type="number" value={f.advance} onChange={set("advance")} /></Field>
-        <Field label="借支日期"><TextInput type="date" value={f.advanceDate} onChange={set("advanceDate")} /></Field>
-      </div>
+      <AdvanceListEditor label="借支" items={f.advances} setItems={(v) => setF({ ...f, advances: v })} />
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 18 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 18, marginTop: 18 }}>
         <Field label="保險狀態">
           <Select value={f.insuranceStatus} onChange={set("insuranceStatus")}>
             <option value="加保">加保</option>
