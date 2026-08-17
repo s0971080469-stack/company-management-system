@@ -3121,21 +3121,25 @@ function CompanyPaymentForm({ data, onSave, onCancel }) {
 const emptyAccounting = () => ({ type: "收入", category: "", amount: "", date: todayStr(), desc: "" });
 
 function AccountingView({ ctx }) {
-  const { accounting, invoices, persist, askDelete } = ctx;
+  const { accounting, persist, askDelete } = ctx;
   const [modal, setModal] = useState(null);
   const [month, setMonth] = useState("");
   const [typeFilter, setTypeFilter] = useState("全部");
 
   // 一次性清理：發票不再自動記「發票收款」收入，但過去已經產生過、
-  // 且該發票也被加入過銀行入帳紀錄的舊資料會重複計算收入，這裡把重複的「發票收款」那筆移除，保留銀行入帳的紀錄。
+  // 且該發票也被加入過銀行入帳紀錄的舊資料會重複計算收入。這裡不能只靠 sourceType／sourceId
+  // 比對（舊資料建立時還沒有這兩個欄位），改用說明文字裡的發票單號來比對兩筆是否指向同一張發票。
   useEffect(() => {
-    const bankDepositedInvoiceIds = new Set(invoices.filter((inv) => inv.addedToBankDeposit).map((inv) => inv.id));
-    if (!bankDepositedInvoiceIds.size) return;
-    const hasDuplicate = accounting.some((a) => a.sourceType === "invoice" && bankDepositedInvoiceIds.has(a.sourceId));
-    if (hasDuplicate) {
-      persist.accounting(accounting.filter((a) => !(a.sourceType === "invoice" && bankDepositedInvoiceIds.has(a.sourceId))));
+    const invoiceNoOf = (desc) => (typeof desc === "string" ? desc.match(/發票\s*(\S+)/)?.[1] : null) || null;
+    const depositedInvoiceNos = new Set(
+      accounting.filter((a) => a.category === "銀行入帳").map((a) => invoiceNoOf(a.desc)).filter(Boolean)
+    );
+    if (!depositedInvoiceNos.size) return;
+    const isDuplicate = (a) => a.category === "發票收款" && depositedInvoiceNos.has(invoiceNoOf(a.desc));
+    if (accounting.some(isDuplicate)) {
+      persist.accounting(accounting.filter((a) => !isDuplicate(a)));
     }
-  }, [accounting.length, invoices.length]);
+  }, [accounting.length]);
 
   const save = (data) => {
     persist.accounting([{ ...data, id: uid(), createdAt: new Date().toISOString() }, ...accounting]);
