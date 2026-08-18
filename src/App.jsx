@@ -1184,16 +1184,23 @@ function Dashboard({ ctx }) {
   ].filter((t) => t.count > 0);
 
   const recentActivity = [
-    ...invoices.map((i) => ({ t: i.date, dt: i.createdAt, text: `發票 ${i.no} — ${i.client}`, tag: i.status, by: i.createdBy })),
+    ...invoices.map((i) => ({ t: i.date, dt: i.updatedAt || i.createdAt, text: `發票 ${i.no} — ${i.client}`, tag: i.status, by: i.createdBy })),
     ...billing.map((b) => {
       const kind = billingKind(b);
-      if (kind === "零用金") return { t: b.date, dt: b.createdAt, text: `零用金 ${b.no} — ${b.item}`, tag: "已入帳", by: b.createdBy };
-      if (kind === "銀行入帳") return { t: b.date, dt: b.createdAt, text: `銀行入帳 ${b.no} — ${b.source}`, tag: "已入帳", by: b.createdBy };
-      return { t: b.date, dt: b.createdAt, text: `公司付款 ${b.no} — ${b.vendor}`, tag: b.status, by: b.createdBy };
+      const dt = b.updatedAt || b.createdAt;
+      if (kind === "零用金") return { t: b.date, dt, text: `零用金 ${b.no} — ${b.item}`, tag: "已入帳", by: b.createdBy };
+      if (kind === "銀行入帳") return { t: b.date, dt, text: `銀行入帳 ${b.no} — ${b.source}`, tag: "已入帳", by: b.createdBy };
+      return { t: b.date, dt, text: `公司付款 ${b.no} — ${b.vendor}`, tag: b.status, by: b.createdBy };
     }),
-    ...(payroll || []).filter((p) => p.status === "已發放").map((p) => ({ t: p.paymentDate || `${p.month}-01`, dt: p.createdAt, text: `薪資發放 — ${p.employeeName}（${p.month}）`, tag: p.status, by: p.createdBy })),
+    ...(payroll || []).filter((p) => p.status === "已發放").map((p) => ({ t: p.paymentDate || `${p.month}-01`, dt: p.updatedAt || p.createdAt, text: `薪資發放 — ${p.employeeName}（${p.month}）`, tag: p.status, by: p.createdBy })),
     ...quotesActivity(ctx),
-  ].filter((x) => x.t).sort((a, b) => (a.t < b.t ? 1 : -1)).slice(0, 30);
+  ].filter((x) => x.t).sort((a, b) => {
+    // 優先用建立時間排序，沒有的話才退回交易日期——避免補登過去日期的紀錄
+    // 因為交易日期比較舊，被誤排到最上面看起來不像「最近」的動態
+    const ak = a.dt || a.t;
+    const bk = b.dt || b.t;
+    return ak < bk ? 1 : ak > bk ? -1 : 0;
+  }).slice(0, 30);
 
   return (
     <div>
@@ -1316,7 +1323,7 @@ function Dashboard({ ctx }) {
   );
 }
 function quotesActivity(ctx) {
-  return ctx.quotes.map((q) => ({ t: q.date, dt: q.createdAt, text: `估價單 ${q.no} — ${q.client}`, tag: q.status, by: q.createdBy }));
+  return ctx.quotes.map((q) => ({ t: q.date, dt: q.updatedAt || q.createdAt, text: `估價單 ${q.no} — ${q.client}`, tag: q.status, by: q.createdBy }));
 }
 
 /* =========================================================
@@ -1568,14 +1575,14 @@ function PayrollView({ ctx }) {
   };
 
   const saveRow = (data) => {
-    persist.payroll(payroll.map((r) => (r.id === data.id ? data : r)));
+    persist.payroll(payroll.map((r) => (r.id === data.id ? { ...data, updatedAt: new Date().toISOString() } : r)));
     setModal(null);
   };
 
   const markPaid = (r) => {
     const net = payrollNet(r);
     const paymentDate = r.paymentDate || todayStr();
-    persist.payroll(payroll.map((x) => (x.id === r.id ? { ...x, status: "已發放", posted: true, paymentDate } : x)));
+    persist.payroll(payroll.map((x) => (x.id === r.id ? { ...x, status: "已發放", posted: true, paymentDate, updatedAt: new Date().toISOString() } : x)));
     if (!r.posted) {
       addAccountingEntry({ type: "支出", category: "薪資", amount: net, desc: `${r.month} 薪資 — ${r.employeeName}`, date: paymentDate, sourceType: "payroll", sourceId: r.id });
     }
@@ -1882,7 +1889,7 @@ function QuotesView({ ctx, setTab }) {
 
   const save = (data) => {
     if (data.id) {
-      persist.quotes(quotes.map((q) => (q.id === data.id ? data : q)));
+      persist.quotes(quotes.map((q) => (q.id === data.id ? { ...data, updatedAt: new Date().toISOString() } : q)));
     } else {
       const no = nextNo("Q", quotes);
       const newQuote = { ...data, id: uid(), no, total: sumItems(data.items), createdBy: actorName(ctx), createdAt: new Date().toISOString() };
@@ -2003,7 +2010,7 @@ function QuotesView({ ctx, setTab }) {
                   <td style={{ ...td, fontFamily: FONT_NUM }}>{fmtMoney(sumItems(q.items))}</td>
                   <td style={td}>{q.companyName ? <StatusBadge status={q.companyName.slice(0, 4)} /> : "—"}</td>
                   <td style={td}>
-                    <Select value={q.status} onChange={(e) => persist.quotes(quotes.map((x) => x.id === q.id ? { ...x, status: e.target.value } : x))} style={{ padding: "4px 8px", fontSize: 12 }}>
+                    <Select value={q.status} onChange={(e) => persist.quotes(quotes.map((x) => x.id === q.id ? { ...x, status: e.target.value, updatedAt: new Date().toISOString() } : x))} style={{ padding: "4px 8px", fontSize: 12 }}>
                       <option value="草擬">草擬</option>
                       <option value="已送出">已送出</option>
                       <option value="已核准">已核准</option>
@@ -2409,7 +2416,7 @@ function InvoicesView({ ctx }) {
   const save = (data) => {
     const total = sumItems(data.items) * (1 + Number(data.taxRate) / 100);
     if (data.id) {
-      persist.invoices(invoices.map((q) => (q.id === data.id ? { ...data, total } : q)));
+      persist.invoices(invoices.map((q) => (q.id === data.id ? { ...data, total, updatedAt: new Date().toISOString() } : q)));
     } else {
       persist.invoices([{ ...data, id: uid(), total, createdBy: actorName(ctx), createdAt: new Date().toISOString() }, ...invoices]);
     }
@@ -2419,11 +2426,11 @@ function InvoicesView({ ctx }) {
   // 發票本身不再自動登記到帳務入口，避免和「新增至銀行入帳紀錄」的收入重複計算；
   // 實際收款請透過「新增至銀行入帳紀錄」登記，帳務入口才會有對應的收入。
   const setStatus = (inv, status) => {
-    persist.invoices(invoices.map((x) => x.id === inv.id ? { ...x, status, posted: status === "已付款" } : x));
+    persist.invoices(invoices.map((x) => x.id === inv.id ? { ...x, status, posted: status === "已付款", updatedAt: new Date().toISOString() } : x));
   };
 
   const setDueDate = (inv, dueDate) => {
-    persist.invoices(invoices.map((x) => x.id === inv.id ? { ...x, dueDate, status: "已付款", posted: true } : x));
+    persist.invoices(invoices.map((x) => x.id === inv.id ? { ...x, dueDate, status: "已付款", posted: true, updatedAt: new Date().toISOString() } : x));
   };
 
   const toggleChecked = (id) => {
@@ -2453,7 +2460,7 @@ function InvoicesView({ ctx }) {
     entries.forEach((entry) => {
       addAccountingEntry({ type: "收入", category: "銀行入帳", amount: entry.amount, desc: `銀行入帳 — ${entry.source}`, date: entry.date, sourceType: "billing", sourceId: entry.id });
     });
-    persist.invoices(invoices.map((inv) => checkedIds.has(inv.id) ? { ...inv, addedToBankDeposit: true } : inv));
+    persist.invoices(invoices.map((inv) => checkedIds.has(inv.id) ? { ...inv, addedToBankDeposit: true, updatedAt: new Date().toISOString() } : inv));
     setCheckedIds(new Set());
   };
 
@@ -2845,7 +2852,7 @@ function BillingView({ ctx }) {
     // 金額一律存正數，實際收入／支出由「收支類型」決定，避免手動輸入負數時正負號重複疊加
     const data = { ...rawData, amount: Math.abs(Number(rawData.amount) || 0) };
     if (data.id) {
-      persist.billing(billing.map((b) => (b.id === data.id ? data : b)));
+      persist.billing(billing.map((b) => (b.id === data.id ? { ...data, updatedAt: new Date().toISOString() } : b)));
     } else {
       const no = nextNo("PC", pettyCash);
       const entry = { ...data, id: uid(), no, posted: true, createdBy: actorName(ctx), createdAt: new Date().toISOString() };
@@ -2857,7 +2864,7 @@ function BillingView({ ctx }) {
 
   const saveCompanyPayment = (data) => {
     if (data.id) {
-      persist.billing(billing.map((b) => (b.id === data.id ? data : b)));
+      persist.billing(billing.map((b) => (b.id === data.id ? { ...data, updatedAt: new Date().toISOString() } : b)));
     } else {
       const no = nextNo("PR", companyPayments);
       persist.billing([{ ...data, id: uid(), no, createdBy: actorName(ctx), createdAt: new Date().toISOString() }, ...billing]);
@@ -2867,7 +2874,7 @@ function BillingView({ ctx }) {
 
   const saveBankDeposit = (data) => {
     if (data.id) {
-      persist.billing(billing.map((b) => (b.id === data.id ? data : b)));
+      persist.billing(billing.map((b) => (b.id === data.id ? { ...data, updatedAt: new Date().toISOString() } : b)));
     } else {
       const no = nextNo("BD", bankDeposits);
       const entry = { ...data, id: uid(), no, posted: true, createdBy: actorName(ctx), createdAt: new Date().toISOString() };
@@ -2878,14 +2885,14 @@ function BillingView({ ctx }) {
   };
 
   const setStatus = (b, status) => {
-    persist.billing(billing.map((x) => x.id === b.id ? { ...x, status, posted: status === "已付款" } : x));
+    persist.billing(billing.map((x) => x.id === b.id ? { ...x, status, posted: status === "已付款", updatedAt: new Date().toISOString() } : x));
     if (status === "已付款" && !b.posted) {
       addAccountingEntry({ type: "支出", category: b.category || "公司付款", amount: b.amount, desc: `公司付款 ${b.no} — ${b.vendor}`, sourceType: "billing", sourceId: b.id });
     }
   };
 
   const setPaymentDate = (b, paymentDate) => {
-    persist.billing(billing.map((x) => x.id === b.id ? { ...x, paymentDate, status: "已付款", posted: true } : x));
+    persist.billing(billing.map((x) => x.id === b.id ? { ...x, paymentDate, status: "已付款", posted: true, updatedAt: new Date().toISOString() } : x));
     if (!b.posted) {
       addAccountingEntry({ type: "支出", category: b.category || "公司付款", amount: b.amount, desc: `公司付款 ${b.no} — ${b.vendor}`, sourceType: "billing", sourceId: b.id });
     }
