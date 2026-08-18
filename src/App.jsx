@@ -3624,12 +3624,20 @@ function ContractsView({ ctx }) {
   const years = Array.from(new Set([
     String(new Date().getFullYear()),
     ...contracts.map((c) => (c.startDate || "").slice(0, 4)).filter(Boolean),
+    ...contracts.map((c) => (c.endDate || "").slice(0, 4)).filter(Boolean),
   ])).sort((a, b) => b.localeCompare(a));
   const yearTabs = ["全部", ...years];
   const KNOWN_COMPANIES = BILLING_COMPANY_OPTIONS.filter((o) => o !== "其他");
   const companyTabs = ["全部", ...KNOWN_COMPANIES, "其他"];
+  // 契約起訖日期只要跟選定年度有重疊（不是只看起始日期）就要列進該年度，
+  // 例如 114 年開始、115 年到期的契約，114、115 兩個年度都要看得到這筆
+  const overlapsYear = (c, y) => {
+    const start = c.startDate || `${y}-01-01`;
+    const end = c.endDate || `${y}-12-31`;
+    return start <= `${y}-12-31` && end >= `${y}-01-01`;
+  };
   const filtered = contracts.filter((c) => {
-    if (year !== "全部" && !(c.startDate || "").startsWith(year)) return false;
+    if (year !== "全部" && !overlapsYear(c, year)) return false;
     if (companyFilter !== "全部") {
       if (companyFilter === "其他") return !KNOWN_COMPANIES.includes(c.contractorCompany);
       return c.contractorCompany === companyFilter;
@@ -3668,7 +3676,7 @@ function ContractsView({ ctx }) {
       ) : (
         <>
           <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
-            <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600, marginRight: 4 }}>年度（依起始日期）</span>
+            <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600, marginRight: 4 }}>年度（起訖日期有含該年度）</span>
             {yearTabs.map((y) => (
               <button key={y} onClick={() => setYear(y)}
                 style={{
