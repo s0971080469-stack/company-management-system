@@ -3617,10 +3617,11 @@ const emptyContract = (vendors) => ({
 });
 
 function ContractsView({ ctx }) {
-  const { contracts, vendors, sysUsers, persist, askDelete } = ctx;
+  const { contracts, vendors, sysUsers, isAdmin, persist, askDelete } = ctx;
   const [modal, setModal] = useState(null);
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [companyFilter, setCompanyFilter] = useState("全部");
+  const [query, setQuery] = useState("");
 
   const years = Array.from(new Set([
     String(new Date().getFullYear()),
@@ -3635,6 +3636,7 @@ function ContractsView({ ctx }) {
       if (companyFilter === "其他") return !KNOWN_COMPANIES.includes(c.contractorCompany);
       return c.contractorCompany === companyFilter;
     }
+    if (query && !(c.no + c.title + (c.party || "")).toLowerCase().includes(query.toLowerCase())) return false;
     return true;
   });
 
@@ -3679,17 +3681,23 @@ function ContractsView({ ctx }) {
                 }}>{y === "全部" ? y : `${toROCYear(y)} 年`}</button>
             ))}
           </div>
-          <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
-            <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600, marginRight: 4 }}>承攬公司</span>
-            {companyTabs.map((c) => (
-              <button key={c} onClick={() => setCompanyFilter(c)}
-                style={{
-                  padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-                  border: `1px solid ${companyFilter === c ? THEME.brass : THEME.line}`,
-                  background: companyFilter === c ? THEME.brass : "#fff",
-                  color: companyFilter === c ? "#fff" : THEME.text,
-                }}>{c}</button>
-            ))}
+          <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+              <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600, marginRight: 4 }}>承攬公司</span>
+              {companyTabs.map((c) => (
+                <button key={c} onClick={() => setCompanyFilter(c)}
+                  style={{
+                    padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
+                    border: `1px solid ${companyFilter === c ? THEME.brass : THEME.line}`,
+                    background: companyFilter === c ? THEME.brass : "#fff",
+                    color: companyFilter === c ? "#fff" : THEME.text,
+                  }}>{c}</button>
+              ))}
+            </div>
+            <div style={{ position: "relative", maxWidth: 260 }}>
+              <Search size={14} style={{ position: "absolute", left: 10, top: 10, color: THEME.muted }} />
+              <TextInput placeholder="搜尋契約編號／名稱／對方單位" value={query} onChange={(e) => setQuery(e.target.value)} style={{ paddingLeft: 30 }} />
+            </div>
           </div>
           {filtered.length === 0 ? (
             <EmptyState icon={FileSignature} text="這個篩選條件下沒有契約。" />
@@ -3722,10 +3730,12 @@ function ContractsView({ ctx }) {
                 )}
               </td>
               <td style={td}>
-                <Select value={c.owner || ""} onChange={(e) => persist.contracts(contracts.map((x) => x.id === c.id ? { ...x, owner: e.target.value } : x))} style={{ padding: "4px 8px", fontSize: 12 }}>
-                  <option value="">未指定</option>
-                  {sysUsers.map((u) => <option key={u.id} value={u.name}>{u.name}</option>)}
-                </Select>
+                {isAdmin ? (
+                  <Select value={c.owner || ""} onChange={(e) => persist.contracts(contracts.map((x) => x.id === c.id ? { ...x, owner: e.target.value } : x))} style={{ padding: "4px 8px", fontSize: 12 }}>
+                    <option value="">未指定</option>
+                    {sysUsers.map((u) => <option key={u.id} value={u.name}>{u.name}</option>)}
+                  </Select>
+                ) : (c.owner || "—")}
               </td>
               <td style={td}>
                 <Select value={c.status} onChange={(e) => persist.contracts(contracts.map((x) => x.id === c.id ? { ...x, status: e.target.value } : x))} style={{ padding: "4px 8px", fontSize: 12 }}>
@@ -3751,7 +3761,7 @@ function ContractsView({ ctx }) {
 
       {modal && (
         <Modal title={modal.mode === "new" ? "新增契約" : `編輯契約 ${modal.data.no || ""}`} onClose={() => setModal(null)}>
-          <ContractForm data={modal.data} vendors={vendors} sysUsers={sysUsers} onSave={save} onCancel={() => setModal(null)} />
+          <ContractForm data={modal.data} vendors={vendors} sysUsers={sysUsers} isAdmin={isAdmin} onSave={save} onCancel={() => setModal(null)} />
         </Modal>
       )}
     </div>
@@ -3762,6 +3772,7 @@ function ContractBillingView({ ctx }) {
   const { contracts, contractBilling, persist, isAdmin, askDelete } = ctx;
   const [month, setMonth] = useState(monthStr());
   const [companyFilter, setCompanyFilter] = useState("全部");
+  const [query, setQuery] = useState("");
   const [attachModal, setAttachModal] = useState(null); // { contractId }
   const [preview, setPreview] = useState(null); // { name, url } | { name, loading: true }
 
@@ -3782,6 +3793,7 @@ function ContractBillingView({ ctx }) {
       if (companyFilter === "其他") return !KNOWN_COMPANIES.includes(c.contractorCompany);
       return c.contractorCompany === companyFilter;
     }
+    if (query && !(c.no + c.title + (c.party || "")).toLowerCase().includes(query.toLowerCase())) return false;
     return true;
   });
 
@@ -3845,17 +3857,23 @@ function ContractBillingView({ ctx }) {
 
       <MonthFilterBar month={month} setMonth={setMonth} label="請款月份" />
 
-      <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
-        <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600, marginRight: 4 }}>承攬公司</span>
-        {companyTabs.map((c) => (
-          <button key={c} onClick={() => setCompanyFilter(c)}
-            style={{
-              padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-              border: `1px solid ${companyFilter === c ? THEME.brass : THEME.line}`,
-              background: companyFilter === c ? THEME.brass : "#fff",
-              color: companyFilter === c ? "#fff" : THEME.text,
-            }}>{c}</button>
-        ))}
+      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+          <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600, marginRight: 4 }}>承攬公司</span>
+          {companyTabs.map((c) => (
+            <button key={c} onClick={() => setCompanyFilter(c)}
+              style={{
+                padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
+                border: `1px solid ${companyFilter === c ? THEME.brass : THEME.line}`,
+                background: companyFilter === c ? THEME.brass : "#fff",
+                color: companyFilter === c ? "#fff" : THEME.text,
+              }}>{c}</button>
+          ))}
+        </div>
+        <div style={{ position: "relative", maxWidth: 260 }}>
+          <Search size={14} style={{ position: "absolute", left: 10, top: 10, color: THEME.muted }} />
+          <TextInput placeholder="搜尋契約編號／名稱／對方單位" value={query} onChange={(e) => setQuery(e.target.value)} style={{ paddingLeft: 30 }} />
+        </div>
       </div>
 
       {filtered.length === 0 ? (
@@ -4060,7 +4078,7 @@ function ContractBillingAttachments({ folderKey, attachments, onChange, askDelet
   );
 }
 
-function ContractForm({ data, vendors, sysUsers, onSave, onCancel }) {
+function ContractForm({ data, vendors, sysUsers, isAdmin, onSave, onCancel }) {
   const [f, setF] = useState({ hasPerformanceBond: "無", performanceBondAmount: "", hasInsurance: "無", insurancePurchaseStatus: "估價中", owner: "", contractorCompany: "", ...data });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   return (
@@ -4126,10 +4144,14 @@ function ContractForm({ data, vendors, sysUsers, onSave, onCancel }) {
       )}
 
       <Field label="負責人員">
-        <Select value={f.owner} onChange={set("owner")}>
-          <option value="">未指定</option>
-          {(sysUsers || []).map((u) => <option key={u.id} value={u.name}>{u.name}</option>)}
-        </Select>
+        {isAdmin ? (
+          <Select value={f.owner} onChange={set("owner")}>
+            <option value="">未指定</option>
+            {(sysUsers || []).map((u) => <option key={u.id} value={u.name}>{u.name}</option>)}
+          </Select>
+        ) : (
+          <div style={{ ...inputStyle, background: THEME.canvas, color: THEME.muted }}>{f.owner || "未指定"}（僅管理員可設定）</div>
+        )}
       </Field>
 
       <Field label="備註" span={2}><TextArea value={f.note} onChange={set("note")} /></Field>
