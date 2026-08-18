@@ -679,13 +679,15 @@ function SectionHeader({ eyebrow, title, action }) {
   );
 }
 
-const th = { textAlign: "left", fontSize: 11.5, color: THEME.muted, fontWeight: 700, letterSpacing: 0.5, padding: "10px 14px", borderBottom: `1px solid ${THEME.line}`, whiteSpace: "nowrap" };
+const th = { textAlign: "left", fontSize: 11.5, color: THEME.muted, fontWeight: 700, letterSpacing: 0.5, padding: "10px 14px", borderBottom: `1px solid ${THEME.line}`, whiteSpace: "nowrap", position: "sticky", top: 0, background: THEME.surface, zIndex: 1 };
 const td = { padding: "12px 14px", fontSize: 13.5, color: THEME.text, borderBottom: `1px solid ${THEME.line}`, verticalAlign: "middle" };
 
 function Table({ columns, children }) {
   return (
     <div style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 12, overflow: "hidden" }}>
-      <div style={{ overflowX: "auto" }}>
+      {/* 這層同時處理水平與垂直捲動，並且是 sticky 表頭實際依附的捲動容器 —
+          若外層另外包一層只有 overflowX 的 div，表頭會依附到那層而失效，往下捲時整個表格會一起被捲走 */}
+      <div style={{ overflow: "auto", maxHeight: "70vh" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead><tr>{columns.map((c) => <th key={c} style={th}>{c}</th>)}</tr></thead>
           <tbody>{children}</tbody>
@@ -1787,13 +1789,13 @@ function LineItemsEditor({ items, setItems, withTax, taxRate, setTaxRate }) {
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ background: "#FAF9F5" }}>
-              <th style={{ ...th, borderBottom: `1px solid ${THEME.line}` }}>項目</th>
-              <th style={{ ...th, width: 64 }}>單位</th>
-              <th style={{ ...th, width: 70 }}>數量</th>
-              <th style={{ ...th, width: 110 }}>單價</th>
-              <th style={{ ...th, width: 110 }}>總價</th>
-              <th style={{ ...th, width: 110 }}>備註</th>
-              <th style={{ ...th, width: 36 }}></th>
+              <th style={{ ...th, position: "static", background: "#FAF9F5", borderBottom: `1px solid ${THEME.line}` }}>項目</th>
+              <th style={{ ...th, position: "static", background: "#FAF9F5", width: 64 }}>單位</th>
+              <th style={{ ...th, position: "static", background: "#FAF9F5", width: 70 }}>數量</th>
+              <th style={{ ...th, position: "static", background: "#FAF9F5", width: 110 }}>單價</th>
+              <th style={{ ...th, position: "static", background: "#FAF9F5", width: 110 }}>總價</th>
+              <th style={{ ...th, position: "static", background: "#FAF9F5", width: 110 }}>備註</th>
+              <th style={{ ...th, position: "static", background: "#FAF9F5", width: 36 }}></th>
             </tr>
           </thead>
           <tbody>
@@ -4334,7 +4336,7 @@ function PermissionsView({ ctx }) {
         </div>
       </div>
 
-      <div style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 12, overflow: "auto" }}>
+      <div style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 12, overflow: "auto", maxHeight: "70vh" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
