@@ -2381,13 +2381,13 @@ function QuoteForm({ data, onSave, onCancel }) {
 }
 
 const emptyInvoice = () => ({
-  no: "", quoteNo: "", client: "", workName: "", paymentMethod: "", date: todayStr(), dueDate: "",
+  no: "", quoteNo: "", client: "", workName: "", paymentMethod: "", invoiceType: "", date: todayStr(), dueDate: "",
   items: [{ id: uid(), desc: "", unit: "", qty: 1, price: 0, note: "" }],
   taxRate: 5, status: "未付款", note: "", posted: false, addedToBankDeposit: false, ...emptyLetterhead(),
 });
 
 function InvoicesView({ ctx }) {
-  const { invoices, quotes, billing, persist, addAccountingEntry, removeAccountingBySource, askDelete } = ctx;
+  const { invoices, quotes, billing, vendors, persist, addAccountingEntry, removeAccountingBySource, askDelete } = ctx;
   const [modal, setModal] = useState(null);
   const [companyFilter, setCompanyFilter] = useState("全部");
   const [month, setMonth] = useState(monthStr());
@@ -2536,16 +2536,17 @@ function InvoicesView({ ctx }) {
 
       {modal && (
         <Modal title={modal.mode === "new" ? "開立發票" : `編輯發票 ${modal.data.no}`} onClose={() => setModal(null)} width={680}>
-          <InvoiceForm data={modal.data} quotes={quotes} onSave={save} onCancel={() => setModal(null)} />
+          <InvoiceForm data={modal.data} quotes={quotes} vendors={vendors} onSave={save} onCancel={() => setModal(null)} />
         </Modal>
       )}
     </div>
   );
 }
 
-function InvoiceForm({ data, quotes, onSave, onCancel }) {
-  const [f, setF] = useState({ ...emptyLetterhead(), workName: "", paymentMethod: "", quoteNo: "", ...data });
+function InvoiceForm({ data, quotes, vendors, onSave, onCancel }) {
+  const [f, setF] = useState({ ...emptyLetterhead(), workName: "", paymentMethod: "", invoiceType: "", quoteNo: "", ...data });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const owners = (vendors || []).filter((v) => v.vendorType === "業主");
 
   const importFromQuote = (e) => {
     const no = e.target.value;
@@ -2571,13 +2572,25 @@ function InvoiceForm({ data, quotes, onSave, onCancel }) {
             {(quotes || []).map((q) => <option key={q.id} value={q.no}>{q.no} — {q.client}</option>)}
           </Select>
         </Field>
-        <Field label="客戶名稱"><TextInput value={f.client} onChange={set("client")} placeholder="客戶 / 公司名稱" /></Field>
+        <Field label="客戶名稱"><TextInput value={f.client} onChange={set("client")} placeholder="客戶 / 公司名稱，可直接輸入" /></Field>
+        <Field label="從業主資料選取（選填）">
+          <Select value="" onChange={(e) => { if (e.target.value) setF({ ...f, client: e.target.value }); }}>
+            <option value="">不套用</option>
+            {owners.map((v) => <option key={v.id} value={v.name}>{v.name}</option>)}
+          </Select>
+        </Field>
         <Field label="工作名稱"><TextInput value={f.workName} onChange={set("workName")} placeholder="專案 / 工作名稱" /></Field>
         <Field label="開立日期"><TextInput type="date" value={f.date} onChange={set("date")} /></Field>
         <Field label="付款方式">
           <Select value={f.paymentMethod} onChange={set("paymentMethod")}>
             <option value="">未設定</option>
             {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
+          </Select>
+        </Field>
+        <Field label="發票類別">
+          <Select value={f.invoiceType || ""} onChange={set("invoiceType")}>
+            <option value="">未設定</option>
+            {INVOICE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
           </Select>
         </Field>
         <Field label="備註"><TextInput value={f.note} onChange={set("note")} placeholder="選填" /></Field>
@@ -3401,8 +3414,9 @@ const VENDOR_COMPANY_OPTIONS = ["綠石環保", "歐克環境", "上藝除蟲", 
 const BILLING_COMPANY_OPTIONS = VENDOR_COMPANY_OPTIONS.filter((o) => o !== "禾豐國際");
 const PAYMENT_METHODS = ["現金", "匯款", "支票", "月結30天", "月結60天", "其他"];
 const VENDOR_TYPES = ["供應商", "業主"];
+const INVOICE_TYPES = ["二聯式", "三聯式"];
 
-const emptyVendor = { name: "", vendorType: "供應商", contact: "", phone: "", email: "", category: "", taxId: "", paymentMethod: "匯款", tradingCompany: "", address: "", note: "" };
+const emptyVendor = { name: "", vendorType: "供應商", contact: "", phone: "", email: "", category: "", taxId: "", paymentMethod: "匯款", tradingCompany: "", address: "", invoiceType: "", note: "" };
 
 function VendorsView({ ctx }) {
   const { vendors, persist, askDelete } = ctx;
@@ -3459,7 +3473,7 @@ function VendorsView({ ctx }) {
       {filtered.length === 0 ? (
         <EmptyState icon={Truck} text="尚未建立任何廠商資料。" action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptyVendor })}>新增第一家廠商</Btn>} />
       ) : (
-        <Table columns={["名稱", "類型", "業務類別", "聯絡人", "聯絡方式", "統一編號", "付款方式", "往來公司", "聯絡地址", ""]}>
+        <Table columns={["名稱", "類型", "業務類別", "聯絡人", "聯絡方式", "統一編號", "付款方式", "往來公司", "聯絡地址", "發票類別", ""]}>
           {filtered.map((v) => (
             <tr key={v.id}>
               <td style={td}><strong>{v.name}</strong></td>
@@ -3474,6 +3488,7 @@ function VendorsView({ ctx }) {
               <td style={td}>{v.paymentMethod || "—"}</td>
               <td style={td}>{v.tradingCompany ? <StatusBadge status={v.tradingCompany} /> : "—"}</td>
               <td style={td}>{v.address || "—"}</td>
+              <td style={td}>{v.vendorType === "業主" ? (v.invoiceType || "—") : "—"}</td>
               <td style={{ ...td, textAlign: "right" }}>
                 <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                   <Btn size="sm" icon={Pencil} onClick={() => setModal({ mode: "edit", data: v })}>編輯</Btn>
@@ -3531,6 +3546,14 @@ function VendorForm({ data, onSave, onCancel }) {
       </Field>
       {companyChoice === "其他" && (
         <Field label="自訂往來公司名稱"><TextInput value={f.tradingCompany} onChange={set("tradingCompany")} placeholder="輸入公司名稱" /></Field>
+      )}
+      {f.vendorType === "業主" && (
+        <Field label="發票類別">
+          <Select value={f.invoiceType || ""} onChange={set("invoiceType")}>
+            <option value="">未設定</option>
+            {INVOICE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </Select>
+        </Field>
       )}
       <Field label="聯絡地址" span={2}><TextInput value={f.address} onChange={set("address")} placeholder="市／區／路／號" /></Field>
       <Field label="聯絡電話"><TextInput value={f.phone} onChange={set("phone")} placeholder="02-1234-5678" /></Field>
