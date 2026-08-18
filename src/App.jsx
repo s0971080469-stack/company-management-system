@@ -3070,7 +3070,7 @@ function BillingView({ ctx }) {
             ? <CompanyPaymentForm data={modal.data} onSave={saveCompanyPayment} onCancel={() => setModal(null)} />
             : expenseKind(modal.data) === "銀行入帳"
             ? <BankDepositForm data={modal.data} onSave={saveBankDeposit} onCancel={() => setModal(null)} />
-            : <PettyCashForm data={modal.data} onSave={savePettyCash} onCancel={() => setModal(null)} />
+            : <PettyCashForm data={modal.data} sysUsers={ctx.sysUsers} onSave={savePettyCash} onCancel={() => setModal(null)} />
           }
         </Modal>
       )}
@@ -3078,7 +3078,7 @@ function BillingView({ ctx }) {
   );
 }
 
-function PettyCashForm({ data, onSave, onCancel }) {
+function PettyCashForm({ data, sysUsers, onSave, onCancel }) {
   const [f, setF] = useState({ flowType: "支出", ...data });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   return (
@@ -3092,7 +3092,12 @@ function PettyCashForm({ data, onSave, onCancel }) {
       </Field>
       <Field label="金額"><TextInput type="number" min="0" value={f.amount} onChange={set("amount")} placeholder="0" /></Field>
       <Field label="日期"><TextInput type="date" value={f.date} onChange={set("date")} /></Field>
-      <Field label="經手人" span={2}><TextInput value={f.handler} onChange={set("handler")} placeholder="經手人姓名" /></Field>
+      <Field label="經手人" span={2}>
+        <Select value={f.handler || ""} onChange={set("handler")}>
+          <option value="">請選擇</option>
+          {(sysUsers || []).map((u) => <option key={u.id} value={u.name}>{u.name}</option>)}
+        </Select>
+      </Field>
       <Field label="備註" span={2}><TextArea value={f.note} onChange={set("note")} placeholder="選填" /></Field>
       <div style={{ gridColumn: "span 2", display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 6 }}>
         <Btn onClick={onCancel}>取消</Btn>
