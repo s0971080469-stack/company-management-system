@@ -1614,17 +1614,11 @@ function PayrollView({ ctx }) {
       </div>
 
       {allRows.length > 0 && sites.length > 2 && (
-        <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
-          <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600, marginRight: 4 }}>所屬案場</span>
-          {sites.map((s) => (
-            <button key={s} onClick={() => setSiteFilter(s)}
-              style={{
-                padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-                border: `1px solid ${siteFilter === s ? THEME.brass : THEME.line}`,
-                background: siteFilter === s ? THEME.brass : "#fff",
-                color: siteFilter === s ? "#fff" : THEME.text,
-              }}>{s}</button>
-          ))}
+        <div style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "center" }}>
+          <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600 }}>所屬案場</span>
+          <Select value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} style={{ width: 200 }}>
+            {sites.map((s) => <option key={s} value={s}>{s}</option>)}
+          </Select>
         </div>
       )}
 
