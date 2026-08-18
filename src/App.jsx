@@ -1341,6 +1341,7 @@ function EmployeesView({ ctx }) {
   const [modal, setModal] = useState(null); // {mode, data}
   const [query, setQuery] = useState("");
   const [companyFilter, setCompanyFilter] = useState("全部");
+  const [siteFilter, setSiteFilter] = useState("全部");
 
   // 數據遷移：將舊格式的 advance 轉換為新格式 advances
   useEffect(() => {
@@ -1367,6 +1368,7 @@ function EmployeesView({ ctx }) {
       if (companyFilter === "其他") return e.company && !KNOWN_COMPANIES.includes(e.company);
       return e.company === companyFilter;
     }
+    if (siteFilter !== "全部" && (e.siteName || "") !== siteFilter) return false;
     return true;
   });
 
@@ -1389,11 +1391,15 @@ function EmployeesView({ ctx }) {
           </div>
         } />
 
-      <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
         <div style={{ position: "relative", maxWidth: 280 }}>
           <Search size={14} style={{ position: "absolute", left: 10, top: 10, color: THEME.muted }} />
           <TextInput placeholder="搜尋姓名／部門／職位" value={query} onChange={(e) => setQuery(e.target.value)} style={{ paddingLeft: 30 }} />
         </div>
+        <Select value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} style={{ width: 200 }}>
+          <option value="全部">所屬案場：全部</option>
+          {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+        </Select>
       </div>
 
       {employees.length > 0 && (
