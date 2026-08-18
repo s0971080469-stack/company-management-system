@@ -3528,7 +3528,7 @@ function VendorsView({ ctx }) {
               <td style={td}>{v.paymentMethod || "—"}</td>
               <td style={td}>{v.tradingCompany ? <StatusBadge status={v.tradingCompany} /> : "—"}</td>
               <td style={td}>{v.address || "—"}</td>
-              <td style={td}>{v.vendorType === "業主" ? (v.invoiceType || "—") : "—"}</td>
+              <td style={td}>{v.invoiceType || "—"}</td>
               <td style={{ ...td, textAlign: "right" }}>
                 <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                   <Btn size="sm" icon={Pencil} onClick={() => setModal({ mode: "edit", data: v })}>編輯</Btn>
@@ -3587,14 +3587,12 @@ function VendorForm({ data, onSave, onCancel }) {
       {companyChoice === "其他" && (
         <Field label="自訂往來公司名稱"><TextInput value={f.tradingCompany} onChange={set("tradingCompany")} placeholder="輸入公司名稱" /></Field>
       )}
-      {f.vendorType === "業主" && (
-        <Field label="發票類別">
-          <Select value={f.invoiceType || ""} onChange={set("invoiceType")}>
-            <option value="">未設定</option>
-            {INVOICE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-          </Select>
-        </Field>
-      )}
+      <Field label="發票類別">
+        <Select value={f.invoiceType || ""} onChange={set("invoiceType")}>
+          <option value="">未設定</option>
+          {INVOICE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+        </Select>
+      </Field>
       <Field label="聯絡地址" span={2}><TextInput value={f.address} onChange={set("address")} placeholder="市／區／路／號" /></Field>
       <Field label="聯絡電話"><TextInput value={f.phone} onChange={set("phone")} placeholder="02-1234-5678" /></Field>
       <Field label="Email"><TextInput value={f.email} onChange={set("email")} placeholder="contact@company.com" /></Field>
