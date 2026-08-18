@@ -558,6 +558,8 @@ function StatusBadge({ status }) {
     "已入帳": { bg: THEME.successSoft, fg: THEME.success },
     "已請款": { bg: THEME.successSoft, fg: THEME.success },
     "未請款": { bg: THEME.warnSoft, fg: THEME.warn },
+    "收入": { bg: THEME.successSoft, fg: THEME.success },
+    "支出": { bg: THEME.dangerSoft, fg: THEME.danger },
     // 公司標籤色——同一間公司在系統各處（人員、契約、發票、收支管理…）都用同一個顏色，方便一眼辨識
     "綠石環保": { bg: "#E1F0EE", fg: "#1B6B63" },
     "歐克環境": { bg: "#E5EDF9", fg: "#2A5199" },
@@ -2801,7 +2803,7 @@ function AttendanceView({ ctx }) {
 /* =========================================================
    COMPANY EXPENSES (公司支出) — 零用金紀錄 / 公司付款
 ========================================================= */
-const emptyPettyCash = () => ({ expenseType: "零用金", date: todayStr(), item: "", amount: "", handler: "", note: "" });
+const emptyPettyCash = () => ({ expenseType: "零用金", flowType: "支出", date: todayStr(), item: "", amount: "", handler: "", note: "" });
 const emptyCompanyPayment = () => ({ expenseType: "公司付款", vendor: "", category: "", amount: "", date: todayStr(), plannedPaymentDate: "", status: "未付款", note: "", posted: false, companyName: "", paymentDate: "" });
 const emptyBankDeposit = () => ({ expenseType: "銀行入帳", date: todayStr(), source: "", amount: "", note: "", companyName: "" });
 
@@ -2814,6 +2816,15 @@ function BillingView({ ctx }) {
 
   const KNOWN_COMPANIES = BILLING_COMPANY_OPTIONS.filter((o) => o !== "其他");
   const companyTabs = ["全部", ...KNOWN_COMPANIES, "其他"];
+
+  // 一次性清理：金額欄位一律應存正數（收入／支出由類型欄位決定），
+  // 但過去可能有人手動輸入負數金額，這裡把負數金額轉回正數，避免統計數字算成負的。
+  useEffect(() => {
+    const hasNegative = billing.some((b) => Number(b.amount) < 0);
+    if (hasNegative) {
+      persist.billing(billing.map((b) => (Number(b.amount) < 0 ? { ...b, amount: Math.abs(Number(b.amount)) } : b)));
+    }
+  }, [billing.length]);
 
   // backward-compatible classification: pre-existing 請款 records have no expenseType but do have a `vendor` field
   const expenseKind = (b) => b.expenseType === "零用金" ? "零用金" : b.expenseType === "銀行入帳" ? "銀行入帳" : b.expenseType === "公司付款" ? "公司付款" : (b.vendor !== undefined ? "公司付款" : "零用金");
@@ -2830,14 +2841,16 @@ function BillingView({ ctx }) {
     return true;
   });
 
-  const savePettyCash = (data) => {
+  const savePettyCash = (rawData) => {
+    // 金額一律存正數，實際收入／支出由「收支類型」決定，避免手動輸入負數時正負號重複疊加
+    const data = { ...rawData, amount: Math.abs(Number(rawData.amount) || 0) };
     if (data.id) {
       persist.billing(billing.map((b) => (b.id === data.id ? data : b)));
     } else {
       const no = nextNo("PC", pettyCash);
       const entry = { ...data, id: uid(), no, posted: true, createdBy: actorName(ctx), createdAt: new Date().toISOString() };
       persist.billing([entry, ...billing]);
-      addAccountingEntry({ type: "支出", category: "零用金", amount: entry.amount, desc: `零用金 — ${entry.item}`, date: entry.date, sourceType: "billing", sourceId: entry.id });
+      addAccountingEntry({ type: entry.flowType === "收入" ? "收入" : "支出", category: "零用金", amount: entry.amount, desc: `零用金 — ${entry.item}`, date: entry.date, sourceType: "billing", sourceId: entry.id });
     }
     setModal(null);
   };
@@ -2879,8 +2892,11 @@ function BillingView({ ctx }) {
   };
 
   const pendingTotal = companyPayments.filter((b) => b.status !== "已付款").reduce((s, b) => s + Number(b.amount || 0), 0);
-  const pettyCashTotal = pettyCash.reduce((s, b) => s + Number(b.amount || 0), 0);
-  const pettyCashMonthTotal = pettyCash.filter((b) => (b.date || "").startsWith(monthStr())).reduce((s, b) => s + Number(b.amount || 0), 0);
+  const isPettyCashExpense = (b) => (b.flowType || "支出") === "支出";
+  const pettyCashTotal = pettyCash.filter(isPettyCashExpense).reduce((s, b) => s + Math.abs(Number(b.amount) || 0), 0);
+  const pettyCashMonthTotal = pettyCash.filter((b) => isPettyCashExpense(b) && (b.date || "").startsWith(monthStr())).reduce((s, b) => s + Math.abs(Number(b.amount) || 0), 0);
+  const pettyCashIncomeTotal = pettyCash.filter((b) => !isPettyCashExpense(b)).reduce((s, b) => s + Math.abs(Number(b.amount) || 0), 0);
+  const pettyCashBalance = pettyCashIncomeTotal - pettyCashTotal;
   const bankDepositTotal = bankDeposits.reduce((s, b) => s + Number(b.amount || 0), 0);
   const bankDepositMonthTotal = bankDeposits.filter((b) => (b.date || "").startsWith(monthStr())).reduce((s, b) => s + Number(b.amount || 0), 0);
 
@@ -2930,10 +2946,11 @@ function BillingView({ ctx }) {
       </div>
 
       {expenseTab === "零用金" ? (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 18 }}>
           <StatCard label="本月零用金支出" value={fmtMoney(pettyCashMonthTotal)} icon={Wallet} tone="brass" />
           <StatCard label="累計零用金支出" value={fmtMoney(pettyCashTotal)} icon={Landmark} tone="ink" />
           <StatCard label="紀錄筆數" value={pettyCash.length} icon={Check} tone="success" />
+          <StatCard label="零用金餘額" value={fmtMoney(pettyCashBalance)} icon={Wallet} tone={pettyCashBalance < 0 ? "danger" : "brass"} />
         </div>
       ) : expenseTab === "銀行入帳" ? (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
@@ -2970,13 +2987,16 @@ function BillingView({ ctx }) {
           {filtered.length === 0 ? (
             <EmptyState icon={emptyIcon} text="這個月份沒有紀錄。" />
           ) : expenseTab === "零用金" ? (
-            <Table columns={["單號", "日期", "項目／用途", "金額", "經手人", "備註", ""]}>
+            <Table columns={["單號", "日期", "項目／用途", "收支類型", "金額", "經手人", "備註", ""]}>
               {filtered.map((b) => (
                 <tr key={b.id}>
                   <td style={{ ...td, fontFamily: FONT_NUM }}>{b.no}</td>
                   <td style={td}>{fmtDate(b.date)}</td>
                   <td style={td}><strong>{b.item}</strong></td>
-                  <td style={{ ...td, fontFamily: FONT_NUM, fontWeight: 700 }}>{fmtMoney(b.amount)}</td>
+                  <td style={td}><StatusBadge status={b.flowType || "支出"} /></td>
+                  <td style={{ ...td, fontFamily: FONT_NUM, fontWeight: 700, color: (b.flowType || "支出") === "收入" ? THEME.success : THEME.danger }}>
+                    {(b.flowType || "支出") === "收入" ? "+" : "−"}{fmtMoney(Math.abs(Number(b.amount) || 0))}
+                  </td>
                   <td style={td}>{b.handler || "—"}</td>
                   <td style={td}>{b.note || "—"}</td>
                   <td style={{ ...td, textAlign: "right" }}>
@@ -3059,12 +3079,18 @@ function BillingView({ ctx }) {
 }
 
 function PettyCashForm({ data, onSave, onCancel }) {
-  const [f, setF] = useState(data);
+  const [f, setF] = useState({ flowType: "支出", ...data });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
       <Field label="項目／用途" span={2}><TextInput value={f.item} onChange={set("item")} placeholder="如：飲水機濾心、計程車資" /></Field>
-      <Field label="金額"><TextInput type="number" value={f.amount} onChange={set("amount")} placeholder="0" /></Field>
+      <Field label="收支類型">
+        <Select value={f.flowType || "支出"} onChange={set("flowType")}>
+          <option value="支出">支出</option>
+          <option value="收入">收入</option>
+        </Select>
+      </Field>
+      <Field label="金額"><TextInput type="number" min="0" value={f.amount} onChange={set("amount")} placeholder="0" /></Field>
       <Field label="日期"><TextInput type="date" value={f.date} onChange={set("date")} /></Field>
       <Field label="經手人" span={2}><TextInput value={f.handler} onChange={set("handler")} placeholder="經手人姓名" /></Field>
       <Field label="備註" span={2}><TextArea value={f.note} onChange={set("note")} placeholder="選填" /></Field>
@@ -3156,6 +3182,15 @@ function AccountingView({ ctx }) {
     }
   }, [accounting.length]);
 
+  // 一次性清理：金額欄位一律應存正數（收入／支出由類型欄位決定），
+  // 但過去有些來源（如零用金）曾經存進負數金額，會讓總收入／總支出算錯，這裡一併轉回正數。
+  useEffect(() => {
+    const hasNegative = accounting.some((a) => Number(a.amount) < 0);
+    if (hasNegative) {
+      persist.accounting(accounting.map((a) => (Number(a.amount) < 0 ? { ...a, amount: Math.abs(Number(a.amount)) } : a)));
+    }
+  }, [accounting.length]);
+
   const save = (data) => {
     persist.accounting([{ ...data, id: uid(), createdAt: new Date().toISOString() }, ...accounting]);
     setModal(null);
@@ -3220,14 +3255,12 @@ function AccountingView({ ctx }) {
           {sorted.map((a) => (
             <tr key={a.id}>
               <td style={td}>{fmtDate(a.date)}</td>
-              <td style={td}>
-                <span style={{ color: a.type === "收入" ? THEME.success : THEME.danger, fontWeight: 700, fontSize: 12.5 }}>
-                  {a.type === "收入" ? "＋收入" : "－支出"}
-                </span>
-              </td>
+              <td style={td}><StatusBadge status={a.type === "收入" ? "收入" : "支出"} /></td>
               <td style={td}>{a.category || "—"}</td>
               <td style={td}>{a.desc || "—"}</td>
-              <td style={{ ...td, fontFamily: FONT_NUM, fontWeight: 700, color: a.type === "收入" ? THEME.success : THEME.danger }}>{fmtMoney(a.amount)}</td>
+              <td style={{ ...td, fontFamily: FONT_NUM, fontWeight: 700, color: a.type === "收入" ? THEME.success : THEME.danger }}>
+                {a.type === "收入" ? "+" : "−"}{fmtMoney(Math.abs(Number(a.amount) || 0))}
+              </td>
               <td style={{ ...td, textAlign: "right" }}>
                 <Btn size="sm" variant="danger" icon={Trash2} onClick={() => askDelete("確定要刪除此筆帳務紀錄嗎？", () => persist.accounting(accounting.filter((x) => x.id !== a.id)))} />
               </td>
