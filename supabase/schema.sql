@@ -46,10 +46,11 @@ insert into storage.buckets (id, name, public)
 values ('quote-scans', 'quote-scans', false)
 on conflict (id) do nothing;
 
--- 確保 bucket 允許上傳圖片與 PDF（如果 bucket 已存在、且之前在 Dashboard 上
--- 被設成只允許圖片類型，上面的 insert 不會更新既有設定，所以這裡另外強制更新一次）
+-- 確保 bucket 允許上傳圖片、PDF 與 Word 公文範本（.doc／.docx）（如果 bucket 已存在、
+-- 且之前在 Dashboard 上被設成只允許圖片類型，上面的 insert 不會更新既有設定，
+-- 所以這裡另外強制更新一次）
 update storage.buckets
-set allowed_mime_types = array['image/png','image/jpeg','image/jpg','image/gif','image/webp','application/pdf']
+set allowed_mime_types = array['image/png','image/jpeg','image/jpg','image/gif','image/webp','application/pdf','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/msword']
 where id = 'quote-scans';
 
 drop policy if exists "authenticated can read quote-scans" on storage.objects;

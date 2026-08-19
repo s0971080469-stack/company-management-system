@@ -5,7 +5,7 @@ import {
   Landmark, BarChart3, Plus, Trash2, Pencil, X, Check, Search,
   LogIn, LogOut, Building2, TrendingUp, TrendingDown, CalendarDays,
   ChevronRight, RotateCcw, ArrowRight, AlertCircle, FileSignature, Truck, ShieldCheck, UserCog, Download, Car,
-  Paperclip, Eye, Upload, Image as ImageIcon, Loader2, MapPin, Printer, Menu
+  Paperclip, Eye, Upload, Image as ImageIcon, Loader2, MapPin, Printer, Menu, Stamp
 } from "lucide-react";
 import {
   BarChart, Bar, LineChart, Line, ComposedChart, PieChart, Pie, Cell, XAxis, YAxis,
@@ -13,6 +13,9 @@ import {
 } from "recharts";
 import { loadKey, saveKey } from "./storage.js";
 import { supabase, createAuthActionClient } from "./supabaseClient.js";
+import PizZip from "pizzip";
+import Docxtemplater from "docxtemplater";
+import { renderAsync as renderDocxAsync } from "docx-preview";
 
 /* ---------------------------------------------------------
    企業帳冊 Corporate Ledger — 主題設計
@@ -47,6 +50,7 @@ const NAV = [
   { key: "employees", label: "人員管理", icon: Users },
   { key: "payroll", label: "薪資表管理", icon: Wallet },
   { key: "vendors", label: "廠商管理", icon: Truck },
+  { key: "documents", label: "公文管理", icon: Stamp },
   { key: "quotes", label: "估價單", icon: FileText },
   { key: "invoices", label: "發票", icon: Receipt },
   { key: "billing", label: "收支管理", icon: HandCoins },
@@ -68,6 +72,8 @@ const STORAGE_KEYS = {
   billing: "billing",
   accounting: "accounting",
   vendors: "vendors",
+  documents: "official_documents",
+  documentTemplates: "document_templates",
   contracts: "contracts",
   sysUsers: "sys_users",
   rolePerms: "role_permissions",
@@ -85,8 +91,8 @@ const DEFAULT_MATRIX = () => {
     roles: DEFAULT_ROLES,
     matrix: {
       "管理員": on(NAV.map((n) => n.key)),
-      "財務": on(["dashboard", "payroll", "vendors", "quotes", "invoices", "billing", "contracts", "accounting", "reports", "attendance"]),
-      "人資": on(["dashboard", "employees", "payroll", "attendance", "reports"]),
+      "財務": on(["dashboard", "payroll", "vendors", "documents", "quotes", "invoices", "billing", "contracts", "accounting", "reports", "attendance"]),
+      "人資": on(["dashboard", "employees", "payroll", "documents", "attendance", "reports"]),
       "一般員工": on(["dashboard", "attendance"]),
     },
   };
@@ -187,6 +193,14 @@ const fmtDate = (s) => {
   const d = new Date(s);
   if (isNaN(d)) return s;
   return `${toROCYear(d.getFullYear())}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
+};
+// 公文用的中文日期格式，如「115 年 8 月 3 日」——不含「中華民國」，
+// 因為公文範本通常會把「中華民國」寫死在固定格式文字裡，標記只需要補年月日
+const fmtDateChinese = (s) => {
+  if (!s) return "";
+  const d = new Date(s);
+  if (isNaN(d)) return s;
+  return `${toROCYear(d.getFullYear())} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日`;
 };
 const fmtDateTime = (s) => {
   if (!s) return "—";
@@ -560,6 +574,11 @@ function StatusBadge({ status }) {
     "未請款": { bg: THEME.warnSoft, fg: THEME.warn },
     "收入": { bg: THEME.successSoft, fg: THEME.success },
     "支出": { bg: THEME.dangerSoft, fg: THEME.danger },
+    "待處理": { bg: THEME.warnSoft, fg: THEME.warn },
+    "處理中": { bg: "#E5EDF9", fg: "#2A5199" },
+    "已完成": { bg: THEME.successSoft, fg: THEME.success },
+    "收文": { bg: "#E4E9F0", fg: "#3E5872" },
+    "發文": { bg: "#F1E7F5", fg: "#6B3F82" },
     // 公司標籤色——同一間公司在系統各處（人員、契約、發票、收支管理…）都用同一個顏色，方便一眼辨識
     "綠石環保": { bg: "#E1F0EE", fg: "#1B6B63" },
     "歐克環境": { bg: "#E5EDF9", fg: "#2A5199" },
@@ -815,6 +834,8 @@ export default function CompanyManagementSystem({ session }) {
   const [billing, setBilling] = useState([]);
   const [accounting, setAccounting] = useState([]);
   const [vendors, setVendors] = useState([]);
+  const [documents, setDocuments] = useState([]);
+  const [documentTemplates, setDocumentTemplates] = useState([]);
   const [contracts, setContracts] = useState([]);
   const [sysUsers, setSysUsers] = useState([]);
   const [rolePerms, setRolePerms] = useState(DEFAULT_MATRIX());
@@ -833,7 +854,7 @@ export default function CompanyManagementSystem({ session }) {
 
   useEffect(() => {
     (async () => {
-      const [emp, att, pay, qt, inv, bil, acc, ven, con, usr, rp, qtpl, cuid, veh, cloc, cbil] = await Promise.all([
+      const [emp, att, pay, qt, inv, bil, acc, ven, doc, doctpl, con, usr, rp, qtpl, cuid, veh, cloc, cbil] = await Promise.all([
         loadKey(STORAGE_KEYS.employees, []),
         loadKey(STORAGE_KEYS.attendance, []),
         loadKey(STORAGE_KEYS.payroll, []),
@@ -842,6 +863,8 @@ export default function CompanyManagementSystem({ session }) {
         loadKey(STORAGE_KEYS.billing, []),
         loadKey(STORAGE_KEYS.accounting, []),
         loadKey(STORAGE_KEYS.vendors, []),
+        loadKey(STORAGE_KEYS.documents, []),
+        loadKey(STORAGE_KEYS.documentTemplates, []),
         loadKey(STORAGE_KEYS.contracts, []),
         loadKey(STORAGE_KEYS.sysUsers, []),
         loadKey(STORAGE_KEYS.rolePerms, null),
@@ -853,7 +876,7 @@ export default function CompanyManagementSystem({ session }) {
       ]);
       setEmployees(emp); setAttendance(att); setPayroll(pay); setQuotes(qt);
       setInvoices(inv); setBilling(bil); setAccounting(acc);
-      setVendors(ven); setContracts(con); setSysUsers(usr);
+      setVendors(ven); setDocuments(doc); setDocumentTemplates(doctpl); setContracts(con); setSysUsers(usr);
       setRolePerms(rp || DEFAULT_MATRIX());
       const missingSeeds = SEED_QUOTE_TEMPLATES.filter((seed) => !qtpl.some((t) => t.company === seed.company));
       const mergedTemplates = missingSeeds.length ? [...missingSeeds, ...qtpl] : qtpl;
@@ -879,6 +902,8 @@ export default function CompanyManagementSystem({ session }) {
     billing: (v) => { setBilling(v); saveKey(STORAGE_KEYS.billing, v); },
     accounting: (v) => { setAccounting(v); saveKey(STORAGE_KEYS.accounting, v); },
     vendors: (v) => { setVendors(v); saveKey(STORAGE_KEYS.vendors, v); },
+    documents: (v) => { setDocuments(v); saveKey(STORAGE_KEYS.documents, v); },
+    documentTemplates: (v) => { setDocumentTemplates(v); saveKey(STORAGE_KEYS.documentTemplates, v); },
     contracts: (v) => { setContracts(v); saveKey(STORAGE_KEYS.contracts, v); },
     sysUsers: (v) => { setSysUsers(v); saveKey(STORAGE_KEYS.sysUsers, v); },
     rolePerms: (v) => { setRolePerms(v); saveKey(STORAGE_KEYS.rolePerms, v); },
@@ -941,7 +966,7 @@ export default function CompanyManagementSystem({ session }) {
 
   const ctx = {
     employees, attendance, payroll, quotes, invoices, billing, accounting,
-    vendors, contracts, sysUsers, rolePerms, quoteTemplates, vehicles, companyLocation, contractBilling,
+    vendors, documents, documentTemplates, contracts, sysUsers, rolePerms, quoteTemplates, vehicles, companyLocation, contractBilling,
     currentUser, isAdmin, realIsAdmin,
     persist, addAccountingEntry, removeAccountingBySource, askDelete, now,
   };
@@ -995,6 +1020,7 @@ export default function CompanyManagementSystem({ session }) {
           {tab === "employees" && <EmployeesView ctx={ctx} />}
           {tab === "payroll" && <PayrollView ctx={ctx} />}
           {tab === "vendors" && <VendorsView ctx={ctx} />}
+          {tab === "documents" && <DocumentsView ctx={ctx} />}
           {tab === "quotes" && <QuotesView ctx={ctx} setTab={setTab} />}
           {tab === "invoices" && <InvoicesView ctx={ctx} />}
           {tab === "attendance" && <AttendanceView ctx={ctx} />}
@@ -1856,7 +1882,7 @@ const emptyQuoteTemplate = () => ({
 });
 
 function QuotesView({ ctx, setTab }) {
-  const { quotes, persist, invoices, quoteTemplates, askDelete } = ctx;
+  const { quotes, persist, invoices, quoteTemplates, vendors, askDelete } = ctx;
   const [modal, setModal] = useState(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [templateManagerOpen, setTemplateManagerOpen] = useState(false);
@@ -1963,7 +1989,7 @@ function QuotesView({ ctx, setTab }) {
 
   return (
     <div>
-      <SectionHeader eyebrow="QUOTATION · 05" title="估價單"
+      <SectionHeader eyebrow="QUOTATION · 06" title="估價單"
         action={
           <div style={{ display: "flex", gap: 8 }}>
             <Btn icon={FileSignature} onClick={() => setTemplateManagerOpen(true)}>管理估價範本</Btn>
@@ -2056,7 +2082,7 @@ function QuotesView({ ctx, setTab }) {
 
       {modal && (
         <Modal title={modal.mode === "new" ? "新增估價單" : `編輯估價單 ${modal.data.no}`} onClose={() => setModal(null)} width={680}>
-          <QuoteForm data={modal.data} onSave={save} onCancel={() => setModal(null)} />
+          <QuoteForm data={modal.data} vendors={vendors} onSave={save} onCancel={() => setModal(null)} />
         </Modal>
       )}
 
@@ -2363,13 +2389,20 @@ function QuoteTemplateForm({ data, onSave, onCancel }) {
   );
 }
 
-function QuoteForm({ data, onSave, onCancel }) {
+function QuoteForm({ data, vendors, onSave, onCancel }) {
   const [f, setF] = useState(data);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const owners = (vendors || []).filter((v) => v.vendorType === "業主");
   return (
     <div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 16 }}>
-        <Field label="報價單位（客戶）"><TextInput value={f.client} onChange={set("client")} placeholder="客戶 / 公司名稱" /></Field>
+        <Field label="報價單位（客戶）"><TextInput value={f.client} onChange={set("client")} placeholder="客戶 / 公司名稱，可直接輸入" /></Field>
+        <Field label="從業主資料選取（選填）">
+          <Select value="" onChange={(e) => { if (e.target.value) setF({ ...f, client: e.target.value }); }}>
+            <option value="">不套用</option>
+            {owners.map((v) => <option key={v.id} value={v.name}>{v.name}</option>)}
+          </Select>
+        </Field>
         <Field label="工作名稱"><TextInput value={f.workName} onChange={set("workName")} placeholder="專案 / 工作名稱" /></Field>
         <Field label="報價日期"><TextInput type="date" value={f.date} onChange={set("date")} /></Field>
         <Field label="有效期限"><TextInput type="date" value={f.validUntil} onChange={set("validUntil")} /></Field>
@@ -2466,7 +2499,7 @@ function InvoicesView({ ctx }) {
 
   return (
     <div>
-      <SectionHeader eyebrow="INVOICE · 06" title="發票"
+      <SectionHeader eyebrow="INVOICE · 07" title="發票"
         action={
           <div style={{ display: "flex", gap: 8 }}>
             <Btn icon={Landmark} disabled={checkedIds.size === 0} onClick={addSelectedToBankDeposits}>新增至銀行入帳紀錄{checkedIds.size ? `（${checkedIds.size}）` : ""}</Btn>
@@ -2690,7 +2723,7 @@ function AttendanceView({ ctx }) {
   if (restricted && !myEmployeeId) {
     return (
       <div>
-        <SectionHeader eyebrow="ATTENDANCE · 11" title="打卡上下班" />
+        <SectionHeader eyebrow="ATTENDANCE · 12" title="打卡上下班" />
         <div style={{ background: THEME.warnSoft, border: `1px solid #E9D8AE`, borderRadius: 10, padding: "14px 18px", fontSize: 13, color: THEME.warn, display: "flex", gap: 8, alignItems: "center" }}>
           <AlertCircle size={16} />
           您目前的帳號尚未綁定員工資料，請聯絡管理員到「權限設定」→「系統帳號」設定綁定的員工後才能打卡。
@@ -2701,7 +2734,7 @@ function AttendanceView({ ctx }) {
 
   return (
     <div>
-      <SectionHeader eyebrow="ATTENDANCE · 11" title="打卡上下班" />
+      <SectionHeader eyebrow="ATTENDANCE · 12" title="打卡上下班" />
 
       <div style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 12, padding: "16px 18px", marginBottom: 18 }}>
         <div style={{ fontSize: 12.5, fontWeight: 700, color: THEME.text, marginBottom: 6 }}>打卡地點限制</div>
@@ -2923,7 +2956,7 @@ function BillingView({ ctx }) {
 
   return (
     <div>
-      <SectionHeader eyebrow="EXPENSE MANAGEMENT · 07" title="收支管理"
+      <SectionHeader eyebrow="EXPENSE MANAGEMENT · 08" title="收支管理"
         action={<Btn variant="brass" icon={Plus} onClick={openNew}>{newLabel}</Btn>} />
 
       {duePayments.length > 0 && (
@@ -3227,7 +3260,7 @@ function AccountingView({ ctx }) {
 
   return (
     <div>
-      <SectionHeader eyebrow="LEDGER · 12" title="帳務入口"
+      <SectionHeader eyebrow="LEDGER · 13" title="帳務入口"
         action={<Btn variant="brass" icon={Plus} onClick={() => setModal(true)}>新增帳務紀錄</Btn>} />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
@@ -3362,7 +3395,7 @@ function ReportsView({ ctx }) {
 
   return (
     <div>
-      <SectionHeader eyebrow="REPORTS · 13" title="公司報表" />
+      <SectionHeader eyebrow="REPORTS · 14" title="公司報表" />
 
       <div style={{ display: "flex", gap: 6, marginBottom: 18, flexWrap: "wrap", alignItems: "center" }}>
         <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600, marginRight: 4 }}>年度</span>
@@ -3613,6 +3646,462 @@ function VendorForm({ data, onSave, onCancel }) {
 }
 
 /* =========================================================
+   DOCUMENTS (公文管理)
+========================================================= */
+const DOCUMENT_MERGE_TAGS = ["文號", "發文字號", "主旨", "發文機關", "發文公司", "發文日期", "承辦人", "內容"];
+const emptyDocument = () => ({
+  subject: "", party: "", date: todayStr(), handler: "", note: "", content: "", templateId: "",
+});
+
+// 依系統自動產生的文號（如 DOC-115-023）＋隨機 5 碼組出公文慣用的「(115)字第 023-45871 號」格式
+const officialDocNo = (no, seq5) => {
+  const m = /-(\d+)-(\d+)$/.exec(no || "");
+  if (!m) return "";
+  return `(${m[1]})字第 ${m[2]}-${seq5 || "00000"} 號`;
+};
+
+// 把公文欄位資料套進 Word 範本（範本內用 {主旨} 這類標記），產生新檔案並觸發下載
+async function generateDocFromTemplate(template, doc, companyFullName) {
+  if (/\.doc$/i.test(template.fileName || "")) {
+    throw new Error("這個範本是舊版 .doc 檔案，自動套入內容只支援 .docx 格式，請先用 Word 開啟後另存新檔為 .docx 再重新上傳。");
+  }
+  const url = await getQuoteScanUrl(template.path);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("範本下載失敗");
+  const arrayBuffer = await res.arrayBuffer();
+  const zip = new PizZip(arrayBuffer);
+  const renderer = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
+  renderer.render({
+    文號: doc.no || "（尚未產生）", 發文字號: officialDocNo(doc.no, doc.seq5), 主旨: doc.subject || "", 類型: "",
+    發文機關: doc.party || "", 受文機關: doc.party || "", 發文公司: companyFullName || template.company || "",
+    日期: fmtDateChinese(doc.date), 發文日期: fmtDateChinese(doc.date),
+    承辦人: doc.handler || "", 狀態: "", 內容: doc.content || "",
+  });
+  const blob = renderer.getZip().generate({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+  return { blob, filename: `${doc.subject || doc.no || "公文"}.docx` };
+}
+
+function downloadBlob(blob, filename) {
+  const blobUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = blobUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(blobUrl);
+}
+
+// 顯示套用範本後產生的 Word 檔案內容，並可直接下載——新增公文表單、公文清單共用這個預覽視窗
+function DocPreviewModal({ preview, onClose }) {
+  const previewRef = React.useRef(null);
+
+  useEffect(() => {
+    if (preview && previewRef.current) {
+      previewRef.current.innerHTML = "";
+      renderDocxAsync(preview.blob, previewRef.current, previewRef.current, {
+        inWrapper: false, ignoreWidth: true, ignoreHeight: true,
+      }).catch((err) => {
+        console.error(err);
+      });
+    }
+  }, [preview]);
+
+  if (!preview) return null;
+  return (
+    <Modal title="公文預覽" onClose={onClose} width={720}>
+      <style>{`
+        .doc-preview-box .docx-wrapper { background: transparent !important; padding: 0 !important; }
+        .doc-preview-box .docx-wrapper > section.docx { width: 100% !important; min-width: 0 !important; max-width: 100% !important; box-shadow: none !important; margin: 0 0 12px !important; padding: 24px !important; }
+        .doc-preview-box img, .doc-preview-box table { max-width: 100% !important; }
+      `}</style>
+      <div ref={previewRef} className="doc-preview-box" style={{ maxHeight: "65vh", overflow: "auto", border: `1px solid ${THEME.line}`, borderRadius: 8, background: "#F5F5F0", zoom: 0.8 }} />
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14 }}>
+        <Btn onClick={onClose}>關閉預覽</Btn>
+        <Btn variant="primary" icon={Download} onClick={() => downloadBlob(preview.blob, preview.filename)}>下載 Word 檔案</Btn>
+      </div>
+    </Modal>
+  );
+}
+
+function DocumentTemplateManager({ templates, onAdd, onDelete }) {
+  const [company, setCompany] = useState(VENDOR_COMPANY_OPTIONS[0]);
+  const [name, setName] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = React.useRef(null);
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploading(true);
+    try {
+      const path = `doc-templates/${uid()}-${safeStorageFileName(file.name)}`;
+      const { error } = await supabase.storage.from(QUOTE_SCAN_BUCKET).upload(path, file);
+      if (error) throw error;
+      onAdd({ id: uid(), company, name: name.trim() || "標準公文範本", fileName: file.name, path, createdAt: new Date().toISOString() });
+      setName("");
+    } catch (err) {
+      console.error(err);
+      alert("範本上傳失敗，請稍後再試一次。");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div>
+      <div style={{ fontSize: 12.5, color: THEME.muted, marginBottom: 16, lineHeight: 1.7 }}>
+        上傳 Word 檔案（.doc 或 .docx）作為各公司的公文範本。舊版 .doc 檔案可以上傳保存，但「產生 Word 檔案」自動套入內容只支援 .docx，若要用自動套入功能，請在 Word 裡把 .doc 檔案另存新檔為 .docx 後再上傳。
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
+        <Select value={company} onChange={(e) => setCompany(e.target.value)}>
+          {VENDOR_COMPANY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+        </Select>
+        <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="範本名稱（選填）" />
+        <input ref={fileInputRef} type="file" accept=".doc,.docx" onChange={handleFile} disabled={uploading} style={{ display: "none" }} />
+        <Btn variant="brass" icon={uploading ? Loader2 : Upload} disabled={uploading} onClick={() => fileInputRef.current?.click()} style={{ gridColumn: "span 2" }}>
+          {uploading ? "上傳中…" : "上傳範本"}
+        </Btn>
+      </div>
+      {templates.length === 0 ? (
+        <div style={{ fontSize: 12.5, color: THEME.muted }}>尚未建立任何公文範本。</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {templates.map((t) => (
+            <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, border: `1px solid ${THEME.line}` }}>
+              <IconBadge icon={FileText} tone="brass" />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>{t.company}{t.name ? ` — ${t.name}` : ""}</div>
+                <div style={{ fontSize: 11, color: THEME.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.fileName}</div>
+              </div>
+              <Btn size="sm" variant="danger" icon={Trash2} onClick={() => onDelete(t)} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DocumentTemplatePicker({ templates, onPick, onBlank, onManage }) {
+  return (
+    <div>
+      <p style={{ fontSize: 12.5, color: THEME.muted, margin: "0 0 16px" }}>
+        點選一間公司的公文範本，新增公文時會自動套用；也可以直接建立空白公文。
+      </p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+        <button onClick={onBlank}
+          style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 10, border: `1px dashed ${THEME.line}`, background: "#FAFAF7", cursor: "pointer", textAlign: "left" }}>
+          <IconBadge icon={Stamp} tone="ink" />
+          <div>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: THEME.text }}>空白公文</div>
+            <div style={{ fontSize: 11.5, color: THEME.muted }}>不套用任何範本，從頭開始填寫</div>
+          </div>
+        </button>
+        {templates.length === 0 ? (
+          <div style={{ fontSize: 12.5, color: THEME.muted, padding: "10px 4px" }}>
+            尚未建立任何公司公文範本。
+          </div>
+        ) : templates.map((t) => (
+          <button key={t.id} onClick={() => onPick(t)}
+            style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 10, border: `1px solid ${THEME.line}`, background: "#fff", cursor: "pointer", textAlign: "left" }}>
+            <IconBadge icon={FileText} tone="brass" />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: THEME.text }}>{t.company}{t.name ? ` — ${t.name}` : ""}</div>
+              <div style={{ fontSize: 11.5, color: THEME.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.fileName}</div>
+            </div>
+            <ChevronRight size={16} color={THEME.muted} />
+          </button>
+        ))}
+      </div>
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <Btn size="sm" icon={Plus} onClick={onManage}>新增／管理範本</Btn>
+      </div>
+    </div>
+  );
+}
+
+function DocumentsView({ ctx }) {
+  const { documents, documentTemplates, sysUsers, quoteTemplates, vendors, persist, askDelete } = ctx;
+  const [modal, setModal] = useState(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [templateManagerOpen, setTemplateManagerOpen] = useState(false);
+  const [listPreview, setListPreview] = useState(null);
+  const [generatingId, setGeneratingId] = useState(null);
+  const [handlerFilter, setHandlerFilter] = useState("全部");
+  const [query, setQuery] = useState("");
+
+  const addTemplate = (t) => persist.documentTemplates([t, ...documentTemplates]);
+  const deleteTemplate = (t) => {
+    askDelete(`確定要刪除範本「${t.company}${t.name ? " — " + t.name : ""}」嗎？`, async () => {
+      try { await deleteQuoteScan(t.path); } catch (err) { console.error(err); }
+      persist.documentTemplates(documentTemplates.filter((x) => x.id !== t.id));
+    });
+  };
+
+  const openBlank = () => { setPickerOpen(false); setModal({ mode: "new", data: emptyDocument(), formKey: uid() }); };
+  const useTemplate = (t) => { setPickerOpen(false); setModal({ mode: "new", data: { ...emptyDocument(), templateId: t.id }, formKey: uid() }); };
+
+  const handlerOptions = Array.from(new Set(documents.map((d) => d.handler).filter(Boolean)));
+
+  const filtered = documents.filter((d) => {
+    if (handlerFilter !== "全部" && d.handler !== handlerFilter) return false;
+    if (query && !(d.no + d.subject + (d.party || "")).toLowerCase().includes(query.toLowerCase())) return false;
+    return true;
+  });
+
+  // 把一筆公文資料存進指定的清單（不直接動 state，方便 saveAndNew 連續存兩筆時
+  // 用「存完第一筆之後的清單」去算第二筆的自動編號，不會兩筆算出同一個號碼）
+  const persistDocInto = (list, data) => {
+    if (data.id) {
+      const updated = { ...data, updatedAt: new Date().toISOString() };
+      return { list: list.map((d) => (d.id === data.id ? updated : d)), saved: updated };
+    }
+    const no = nextNo("DOC", list);
+    const seq5 = String(Math.floor(Math.random() * 100000)).padStart(5, "0");
+    const created = { ...data, id: uid(), no, seq5, createdBy: actorName(ctx), createdAt: new Date().toISOString() };
+    return { list: [created, ...list], saved: created };
+  };
+
+  // 儲存後刻意不關視窗，維持開著讓使用者接著選範本、產生 Word 檔案，
+  // 不用存檔後再重新點開editing一次才能拿到正式編號。
+  const save = (data) => {
+    const { list, saved } = persistDocInto(documents, data);
+    persist.documents(list);
+    setModal({ mode: "edit", data: saved });
+  };
+
+  // 「新增一筆」：存好目前這筆之後，複製這筆內容（主旨、發文機關、承辦人…）
+  // 立刻另存成一筆全新、有自己文號的公文，直接開起來讓你接著改細節再送出，
+  // 適合連續發文給不同機關但內容大同小異的情況。
+  const saveAndNew = (data) => {
+    const step1 = persistDocInto(documents, data);
+    const duplicate = { ...step1.saved };
+    delete duplicate.id;
+    delete duplicate.no;
+    delete duplicate.seq5;
+    delete duplicate.createdAt;
+    delete duplicate.updatedAt;
+    const step2 = persistDocInto(step1.list, duplicate);
+    persist.documents(step2.list);
+    setModal({ mode: "edit", data: step2.saved, formKey: uid() });
+  };
+
+  // 清單上「預覽」「下載」直接用這筆公文已存的資料＋選好的範本產生 Word 檔案，
+  // 不用另外開編輯視窗；沒有選範本的公文這兩顆按鈕會反灰。
+  const generateForRow = async (d, download) => {
+    const tpl = documentTemplates.find((t) => t.id === d.templateId);
+    if (!tpl) { alert("這筆公文尚未選擇要套用的範本，請先編輯這筆公文選擇範本。"); return; }
+    const companyFullName = (quoteTemplates || []).find((qt) => qt.company === tpl.company)?.companyName;
+    setGeneratingId(d.id);
+    try {
+      const result = await generateDocFromTemplate(tpl, d, companyFullName);
+      if (download) downloadBlob(result.blob, result.filename);
+      else setListPreview(result);
+    } catch (err) {
+      console.error(err);
+      alert(err.message && err.message.includes(".doc")
+        ? err.message
+        : "公文檔案產生失敗，請確認範本內的標記格式是否正確（如 {主旨}），或稍後再試一次。");
+    } finally {
+      setGeneratingId(null);
+    }
+  };
+
+  const monthCount = documents.filter((d) => (d.date || "").startsWith(monthStr())).length;
+  const templatedCount = documents.filter((d) => d.templateId).length;
+
+  return (
+    <div>
+      <SectionHeader eyebrow="DOCUMENT · 05" title="公文管理"
+        action={
+          <div style={{ display: "flex", gap: 8 }}>
+            <Btn icon={FileText} onClick={() => setTemplateManagerOpen(true)}>管理公文範本</Btn>
+            <Btn icon={Printer} onClick={() => window.print()}>列印</Btn>
+            <Btn variant="brass" icon={Plus} onClick={() => setPickerOpen(true)}>新增公文</Btn>
+          </div>
+        } />
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
+        <StatCard label="公文總數" value={documents.length} icon={Stamp} tone="ink" />
+        <StatCard label="本月新增" value={monthCount} icon={CalendarDays} tone="brass" />
+        <StatCard label="已套用範本" value={templatedCount} icon={FileText} tone="success" />
+      </div>
+
+      {documents.length === 0 ? (
+        <EmptyState icon={Stamp} text="尚未建立任何公文紀錄。" action={<Btn variant="brass" icon={Plus} onClick={() => setPickerOpen(true)}>建立第一筆公文</Btn>} />
+      ) : (
+        <>
+          <div style={{ display: "flex", gap: 16, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+            {handlerOptions.length > 0 && (
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600 }}>承辦人</span>
+                <Select value={handlerFilter} onChange={(e) => setHandlerFilter(e.target.value)} style={{ width: 180 }}>
+                  <option value="全部">全部</option>
+                  {handlerOptions.map((h) => <option key={h} value={h}>{h}</option>)}
+                </Select>
+              </div>
+            )}
+            <div style={{ position: "relative", maxWidth: 260 }}>
+              <Search size={14} style={{ position: "absolute", left: 10, top: 10, color: THEME.muted }} />
+              <TextInput placeholder="搜尋文號／主旨／發文機關" value={query} onChange={(e) => setQuery(e.target.value)} style={{ paddingLeft: 30 }} />
+            </div>
+          </div>
+
+          {filtered.length === 0 ? (
+            <EmptyState icon={Stamp} text="這個篩選條件下沒有公文。" />
+          ) : (
+            <Table columns={["發文字號", "主旨", "發文機關", "發文日期", "承辦人", "預覽", "下載", ""]}>
+              {filtered.map((d) => {
+                const busy = generatingId === d.id;
+                return (
+                <tr key={d.id}>
+                  <td style={{ ...td, fontFamily: FONT_NUM }}>{officialDocNo(d.no, d.seq5) || d.no || "—"}</td>
+                  <td style={td}><strong>{d.subject}</strong></td>
+                  <td style={td}>{d.party || "—"}</td>
+                  <td style={td}>{fmtDate(d.date)}</td>
+                  <td style={td}>{d.handler || "—"}</td>
+                  <td style={td}>
+                    <Btn size="sm" icon={busy ? Loader2 : Eye} disabled={!d.templateId || busy} onClick={() => generateForRow(d, false)}>預覽</Btn>
+                  </td>
+                  <td style={td}>
+                    <Btn size="sm" icon={busy ? Loader2 : Download} disabled={!d.templateId || busy} onClick={() => generateForRow(d, true)}>下載</Btn>
+                  </td>
+                  <td style={{ ...td, textAlign: "right" }}>
+                    <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                      <Btn size="sm" icon={Pencil} onClick={() => setModal({ mode: "edit", data: d })} />
+                      <Btn size="sm" variant="danger" icon={Trash2} onClick={() => askDelete(`確定要刪除公文「${d.subject}」嗎？`, () => persist.documents(documents.filter((x) => x.id !== d.id)))} />
+                    </div>
+                  </td>
+                </tr>
+                );
+              })}
+            </Table>
+          )}
+        </>
+      )}
+
+      {pickerOpen && (
+        <Modal title="新增公文" onClose={() => setPickerOpen(false)}>
+          <DocumentTemplatePicker
+            templates={documentTemplates}
+            onPick={useTemplate}
+            onBlank={openBlank}
+            onManage={() => { setPickerOpen(false); setTemplateManagerOpen(true); }}
+          />
+        </Modal>
+      )}
+
+      {modal && (
+        <Modal title={modal.mode === "new" ? "新增公文" : `編輯公文 ${modal.data.no}`} onClose={() => setModal(null)} width={640}>
+          <DocumentForm key={modal.data.id || modal.formKey} data={modal.data} sysUsers={sysUsers} vendors={vendors} templates={documentTemplates} quoteTemplates={quoteTemplates} onSave={save} onSaveAndNew={saveAndNew} onCancel={() => setModal(null)} />
+        </Modal>
+      )}
+
+      {templateManagerOpen && (
+        <Modal title="公文範本管理" onClose={() => setTemplateManagerOpen(false)} width={560}>
+          <DocumentTemplateManager templates={documentTemplates} onAdd={addTemplate} onDelete={deleteTemplate} />
+        </Modal>
+      )}
+
+      <DocPreviewModal preview={listPreview} onClose={() => setListPreview(null)} />
+    </div>
+  );
+}
+
+function DocumentForm({ data, sysUsers, vendors, templates, quoteTemplates, onSave, onSaveAndNew, onCancel }) {
+  const initial = { content: "", templateId: "", ...data };
+  const [f, setF] = useState(initial);
+  const [baseline, setBaseline] = useState(() => JSON.stringify(initial));
+  const [generating, setGenerating] = useState(false);
+  const [preview, setPreview] = useState(null); // { blob, filename }
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const owners = (vendors || []).filter((v) => v.vendorType === "業主");
+  const isDirty = JSON.stringify(f) !== baseline;
+
+  const doSave = () => {
+    if (!f.subject) return;
+    onSave(f);
+    setBaseline(JSON.stringify(f));
+  };
+  const doSaveAndNew = () => {
+    if (!f.subject || !isDirty) return;
+    onSaveAndNew(f);
+  };
+
+  const generate = async () => {
+    const tpl = (templates || []).find((t) => t.id === f.templateId);
+    if (!tpl) { alert("請先選擇要套用的公文範本。"); return; }
+    if (!f.no) { alert("請先按「儲存」，公文正式編號後才能產生檔案，這樣「文號」「發文字號」才會是真正的號碼。"); return; }
+    const companyFullName = (quoteTemplates || []).find((qt) => qt.company === tpl.company)?.companyName;
+    setGenerating(true);
+    try {
+      const result = await generateDocFromTemplate(tpl, f, companyFullName);
+      setPreview(result);
+    } catch (err) {
+      console.error(err);
+      alert(err.message && err.message.includes(".doc")
+        ? err.message
+        : "公文檔案產生失敗，請確認範本內的標記格式是否正確（如 {主旨}），或稍後再試一次。");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+      <Field label="主旨" span={2}><TextInput value={f.subject} onChange={set("subject")} placeholder="公文主旨" /></Field>
+      <Field label="發文機關"><TextInput value={f.party} onChange={set("party")} placeholder="機關或單位名稱，可直接輸入" /></Field>
+      <Field label="從業主資料選取（選填）">
+        <Select value="" onChange={(e) => { if (e.target.value) setF({ ...f, party: e.target.value }); }}>
+          <option value="">不套用</option>
+          {owners.map((v) => <option key={v.id} value={v.name}>{v.name}</option>)}
+        </Select>
+      </Field>
+      <Field label="發文日期"><DatePickerButton value={f.date} onChange={(v) => setF({ ...f, date: v })} /></Field>
+      <Field label="承辦人">
+        <Select value={f.handler || ""} onChange={set("handler")}>
+          <option value="">未指定</option>
+          {(sysUsers || []).map((u) => <option key={u.id} value={u.name}>{u.name}</option>)}
+        </Select>
+      </Field>
+      <Field label="公文內容" span={2}><TextArea value={f.content} onChange={set("content")} placeholder="填寫後可套用範本產生 Word 檔案" rows={5} /></Field>
+      <Field label="備註" span={2}><TextArea value={f.note} onChange={set("note")} placeholder="選填" /></Field>
+
+      <div style={{ gridColumn: "span 2", background: THEME.canvas, border: `1px solid ${THEME.line}`, borderRadius: 10, padding: "12px 14px" }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600, flexShrink: 0 }}>套用公文範本</span>
+          <Select value={f.templateId || ""} onChange={set("templateId")} style={{ flex: 1, minWidth: 160 }}>
+            <option value="">不套用</option>
+            {(templates || []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </Select>
+          <Btn icon={generating ? Loader2 : Eye} disabled={!f.templateId || !f.no || generating} onClick={generate}>
+            {generating ? "產生中…" : "預覽並產生"}
+          </Btn>
+        </div>
+        {f.templateId && !f.no && (
+          <div style={{ fontSize: 11, color: THEME.warn, marginTop: 8 }}>請先按下方「儲存」，公文編號後才能產生檔案。</div>
+        )}
+        {f.templateId && (
+          <div style={{ fontSize: 11, color: THEME.muted, marginTop: 8, fontFamily: FONT_NUM }}>
+            範本內可用標記：{DOCUMENT_MERGE_TAGS.map((t) => `{${t}}`).join("　")}
+          </div>
+        )}
+      </div>
+
+      <div style={{ gridColumn: "span 2", display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 6 }}>
+        <Btn onClick={onCancel}>關閉</Btn>
+        <Btn icon={Plus} onClick={doSaveAndNew} disabled={!f.subject || !isDirty}>新增一筆</Btn>
+        <Btn variant="primary" icon={Check} onClick={doSave} disabled={!f.subject}>儲存</Btn>
+      </div>
+
+      <DocPreviewModal preview={preview} onClose={() => setPreview(null)} />
+    </div>
+  );
+}
+
+/* =========================================================
    CONTRACTS (契約管理)
 ========================================================= */
 const emptyContract = (vendors) => ({
@@ -3668,7 +4157,7 @@ function ContractsView({ ctx }) {
 
   return (
     <div>
-      <SectionHeader eyebrow="CONTRACT · 08" title="契約管理"
+      <SectionHeader eyebrow="CONTRACT · 09" title="契約管理"
         action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptyContract(vendors) })}>新增契約</Btn>} />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 18 }}>
@@ -3860,7 +4349,7 @@ function ContractBillingView({ ctx }) {
 
   return (
     <div>
-      <SectionHeader eyebrow="CONTRACT · 09" title="每月請款追蹤" />
+      <SectionHeader eyebrow="CONTRACT · 10" title="每月請款追蹤" />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
         <StatCard label="本月契約數" value={filtered.length} icon={FileSignature} tone="ink" />
@@ -3960,11 +4449,12 @@ function ContractBillingView({ ctx }) {
 
       {attachModal && (
         <Modal title="請款掃描檔上傳" onClose={() => setAttachModal(null)} width={520}>
-          <ContractBillingAttachments
+          <FileAttachments
             folderKey={`billing-${attachModal.contractId}-${month}`}
             attachments={recordFor(attachModal.contractId)?.attachments || []}
             onChange={(next) => updateRecord(attachModal.contractId, { attachments: next })}
             askDelete={askDelete}
+            emptyText="尚未上傳任何掃描檔，需先上傳本月請款單掃描檔（圖片或 PDF）才能勾選「本月請款」。"
           />
         </Modal>
       )}
@@ -3984,7 +4474,7 @@ function ContractBillingView({ ctx }) {
   );
 }
 
-function ContractBillingAttachments({ folderKey, attachments, onChange, askDelete }) {
+function FileAttachments({ folderKey, attachments, onChange, askDelete, emptyText = "尚未上傳任何檔案。" }) {
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState(null); // { name, url } | { name, loading: true }
   const fileInputRef = React.useRef(null);
@@ -4058,7 +4548,7 @@ function ContractBillingAttachments({ folderKey, attachments, onChange, askDelet
       </Btn>
 
       {(attachments || []).length === 0 ? (
-        <div style={{ fontSize: 12.5, color: THEME.muted, marginTop: 14 }}>尚未上傳任何掃描檔，需先上傳本月請款單掃描檔（圖片或 PDF）才能勾選「本月請款」。</div>
+        <div style={{ fontSize: 12.5, color: THEME.muted, marginTop: 14 }}>{emptyText}</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 16 }}>
           {(attachments || []).map((att) => (
@@ -4202,7 +4692,7 @@ function VehiclesView({ ctx }) {
 
   return (
     <div>
-      <SectionHeader eyebrow="VEHICLE · 10" title="車輛管理"
+      <SectionHeader eyebrow="VEHICLE · 11" title="車輛管理"
         action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptyVehicle })}>新增車輛</Btn>} />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
@@ -4356,7 +4846,7 @@ function PermissionsView({ ctx }) {
 
   return (
     <div>
-      <SectionHeader eyebrow="ACCESS · 14" title="權限設定"
+      <SectionHeader eyebrow="ACCESS · 15" title="權限設定"
         action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptySysUser(roles) })}>新增系統帳號</Btn>} />
 
       <div style={{ background: "#FBF7EC", border: `1px solid ${THEME.brassSoft}`, borderRadius: 10, padding: "10px 16px", fontSize: 12.5, color: THEME.brassDeep, marginBottom: 16, display: "flex", gap: 8, alignItems: "center" }}>
