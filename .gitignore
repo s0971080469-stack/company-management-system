@@ -3,3 +3,5 @@ dist
 .env
 .env.local
 .DS_Store
+scripts/backup.config.json
+scripts/backup.log
