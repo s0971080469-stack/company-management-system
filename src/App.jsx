@@ -2022,7 +2022,7 @@ function QuotesView({ ctx, setTab }) {
               <span style={{ fontSize: 14.5, fontWeight: 700, color: THEME.text }}>{fmtMonthLabel(key)}</span>
               <span style={{ fontSize: 12.5, color: THEME.muted }}>共 {list.length} 張・小計 <span style={{ fontFamily: FONT_NUM, color: THEME.text }}>{fmtMoney(list.reduce((s, q) => s + sumItems(q.items), 0))}</span></span>
             </div>
-            <Table columns={["單號", "客戶", "日期", "有效期限", "金額", "報價公司", "狀態", "掃描檔上傳", "預覽", "下載掃描檔", ""]}>
+            <Table columns={["單號", "客戶", "新增人員", "日期", "有效期限", "金額", "報價公司", "狀態", "掃描檔上傳", "預覽", "下載掃描檔", ""]}>
               {list.map((q) => {
                 const attachments = q.attachments || [];
                 const hasAttachment = attachments.length > 0;
@@ -2031,6 +2031,7 @@ function QuotesView({ ctx, setTab }) {
                 <tr key={q.id}>
                   <td style={{ ...td, fontFamily: FONT_NUM }}>{q.no}</td>
                   <td style={td}><strong>{q.client}</strong></td>
+                  <td style={td}>{q.createdBy || "—"}</td>
                   <td style={td}>{fmtDate(q.date)}</td>
                   <td style={td}>{fmtDate(q.validUntil)}</td>
                   <td style={{ ...td, fontFamily: FONT_NUM }}>{fmtMoney(sumItems(q.items))}</td>
@@ -3648,9 +3649,10 @@ function VendorForm({ data, onSave, onCancel }) {
 /* =========================================================
    DOCUMENTS (公文管理)
 ========================================================= */
-const DOCUMENT_MERGE_TAGS = ["文號", "發文字號", "主旨", "發文機關", "發文公司", "發文日期", "承辦人", "內容"];
+const DOCUMENT_SUMMARY_TYPES = ["請款函", "估驗函", "送審函", "缺失改善函"];
+const DOCUMENT_MERGE_TAGS = ["文號", "發文字號", "公文概述", "發文機關", "發文公司", "發文日期", "編輯人", "契約名稱", "正本", "說明"];
 const emptyDocument = () => ({
-  subject: "", party: "", date: todayStr(), handler: "", note: "", content: "", templateId: "",
+  overview: "", subject: "", party: "", date: todayStr(), handler: "", contractTitle: "", note: "", content: "", templateId: "", recipients: [],
 });
 
 // 依系統自動產生的文號（如 DOC-115-023）＋隨機 5 碼組出公文慣用的「(115)字第 023-45871 號」格式
@@ -3671,14 +3673,16 @@ async function generateDocFromTemplate(template, doc, companyFullName) {
   const arrayBuffer = await res.arrayBuffer();
   const zip = new PizZip(arrayBuffer);
   const renderer = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
+  const recipientsText = (doc.recipients || []).filter(Boolean).join("、");
   renderer.render({
-    文號: doc.no || "（尚未產生）", 發文字號: officialDocNo(doc.no, doc.seq5), 主旨: doc.subject || "", 類型: "",
+    文號: doc.no || "（尚未產生）", 發文字號: officialDocNo(doc.no, doc.seq5), 主旨: doc.subject || "", 公文概述: doc.overview || "", 類型: "",
     發文機關: doc.party || "", 受文機關: doc.party || "", 發文公司: companyFullName || template.company || "",
     日期: fmtDateChinese(doc.date), 發文日期: fmtDateChinese(doc.date),
-    承辦人: doc.handler || "", 狀態: "", 內容: doc.content || "",
+    承辦人: doc.handler || "", 編輯人: doc.handler || "", 契約名稱: doc.contractTitle || "", 正本: recipientsText, 狀態: "", 內容: doc.content || "", 說明: doc.content || "",
   });
   const blob = renderer.getZip().generate({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
-  return { blob, filename: `${doc.subject || doc.no || "公文"}.docx` };
+  const fileTitle = `${doc.contractTitle || ""}${doc.overview || ""}` || doc.subject || doc.no || "公文";
+  return { blob, filename: `${fileTitle}.docx` };
 }
 
 function downloadBlob(blob, filename) {
@@ -3823,13 +3827,15 @@ function DocumentTemplatePicker({ templates, onPick, onBlank, onManage }) {
 }
 
 function DocumentsView({ ctx }) {
-  const { documents, documentTemplates, sysUsers, quoteTemplates, vendors, persist, askDelete } = ctx;
+  const { documents, documentTemplates, sysUsers, quoteTemplates, vendors, contracts, persist, askDelete } = ctx;
   const [modal, setModal] = useState(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [templateManagerOpen, setTemplateManagerOpen] = useState(false);
   const [listPreview, setListPreview] = useState(null);
   const [generatingId, setGeneratingId] = useState(null);
   const [handlerFilter, setHandlerFilter] = useState("全部");
+  const [contractFilter, setContractFilter] = useState("全部");
+  const [monthFilter, setMonthFilter] = useState("");
   const [query, setQuery] = useState("");
 
   const addTemplate = (t) => persist.documentTemplates([t, ...documentTemplates]);
@@ -3844,12 +3850,23 @@ function DocumentsView({ ctx }) {
   const useTemplate = (t) => { setPickerOpen(false); setModal({ mode: "new", data: { ...emptyDocument(), templateId: t.id }, formKey: uid() }); };
 
   const handlerOptions = Array.from(new Set(documents.map((d) => d.handler).filter(Boolean)));
+  const contractOptions = Array.from(new Set(documents.map((d) => d.contractTitle).filter(Boolean)));
 
-  const filtered = documents.filter((d) => {
-    if (handlerFilter !== "全部" && d.handler !== handlerFilter) return false;
-    if (query && !(d.no + d.subject + (d.party || "")).toLowerCase().includes(query.toLowerCase())) return false;
-    return true;
-  });
+  // 依最後異動時間排序，越新（剛新增或剛編輯過）的排越上面，
+  // 而不是照陣列原本的順序（編輯舊公文不會自動移到最前面）
+  const filtered = documents
+    .filter((d) => {
+      if (handlerFilter !== "全部" && d.handler !== handlerFilter) return false;
+      if (contractFilter !== "全部" && d.contractTitle !== contractFilter) return false;
+      if (monthFilter && !(d.date || "").startsWith(monthFilter)) return false;
+      if (query && !(d.no + d.subject + (d.overview || "") + (d.party || "")).toLowerCase().includes(query.toLowerCase())) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      const ak = a.updatedAt || a.createdAt || "";
+      const bk = b.updatedAt || b.createdAt || "";
+      return ak < bk ? 1 : ak > bk ? -1 : 0;
+    });
 
   // 把一筆公文資料存進指定的清單（不直接動 state，方便 saveAndNew 連續存兩筆時
   // 用「存完第一筆之後的清單」去算第二筆的自動編號，不會兩筆算出同一個號碼）
@@ -3933,33 +3950,48 @@ function DocumentsView({ ctx }) {
         <EmptyState icon={Stamp} text="尚未建立任何公文紀錄。" action={<Btn variant="brass" icon={Plus} onClick={() => setPickerOpen(true)}>建立第一筆公文</Btn>} />
       ) : (
         <>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 16 }}>
+            <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600 }}>發文日期</span>
+            <TextInput type="month" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} style={{ width: 160 }} />
+            {monthFilter && <Btn size="sm" onClick={() => setMonthFilter("")}>顯示全部</Btn>}
+          </div>
           <div style={{ display: "flex", gap: 16, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
             {handlerOptions.length > 0 && (
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600 }}>承辦人</span>
+                <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600 }}>編輯人</span>
                 <Select value={handlerFilter} onChange={(e) => setHandlerFilter(e.target.value)} style={{ width: 180 }}>
                   <option value="全部">全部</option>
                   {handlerOptions.map((h) => <option key={h} value={h}>{h}</option>)}
                 </Select>
               </div>
             )}
+            {contractOptions.length > 0 && (
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600 }}>契約案名</span>
+                <Select value={contractFilter} onChange={(e) => setContractFilter(e.target.value)} style={{ width: 200 }}>
+                  <option value="全部">全部</option>
+                  {contractOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+                </Select>
+              </div>
+            )}
             <div style={{ position: "relative", maxWidth: 260 }}>
               <Search size={14} style={{ position: "absolute", left: 10, top: 10, color: THEME.muted }} />
-              <TextInput placeholder="搜尋文號／主旨／發文機關" value={query} onChange={(e) => setQuery(e.target.value)} style={{ paddingLeft: 30 }} />
+              <TextInput placeholder="搜尋文號／公文概述／發文機關" value={query} onChange={(e) => setQuery(e.target.value)} style={{ paddingLeft: 30 }} />
             </div>
           </div>
 
           {filtered.length === 0 ? (
             <EmptyState icon={Stamp} text="這個篩選條件下沒有公文。" />
           ) : (
-            <Table columns={["發文字號", "主旨", "發文機關", "發文日期", "承辦人", "預覽", "下載", ""]}>
+            <Table columns={["發文字號", "公文概述", "發文機關", "契約案名", "發文日期", "編輯人", "預覽", "下載", ""]}>
               {filtered.map((d) => {
                 const busy = generatingId === d.id;
                 return (
                 <tr key={d.id}>
                   <td style={{ ...td, fontFamily: FONT_NUM }}>{officialDocNo(d.no, d.seq5) || d.no || "—"}</td>
-                  <td style={td}><strong>{d.subject}</strong></td>
+                  <td style={td}><strong>{d.overview || "—"}</strong></td>
                   <td style={td}>{d.party || "—"}</td>
+                  <td style={td}>{d.contractTitle || "—"}</td>
                   <td style={td}>{fmtDate(d.date)}</td>
                   <td style={td}>{d.handler || "—"}</td>
                   <td style={td}>
@@ -3971,7 +4003,7 @@ function DocumentsView({ ctx }) {
                   <td style={{ ...td, textAlign: "right" }}>
                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                       <Btn size="sm" icon={Pencil} onClick={() => setModal({ mode: "edit", data: d })} />
-                      <Btn size="sm" variant="danger" icon={Trash2} onClick={() => askDelete(`確定要刪除公文「${d.subject}」嗎？`, () => persist.documents(documents.filter((x) => x.id !== d.id)))} />
+                      <Btn size="sm" variant="danger" icon={Trash2} onClick={() => askDelete(`確定要刪除公文「${d.overview || d.subject}」嗎？`, () => persist.documents(documents.filter((x) => x.id !== d.id)))} />
                     </div>
                   </td>
                 </tr>
@@ -3995,7 +4027,7 @@ function DocumentsView({ ctx }) {
 
       {modal && (
         <Modal title={modal.mode === "new" ? "新增公文" : `編輯公文 ${modal.data.no}`} onClose={() => setModal(null)} width={640}>
-          <DocumentForm key={modal.data.id || modal.formKey} data={modal.data} sysUsers={sysUsers} vendors={vendors} templates={documentTemplates} quoteTemplates={quoteTemplates} onSave={save} onSaveAndNew={saveAndNew} onCancel={() => setModal(null)} />
+          <DocumentForm key={modal.data.id || modal.formKey} data={modal.data} sysUsers={sysUsers} vendors={vendors} contracts={contracts} templates={documentTemplates} quoteTemplates={quoteTemplates} onSave={save} onSaveAndNew={saveAndNew} onCancel={() => setModal(null)} />
         </Modal>
       )}
 
@@ -4010,20 +4042,53 @@ function DocumentsView({ ctx }) {
   );
 }
 
-function DocumentForm({ data, sysUsers, vendors, templates, quoteTemplates, onSave, onSaveAndNew, onCancel }) {
-  const initial = { content: "", templateId: "", ...data };
+// 純文字清單編輯器（可新增／刪除多筆），公文的「正本」用來列多個受文機關
+function NameListEditor({ items, setItems, placeholder }) {
+  const update = (idx, val) => { const next = items.slice(); next[idx] = val; setItems(next); };
+  const remove = (idx) => setItems(items.filter((_, i) => i !== idx));
+  const add = () => setItems([...items, ""]);
+  return (
+    <div>
+      {items.length === 0 && <div style={{ fontSize: 12.5, color: THEME.muted, marginBottom: 8 }}>尚無項目</div>}
+      {items.map((v, i) => (
+        <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
+          <TextInput value={v} onChange={(e) => update(i, e.target.value)} placeholder={placeholder} style={{ flex: 1 }} />
+          <button type="button" onClick={() => remove(i)} style={{ border: "none", background: "transparent", cursor: "pointer", color: THEME.danger, padding: "6px 4px" }}><X size={15} /></button>
+        </div>
+      ))}
+      <Btn size="sm" icon={Plus} onClick={add}>新增正本</Btn>
+    </div>
+  );
+}
+
+function DocumentForm({ data, sysUsers, vendors, contracts, templates, quoteTemplates, onSave, onSaveAndNew, onCancel }) {
+  const initial = { overview: "", content: "", templateId: "", ...data };
   const [f, setF] = useState(initial);
   const [baseline, setBaseline] = useState(() => JSON.stringify(initial));
   const [generating, setGenerating] = useState(false);
   const [preview, setPreview] = useState(null); // { blob, filename }
+  const [justSaved, setJustSaved] = useState(false);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const owners = (vendors || []).filter((v) => v.vendorType === "業主");
+  const contractOptions = Array.from(new Set((contracts || []).map((c) => c.title).filter(Boolean)));
   const isDirty = JSON.stringify(f) !== baseline;
+
+  // 正本預設帶入發文機關——只要正本清單還是空的，就跟著發文機關同步；
+  // 一旦使用者自己新增／編輯過正本項目，就不再自動覆蓋
+  useEffect(() => {
+    if ((f.recipients || []).length === 0 && f.party) {
+      setF((prev) => ({ ...prev, recipients: [prev.party] }));
+    }
+  }, [f.party]);
 
   const doSave = () => {
     if (!f.subject) return;
     onSave(f);
     setBaseline(JSON.stringify(f));
+    // 編輯既有公文時畫面不會關閉、標題也不會變，按下去很容易誤以為沒反應，
+    // 所以額外用按鈕文字短暫閃一下「已儲存」給明確回饋
+    setJustSaved(true);
+    setTimeout(() => setJustSaved(false), 1600);
   };
   const doSaveAndNew = () => {
     if (!f.subject || !isDirty) return;
@@ -4051,7 +4116,14 @@ function DocumentForm({ data, sysUsers, vendors, templates, quoteTemplates, onSa
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-      <Field label="主旨" span={2}><TextInput value={f.subject} onChange={set("subject")} placeholder="公文主旨" /></Field>
+      <Field label="公文概述"><TextInput value={f.overview} onChange={set("overview")} placeholder="公文概述，可直接輸入" /></Field>
+      <Field label="快速套用類型（選填）">
+        <Select value="" onChange={(e) => { if (e.target.value) setF({ ...f, overview: e.target.value }); }}>
+          <option value="">不套用</option>
+          {DOCUMENT_SUMMARY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+        </Select>
+      </Field>
+      <Field label="主旨" span={2}><TextArea value={f.subject} onChange={set("subject")} placeholder="公文主旨" rows={5} /></Field>
       <Field label="發文機關"><TextInput value={f.party} onChange={set("party")} placeholder="機關或單位名稱，可直接輸入" /></Field>
       <Field label="從業主資料選取（選填）">
         <Select value="" onChange={(e) => { if (e.target.value) setF({ ...f, party: e.target.value }); }}>
@@ -4060,13 +4132,22 @@ function DocumentForm({ data, sysUsers, vendors, templates, quoteTemplates, onSa
         </Select>
       </Field>
       <Field label="發文日期"><DatePickerButton value={f.date} onChange={(v) => setF({ ...f, date: v })} /></Field>
-      <Field label="承辦人">
+      <Field label="編輯人">
         <Select value={f.handler || ""} onChange={set("handler")}>
           <option value="">未指定</option>
           {(sysUsers || []).map((u) => <option key={u.id} value={u.name}>{u.name}</option>)}
         </Select>
       </Field>
-      <Field label="公文內容" span={2}><TextArea value={f.content} onChange={set("content")} placeholder="填寫後可套用範本產生 Word 檔案" rows={5} /></Field>
+      <Field label="契約名稱">
+        <Select value={f.contractTitle || ""} onChange={set("contractTitle")}>
+          <option value="">未指定</option>
+          {contractOptions.map((t) => <option key={t} value={t}>{t}</option>)}
+        </Select>
+      </Field>
+      <Field label="正本" span={2}>
+        <NameListEditor items={f.recipients || []} setItems={(v) => setF({ ...f, recipients: v })} placeholder="受文機關或單位名稱" />
+      </Field>
+      <Field label="說明" span={2}><TextArea value={f.content} onChange={set("content")} placeholder="填寫後可套用範本產生 Word 檔案" /></Field>
       <Field label="備註" span={2}><TextArea value={f.note} onChange={set("note")} placeholder="選填" /></Field>
 
       <div style={{ gridColumn: "span 2", background: THEME.canvas, border: `1px solid ${THEME.line}`, borderRadius: 10, padding: "12px 14px" }}>
@@ -4074,7 +4155,7 @@ function DocumentForm({ data, sysUsers, vendors, templates, quoteTemplates, onSa
           <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600, flexShrink: 0 }}>套用公文範本</span>
           <Select value={f.templateId || ""} onChange={set("templateId")} style={{ flex: 1, minWidth: 160 }}>
             <option value="">不套用</option>
-            {(templates || []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            {(templates || []).map((t) => <option key={t.id} value={t.id}>{t.company}-{t.name}</option>)}
           </Select>
           <Btn icon={generating ? Loader2 : Eye} disabled={!f.templateId || !f.no || generating} onClick={generate}>
             {generating ? "產生中…" : "預覽並產生"}
@@ -4093,7 +4174,7 @@ function DocumentForm({ data, sysUsers, vendors, templates, quoteTemplates, onSa
       <div style={{ gridColumn: "span 2", display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 6 }}>
         <Btn onClick={onCancel}>關閉</Btn>
         <Btn icon={Plus} onClick={doSaveAndNew} disabled={!f.subject || !isDirty}>新增一筆</Btn>
-        <Btn variant="primary" icon={Check} onClick={doSave} disabled={!f.subject}>儲存</Btn>
+        <Btn variant={justSaved ? "success" : "primary"} icon={Check} onClick={doSave} disabled={!f.subject}>{justSaved ? "已儲存 ✓" : "儲存"}</Btn>
       </div>
 
       <DocPreviewModal preview={preview} onClose={() => setPreview(null)} />
