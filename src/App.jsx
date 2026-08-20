@@ -82,6 +82,7 @@ const STORAGE_KEYS = {
   currentUser: "current_user_id",
   companyLocation: "company_location",
   contractBilling: "contract_billing_tracking",
+  leaveRequests: "leave_requests",
 };
 
 const DEFAULT_ROLES = ["管理員", "財務", "人資", "一般員工"];
@@ -579,6 +580,12 @@ function StatusBadge({ status }) {
     "已完成": { bg: THEME.successSoft, fg: THEME.success },
     "收文": { bg: "#E4E9F0", fg: "#3E5872" },
     "發文": { bg: "#F1E7F5", fg: "#6B3F82" },
+    "特休": { bg: THEME.successSoft, fg: THEME.success },
+    "事假": { bg: THEME.warnSoft, fg: THEME.warn },
+    "病假": { bg: THEME.dangerSoft, fg: THEME.danger },
+    "公假": { bg: "#E4E9F0", fg: "#3E5872" },
+    "婚假": { bg: "#F1E7F5", fg: "#6B3F82" },
+    "喪假": { bg: "#EEEEEE", fg: THEME.muted },
     // 公司標籤色——同一間公司在系統各處（人員、契約、發票、收支管理…）都用同一個顏色，方便一眼辨識
     "綠石環保": { bg: "#E1F0EE", fg: "#1B6B63" },
     "歐克環境": { bg: "#E5EDF9", fg: "#2A5199" },
@@ -703,12 +710,12 @@ function SectionHeader({ eyebrow, title, action }) {
 const th = { textAlign: "left", fontSize: 11.5, color: THEME.muted, fontWeight: 700, letterSpacing: 0.5, padding: "10px 14px", borderBottom: `1px solid ${THEME.line}`, whiteSpace: "nowrap", position: "sticky", top: 0, background: THEME.surface, zIndex: 1 };
 const td = { padding: "12px 14px", fontSize: 13.5, color: THEME.text, borderBottom: `1px solid ${THEME.line}`, verticalAlign: "middle" };
 
-function Table({ columns, children }) {
+function Table({ columns, children, maxHeight = "70vh" }) {
   return (
     <div style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 12, overflow: "hidden" }}>
       {/* 這層同時處理水平與垂直捲動，並且是 sticky 表頭實際依附的捲動容器 —
           若外層另外包一層只有 overflowX 的 div，表頭會依附到那層而失效，往下捲時整個表格會一起被捲走 */}
-      <div style={{ overflow: "auto", maxHeight: "70vh" }}>
+      <div style={{ overflow: "auto", maxHeight }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead><tr>{columns.map((c) => <th key={c} style={th}>{c}</th>)}</tr></thead>
           <tbody>{children}</tbody>
@@ -844,6 +851,7 @@ export default function CompanyManagementSystem({ session }) {
   const [vehicles, setVehicles] = useState([]);
   const [companyLocation, setCompanyLocation] = useState(null);
   const [contractBilling, setContractBilling] = useState([]);
+  const [leaveRequests, setLeaveRequests] = useState([]);
 
   const [confirmState, setConfirmState] = useState(null);
 
@@ -854,7 +862,7 @@ export default function CompanyManagementSystem({ session }) {
 
   useEffect(() => {
     (async () => {
-      const [emp, att, pay, qt, inv, bil, acc, ven, doc, doctpl, con, usr, rp, qtpl, cuid, veh, cloc, cbil] = await Promise.all([
+      const [emp, att, pay, qt, inv, bil, acc, ven, doc, doctpl, con, usr, rp, qtpl, cuid, veh, cloc, cbil, lv] = await Promise.all([
         loadKey(STORAGE_KEYS.employees, []),
         loadKey(STORAGE_KEYS.attendance, []),
         loadKey(STORAGE_KEYS.payroll, []),
@@ -873,6 +881,7 @@ export default function CompanyManagementSystem({ session }) {
         loadKey(STORAGE_KEYS.vehicles, []),
         loadKey(STORAGE_KEYS.companyLocation, null),
         loadKey(STORAGE_KEYS.contractBilling, []),
+        loadKey(STORAGE_KEYS.leaveRequests, []),
       ]);
       setEmployees(emp); setAttendance(att); setPayroll(pay); setQuotes(qt);
       setInvoices(inv); setBilling(bil); setAccounting(acc);
@@ -888,6 +897,7 @@ export default function CompanyManagementSystem({ session }) {
       if (!cloc) saveKey(STORAGE_KEYS.companyLocation, loc);
       setCompanyLocation(loc);
       setContractBilling(cbil);
+      setLeaveRequests(lv);
       setLoading(false);
     })();
   }, []);
@@ -912,6 +922,7 @@ export default function CompanyManagementSystem({ session }) {
     vehicles: (v) => { setVehicles(v); saveKey(STORAGE_KEYS.vehicles, v); },
     companyLocation: (v) => { setCompanyLocation(v); saveKey(STORAGE_KEYS.companyLocation, v); },
     contractBilling: (v) => { setContractBilling(v); saveKey(STORAGE_KEYS.contractBilling, v); },
+    leaveRequests: (v) => { setLeaveRequests(v); saveKey(STORAGE_KEYS.leaveRequests, v); },
   };
 
   const addAccountingEntry = useCallback((entry) => {
@@ -966,7 +977,7 @@ export default function CompanyManagementSystem({ session }) {
 
   const ctx = {
     employees, attendance, payroll, quotes, invoices, billing, accounting,
-    vendors, documents, documentTemplates, contracts, sysUsers, rolePerms, quoteTemplates, vehicles, companyLocation, contractBilling,
+    vendors, documents, documentTemplates, contracts, sysUsers, rolePerms, quoteTemplates, vehicles, companyLocation, contractBilling, leaveRequests,
     currentUser, isAdmin, realIsAdmin,
     persist, addAccountingEntry, removeAccountingBySource, askDelete, now,
   };
@@ -2653,8 +2664,132 @@ function InvoiceForm({ data, quotes, vendors, onSave, onCancel }) {
 /* =========================================================
    ATTENDANCE
 ========================================================= */
+const LEAVE_TYPES = ["特休", "事假", "病假", "公假", "婚假", "喪假", "其他"];
+const LEAVE_TYPE_COLORS = {
+  "特休": { bg: THEME.successSoft, fg: THEME.success },
+  "事假": { bg: THEME.warnSoft, fg: THEME.warn },
+  "病假": { bg: THEME.dangerSoft, fg: THEME.danger },
+  "公假": { bg: "#E4E9F0", fg: "#3E5872" },
+  "婚假": { bg: "#F1E7F5", fg: "#6B3F82" },
+  "喪假": { bg: "#EEEEEE", fg: THEME.muted },
+  "其他": { bg: "#E9EBF0", fg: "#454C5C" },
+};
+const emptyLeaveRequest = (employeeId) => ({ employeeId: employeeId || "", type: "特休", startDate: todayStr(), endDate: todayStr(), reason: "", status: "待審核" });
+const leaveDayCount = (startDate, endDate) => {
+  if (!startDate || !endDate) return 0;
+  const diff = Math.round((new Date(endDate) - new Date(startDate)) / 86400000) + 1;
+  return diff > 0 ? diff : 0;
+};
+// 把某位員工在某個月份、已核准的請假日期展開成 { "YYYY-MM-DD": 假別 } 方便月曆查表
+const expandApprovedLeaveDays = (leaveRows) => {
+  const map = {};
+  leaveRows.filter((l) => l.status === "已核准").forEach((l) => {
+    let d = new Date(l.startDate);
+    const end = new Date(l.endDate);
+    if (isNaN(d) || isNaN(end)) return;
+    while (d <= end) {
+      map[d.toISOString().slice(0, 10)] = l.type;
+      d.setDate(d.getDate() + 1);
+    }
+  });
+  return map;
+};
+
+function MonthCalendar({ month, attendanceRows, leaveRows, todayIso }) {
+  const [y, m] = month.split("-").map(Number);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const firstWeekday = new Date(y, m - 1, 1).getDay();
+  const cells = [...Array(firstWeekday).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
+  const pad = (n) => String(n).padStart(2, "0");
+  const dateStr = (d) => `${y}-${pad(m)}-${pad(d)}`;
+  const attByDate = {};
+  attendanceRows.forEach((a) => { attByDate[a.date] = a; });
+  const leaveByDate = expandApprovedLeaveDays(leaveRows);
+
+  return (
+    <div style={{ background: THEME.line, border: `1px solid ${THEME.line}`, borderRadius: 12, padding: "14px 14px 16px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 6, marginBottom: 6 }}>
+        {["日", "一", "二", "三", "四", "五", "六"].map((w, i) => (
+          <div key={w} style={{ textAlign: "center", fontSize: 11.5, color: (i === 0 || i === 6) ? THEME.brassDeep : THEME.muted, fontWeight: 700 }}>{w}</div>
+        ))}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 6 }}>
+        {cells.map((d, i) => {
+          if (!d) return <div key={i} />;
+          const iso = dateStr(d);
+          const att = attByDate[iso];
+          const leaveType = leaveByDate[iso];
+          const isToday = iso === todayIso;
+          const weekday = new Date(y, m - 1, d).getDay();
+          const isWeekend = weekday === 0 || weekday === 6;
+          const tone = LEAVE_TYPE_COLORS[leaveType] || LEAVE_TYPE_COLORS["其他"];
+          const hasAttendance = att && (att.clockIn || att.clockOut);
+          // 儲存格底色依狀態決定：請假 > 有打卡 > 週末 > 平日，一眼就能看出當天狀態
+          const cellBg = leaveType ? tone.bg : hasAttendance ? THEME.successSoft : isWeekend ? THEME.brassSoft : THEME.canvas;
+          const cellBorder = isToday ? THEME.brass : leaveType ? tone.bg : THEME.line;
+          return (
+            <div key={i} style={{
+              minHeight: 70, borderRadius: 8, padding: "6px 8px",
+              border: `${isToday ? 2 : 1}px solid ${cellBorder}`,
+              background: cellBg,
+            }}>
+              <div style={{ fontSize: 11.5, fontWeight: isToday || isWeekend ? 700 : 500, color: isToday || isWeekend ? THEME.brassDeep : THEME.text, fontFamily: FONT_NUM }}>{d}</div>
+              {leaveType && (
+                <div style={{ marginTop: 4, fontSize: 10.5, fontWeight: 700, padding: "1px 6px", borderRadius: 999, display: "inline-block", background: "#fff", color: tone.fg }}>
+                  {leaveType}
+                </div>
+              )}
+              {hasAttendance && (
+                <div style={{ marginTop: 4, fontSize: 10, color: THEME.success, fontWeight: 600, fontFamily: FONT_NUM, lineHeight: 1.5 }}>
+                  {att.clockIn || "—"}{att.clockOut ? `–${att.clockOut}` : ""}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function LeaveForm({ data, employees, restricted, myEmployeeId, onSave, onCancel }) {
+  const [f, setF] = useState(data);
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const days = leaveDayCount(f.startDate, f.endDate);
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+      {!restricted && (
+        <Field label="員工" span={2}>
+          <Select value={f.employeeId} onChange={set("employeeId")}>
+            <option value="">選擇員工…</option>
+            {employees.map((e) => <option key={e.id} value={e.id}>{e.name}（{e.dept || "未設部門"}）</option>)}
+          </Select>
+        </Field>
+      )}
+      <Field label="假別">
+        <Select value={f.type} onChange={set("type")}>
+          {LEAVE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+        </Select>
+      </Field>
+      <Field label="開始日期"><TextInput type="date" value={f.startDate} onChange={set("startDate")} /></Field>
+      <Field label="結束日期"><TextInput type="date" value={f.endDate} onChange={set("endDate")} /></Field>
+      <div style={{ gridColumn: "span 2", fontSize: 12.5, color: THEME.muted, marginTop: -6 }}>
+        共 <span style={{ fontFamily: FONT_NUM, fontWeight: 700, color: THEME.text }}>{days > 0 ? days : 0}</span> 天
+      </div>
+      <Field label="事由" span={2}><TextArea value={f.reason} onChange={set("reason")} placeholder="選填" /></Field>
+      <div style={{ gridColumn: "span 2", display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 6 }}>
+        <Btn onClick={onCancel}>取消</Btn>
+        <Btn variant="primary" icon={Check}
+          onClick={() => { const employeeId = restricted ? myEmployeeId : f.employeeId; if (employeeId && f.startDate && f.endDate) onSave({ ...f, employeeId }); }}
+          disabled={(!restricted && !f.employeeId) || !f.startDate || !f.endDate || f.endDate < f.startDate}
+        >送出申請</Btn>
+      </div>
+    </div>
+  );
+}
+
 function AttendanceView({ ctx }) {
-  const { employees, attendance, persist, now, isAdmin, currentUser, companyLocation } = ctx;
+  const { employees, attendance, leaveRequests, persist, now, isAdmin, currentUser, companyLocation, askDelete } = ctx;
   const activeEmployees = employees.filter((e) => e.status === "在職");
   const myEmployeeId = currentUser?.employeeId || "";
   const restricted = !isAdmin;
@@ -2721,6 +2856,32 @@ function AttendanceView({ ctx }) {
     : monthRowsAll.filter((a) => empFilter === "全部" || a.employeeId === empFilter))
     .slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 
+  // ---- 月曆檢視 ----
+  const [calendarEmpId, setCalendarEmpId] = useState(restricted ? myEmployeeId : "");
+  useEffect(() => {
+    if (restricted) { setCalendarEmpId(myEmployeeId); return; }
+    if (!calendarEmpId && activeEmployees.length) setCalendarEmpId(activeEmployees[0].id);
+  }, [restricted, myEmployeeId, activeEmployees.length]);
+  const calendarAttendance = attendance.filter((a) => a.employeeId === calendarEmpId && (a.date || "").startsWith(month));
+  const calendarLeave = leaveRequests.filter((l) => l.employeeId === calendarEmpId);
+
+  // ---- 請假 ----
+  const [leaveModal, setLeaveModal] = useState(null);
+  const myLeaveRequests = leaveRequests.filter((l) => l.employeeId === myEmployeeId).slice().sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  const allLeaveRequests = leaveRequests.slice().sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  const empName2 = (id) => employees.find((e) => e.id === id)?.name || "（已刪除員工）";
+  const saveLeave = (data) => {
+    if (data.id) {
+      persist.leaveRequests(leaveRequests.map((l) => (l.id === data.id ? { ...data, updatedAt: new Date().toISOString() } : l)));
+    } else {
+      persist.leaveRequests([{ ...data, id: uid(), createdBy: actorName(ctx), createdAt: new Date().toISOString() }, ...leaveRequests]);
+    }
+    setLeaveModal(null);
+  };
+  const setLeaveStatus = (l, status) => {
+    persist.leaveRequests(leaveRequests.map((x) => x.id === l.id ? { ...x, status, updatedAt: new Date().toISOString() } : x));
+  };
+
   if (restricted && !myEmployeeId) {
     return (
       <div>
@@ -2737,105 +2898,174 @@ function AttendanceView({ ctx }) {
     <div>
       <SectionHeader eyebrow="ATTENDANCE · 12" title="打卡上下班" />
 
-      <div style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 12, padding: "16px 18px", marginBottom: 18 }}>
-        <div style={{ fontSize: 12.5, fontWeight: 700, color: THEME.text, marginBottom: 6 }}>打卡地點限制</div>
-        <div style={{ fontSize: 12, color: THEME.muted, marginBottom: 10 }}>
-          設定公司座標後，管理員以下所有人員只能在公司 {CLOCK_RADIUS_M} 公尺範圍內打卡。
-        </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          {companyLocation && (
-            <span style={{ fontSize: 12, color: THEME.muted, fontFamily: FONT_NUM }}>
-              目前座標：{companyLocation.lat.toFixed(6)}, {companyLocation.lng.toFixed(6)}
-            </span>
-          )}
-          <Btn size="sm" icon={MapPin} onClick={useCurrentLocationAsCompany}>使用目前位置</Btn>
-        </div>
-      </div>
-
-      <div style={{ background: THEME.ink, borderRadius: 14, padding: "28px 30px", marginBottom: 22, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 20 }}>
-        <div>
-          <div style={{ fontSize: 12, color: "#9BA2B5", letterSpacing: 1, marginBottom: 6 }}>打卡鐘 · PUNCH CLOCK</div>
-          <div style={{ fontFamily: FONT_NUM, fontSize: 40, fontWeight: 700, color: "#fff", letterSpacing: 1 }}>
-            {now.toLocaleTimeString("zh-TW", { hour12: false })}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>
+        <div style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 12, padding: "16px 18px" }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: THEME.text, marginBottom: 6 }}>打卡地點限制</div>
+          <div style={{ fontSize: 12, color: THEME.muted, marginBottom: 10 }}>
+            設定公司座標後，管理員以下所有人員只能在公司 {CLOCK_RADIUS_M} 公尺範圍內打卡。
           </div>
-          <div style={{ fontSize: 13, color: "#C7CBD9", marginTop: 4 }}>{today}</div>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            {companyLocation && (
+              <span style={{ fontSize: 12, color: THEME.muted, fontFamily: FONT_NUM }}>
+                目前座標：{companyLocation.lat.toFixed(6)}, {companyLocation.lng.toFixed(6)}
+              </span>
+            )}
+            <Btn size="sm" icon={MapPin} onClick={useCurrentLocationAsCompany}>使用目前位置</Btn>
+          </div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 260 }}>
-          {restricted ? (
-            <div style={{ background: "#fff", borderRadius: 7, padding: "9px 12px", fontSize: 13.5, fontWeight: 700, color: THEME.text }}>
-              {empName(myEmployeeId)}
+
+        <div style={{ background: THEME.ink, borderRadius: 14, padding: "24px 26px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 18 }}>
+          <div>
+            <div style={{ fontSize: 12, color: "#9BA2B5", letterSpacing: 1, marginBottom: 6 }}>打卡鐘 · PUNCH CLOCK</div>
+            <div style={{ fontFamily: FONT_NUM, fontSize: 34, fontWeight: 700, color: "#fff", letterSpacing: 1 }}>
+              {now.toLocaleTimeString("zh-TW", { hour12: false })}
             </div>
-          ) : (
-            <Select value={empId} onChange={(e) => setEmpId(e.target.value)} style={{ background: "#fff" }}>
-              <option value="">選擇員工…</option>
-              {activeEmployees.map((e) => <option key={e.id} value={e.id}>{e.name}（{e.dept || "未設部門"}）</option>)}
-            </Select>
+            <div style={{ fontSize: 13, color: "#C7CBD9", marginTop: 4 }}>{today}</div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 220 }}>
+            {restricted ? (
+              <div style={{ background: "#fff", borderRadius: 7, padding: "9px 12px", fontSize: 13.5, fontWeight: 700, color: THEME.text }}>
+                {empName(myEmployeeId)}
+              </div>
+            ) : (
+              <Select value={empId} onChange={(e) => setEmpId(e.target.value)} style={{ background: "#fff" }}>
+                <option value="">選擇員工…</option>
+                {activeEmployees.map((e) => <option key={e.id} value={e.id}>{e.name}（{e.dept || "未設部門"}）</option>)}
+              </Select>
+            )}
+            <div style={{ display: "flex", gap: 8 }}>
+              <Btn variant="success" icon={LogIn} onClick={clockIn} disabled={!empId || (selfRecord && selfRecord.clockIn)}>上班打卡</Btn>
+              <Btn variant="danger" icon={LogOut} onClick={clockOut} disabled={!empId || !selfRecord || !selfRecord.clockIn || selfRecord.clockOut}>下班打卡</Btn>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h3 style={{ fontSize: 14.5, fontWeight: 700, color: THEME.text, marginBottom: 12 }}>{restricted ? "我的月份出勤" : "月份出勤"}</h3>
+          <MonthFilterBar month={month} setMonth={setMonth} label="出勤月份" />
+        </div>
+
+        <div style={{ gridRow: "span 2" }}>
+          <h4 style={{ fontSize: 13, fontWeight: 700, color: THEME.muted, marginBottom: 10 }}>月曆</h4>
+          {!restricted && (
+            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
+              <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600 }}>檢視員工</span>
+              <Select value={calendarEmpId} onChange={(e) => setCalendarEmpId(e.target.value)} style={{ width: 200 }}>
+                {activeEmployees.map((e) => <option key={e.id} value={e.id}>{e.name}（{e.dept || "未設部門"}）</option>)}
+              </Select>
+            </div>
           )}
-          <div style={{ display: "flex", gap: 8 }}>
-            <Btn variant="success" icon={LogIn} onClick={clockIn} disabled={!empId || (selfRecord && selfRecord.clockIn)}>上班打卡</Btn>
-            <Btn variant="danger" icon={LogOut} onClick={clockOut} disabled={!empId || !selfRecord || !selfRecord.clockIn || selfRecord.clockOut}>下班打卡</Btn>
+          {calendarEmpId ? (
+            <MonthCalendar month={month} attendanceRows={calendarAttendance} leaveRows={calendarLeave} todayIso={today} />
+          ) : (
+            <EmptyState icon={CalendarDays} text="請先選擇要檢視的員工。" />
+          )}
+        </div>
+
+        <div>
+          <div style={{ marginBottom: 28 }}>
+            <h4 style={{ fontSize: 13, fontWeight: 700, color: THEME.muted, marginBottom: 10 }}>{restricted ? "我的今日出勤紀錄" : "今日出勤紀錄"}</h4>
+            {todayRows.length === 0 ? (
+              <EmptyState icon={Clock} text="今日尚無打卡紀錄。" />
+            ) : (
+              <Table maxHeight="240px" columns={["員工", "上班時間", "下班時間", "工時", ""]}>
+                {todayRows.map((a) => (
+                  <tr key={a.id}>
+                    <td style={td}><strong>{empName(a.employeeId)}</strong></td>
+                    <td style={{ ...td, fontFamily: FONT_NUM }}>{a.clockIn || "—"}</td>
+                    <td style={{ ...td, fontFamily: FONT_NUM }}>{a.clockOut || "—"}</td>
+                    <td style={{ ...td, fontFamily: FONT_NUM }}>{hoursWorked(a)}</td>
+                    <td style={{ ...td, textAlign: "right" }}>
+                      {!restricted && <Btn size="sm" variant="danger" icon={Trash2} onClick={() => ctx.askDelete("確定要刪除此筆打卡紀錄嗎？", () => persist.attendance(attendance.filter((x) => x.id !== a.id)))} />}
+                    </td>
+                  </tr>
+                ))}
+              </Table>
+            )}
+          </div>
+
+          <div style={{ marginBottom: 28 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 10 }}>
+              <h4 style={{ fontSize: 13, fontWeight: 700, color: THEME.muted, margin: 0 }}>{restricted ? "我的請假" : "請假管理"}</h4>
+              <Btn size="sm" variant="brass" icon={Plus} onClick={() => setLeaveModal({ mode: "new", data: emptyLeaveRequest(restricted ? myEmployeeId : "") })}>申請請假</Btn>
+            </div>
+            {(restricted ? myLeaveRequests : allLeaveRequests).length === 0 ? (
+              <EmptyState icon={CalendarDays} text="尚無請假紀錄。" />
+            ) : (
+              <Table maxHeight="240px" columns={restricted ? ["假別", "天數", "狀態", ""] : ["員工", "假別", "天數", "狀態", ""]}>
+                {(restricted ? myLeaveRequests : allLeaveRequests).map((l) => (
+                  <tr key={l.id}>
+                    {!restricted && <td style={td}><strong>{empName2(l.employeeId)}</strong></td>}
+                    <td style={td}><StatusBadge status={l.type} /></td>
+                    <td style={{ ...td, fontFamily: FONT_NUM }}>{leaveDayCount(l.startDate, l.endDate)}</td>
+                    <td style={td}>
+                      {!restricted ? (
+                        <Select value={l.status} onChange={(e) => setLeaveStatus(l, e.target.value)} style={{ padding: "4px 8px", fontSize: 12 }}>
+                          <option value="待審核">待審核</option>
+                          <option value="已核准">已核准</option>
+                          <option value="已拒絕">已拒絕</option>
+                        </Select>
+                      ) : <StatusBadge status={l.status} />}
+                    </td>
+                    <td style={{ ...td, textAlign: "right" }}>
+                      {(!restricted || l.status === "待審核") && (
+                        <Btn size="sm" variant="danger" icon={Trash2} onClick={() => askDelete(`確定要刪除這筆請假紀錄嗎？`, () => persist.leaveRequests(leaveRequests.filter((x) => x.id !== l.id)))} />
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </Table>
+            )}
+          </div>
+
+          <div>
+            <h4 style={{ fontSize: 13, fontWeight: 700, color: THEME.muted, marginBottom: 10 }}>列表</h4>
+            {!restricted && monthEmpIds.length > 1 && (
+              <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+                <button onClick={() => setEmpFilter("全部")}
+                  style={{
+                    padding: "6px 12px", borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                    border: `1px solid ${empFilter === "全部" ? THEME.brass : THEME.line}`,
+                    background: empFilter === "全部" ? THEME.brass : "#fff",
+                    color: empFilter === "全部" ? "#fff" : THEME.text,
+                  }}>全部</button>
+                {monthEmpIds.map((id) => (
+                  <button key={id} onClick={() => setEmpFilter(id)}
+                    style={{
+                      padding: "6px 12px", borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                      border: `1px solid ${empFilter === id ? THEME.brass : THEME.line}`,
+                      background: empFilter === id ? THEME.brass : "#fff",
+                      color: empFilter === id ? "#fff" : THEME.text,
+                    }}>{empName(id)}</button>
+                ))}
+              </div>
+            )}
+            {monthRows.length === 0 ? (
+              <EmptyState icon={Clock} text="這個月份沒有打卡紀錄。" />
+            ) : (
+              <Table maxHeight="240px" columns={["日期", "員工", "上班", "下班", "工時", ""]}>
+                {monthRows.map((a) => (
+                  <tr key={a.id}>
+                    <td style={td}>{fmtDate(a.date)}</td>
+                    <td style={td}><strong>{empName(a.employeeId)}</strong></td>
+                    <td style={{ ...td, fontFamily: FONT_NUM }}>{a.clockIn || "—"}</td>
+                    <td style={{ ...td, fontFamily: FONT_NUM }}>{a.clockOut || "—"}</td>
+                    <td style={{ ...td, fontFamily: FONT_NUM }}>{hoursWorked(a)}</td>
+                    <td style={{ ...td, textAlign: "right" }}>
+                      {!restricted && <Btn size="sm" variant="danger" icon={Trash2} onClick={() => ctx.askDelete("確定要刪除此筆打卡紀錄嗎？", () => persist.attendance(attendance.filter((x) => x.id !== a.id)))} />}
+                    </td>
+                  </tr>
+                ))}
+              </Table>
+            )}
           </div>
         </div>
       </div>
 
-      <h3 style={{ fontSize: 14.5, fontWeight: 700, color: THEME.text, marginBottom: 12 }}>{restricted ? "我的今日出勤紀錄" : "今日出勤紀錄"}</h3>
-      {todayRows.length === 0 ? (
-        <EmptyState icon={Clock} text="今日尚無打卡紀錄。" />
-      ) : (
-        <Table columns={["員工", "上班時間", "下班時間", "工時", ""]}>
-          {todayRows.map((a) => (
-            <tr key={a.id}>
-              <td style={td}><strong>{empName(a.employeeId)}</strong></td>
-              <td style={{ ...td, fontFamily: FONT_NUM }}>{a.clockIn || "—"}</td>
-              <td style={{ ...td, fontFamily: FONT_NUM }}>{a.clockOut || "—"}</td>
-              <td style={{ ...td, fontFamily: FONT_NUM }}>{hoursWorked(a)}</td>
-              <td style={{ ...td, textAlign: "right" }}>
-                {!restricted && <Btn size="sm" variant="danger" icon={Trash2} onClick={() => ctx.askDelete("確定要刪除此筆打卡紀錄嗎？", () => persist.attendance(attendance.filter((x) => x.id !== a.id)))} />}
-              </td>
-            </tr>
-          ))}
-        </Table>
-      )}
-
-      <h3 style={{ fontSize: 14.5, fontWeight: 700, color: THEME.text, margin: "30px 0 12px" }}>{restricted ? "我的月份出勤紀錄" : "月份出勤紀錄"}</h3>
-      <MonthFilterBar month={month} setMonth={setMonth} label="出勤月份" />
-      {!restricted && monthEmpIds.length > 1 && (
-        <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
-          <button onClick={() => setEmpFilter("全部")}
-            style={{
-              padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-              border: `1px solid ${empFilter === "全部" ? THEME.brass : THEME.line}`,
-              background: empFilter === "全部" ? THEME.brass : "#fff",
-              color: empFilter === "全部" ? "#fff" : THEME.text,
-            }}>全部</button>
-          {monthEmpIds.map((id) => (
-            <button key={id} onClick={() => setEmpFilter(id)}
-              style={{
-                padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-                border: `1px solid ${empFilter === id ? THEME.brass : THEME.line}`,
-                background: empFilter === id ? THEME.brass : "#fff",
-                color: empFilter === id ? "#fff" : THEME.text,
-              }}>{empName(id)}</button>
-          ))}
-        </div>
-      )}
-      {monthRows.length === 0 ? (
-        <EmptyState icon={Clock} text="這個月份沒有打卡紀錄。" />
-      ) : (
-        <Table columns={["日期", "員工", "上班時間", "下班時間", "工時", ""]}>
-          {monthRows.map((a) => (
-            <tr key={a.id}>
-              <td style={td}>{fmtDate(a.date)}</td>
-              <td style={td}><strong>{empName(a.employeeId)}</strong></td>
-              <td style={{ ...td, fontFamily: FONT_NUM }}>{a.clockIn || "—"}</td>
-              <td style={{ ...td, fontFamily: FONT_NUM }}>{a.clockOut || "—"}</td>
-              <td style={{ ...td, fontFamily: FONT_NUM }}>{hoursWorked(a)}</td>
-              <td style={{ ...td, textAlign: "right" }}>
-                {!restricted && <Btn size="sm" variant="danger" icon={Trash2} onClick={() => ctx.askDelete("確定要刪除此筆打卡紀錄嗎？", () => persist.attendance(attendance.filter((x) => x.id !== a.id)))} />}
-              </td>
-            </tr>
-          ))}
-        </Table>
+      {leaveModal && (
+        <Modal title="申請請假" onClose={() => setLeaveModal(null)}>
+          <LeaveForm data={leaveModal.data} employees={activeEmployees} restricted={restricted} myEmployeeId={myEmployeeId} onSave={saveLeave} onCancel={() => setLeaveModal(null)} />
+        </Modal>
       )}
     </div>
   );
