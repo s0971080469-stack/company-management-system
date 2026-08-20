@@ -1015,6 +1015,11 @@ export default function CompanyManagementSystem({ session }) {
             display: block; position: fixed; inset: 0; background: rgba(15,18,28,.45); z-index: 39;
           }
           .app-content { padding: 20px 16px !important; }
+          .stat-grid { grid-template-columns: repeat(2, 1fr) !important; }
+          .dashboard-split, .two-col-split { grid-template-columns: 1fr !important; }
+        }
+        @media (max-width: 480px) {
+          .stat-grid { grid-template-columns: 1fr !important; }
         }
       `}</style>
 
@@ -1263,7 +1268,7 @@ function Dashboard({ ctx }) {
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 22 }}>
+      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 22 }}>
         <StatCard label="在職員工人數" value={activeEmp} sub={`共登錄 ${employees.length} 位`} icon={Users} tone="ink" />
         <StatCard label="本月發票金額" value={fmtMoney(monthInvoiceTotal)} sub={thisMonth} icon={Receipt} tone="brass" />
         <StatCard label="待付款金額" value={fmtMoney(pendingBilling)} sub="未付款（公司付款）" icon={HandCoins} tone="warn" />
@@ -1274,7 +1279,7 @@ function Dashboard({ ctx }) {
         <StatCard label="本月未請款" value={unbilledCount} sub={`共 ${contractsThisMonth.length} 份契約`} icon={AlertCircle} tone="warn" />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 16 }}>
+      <div className="dashboard-split" style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 16 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 12, padding: "20px 22px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
@@ -1296,7 +1301,7 @@ function Dashboard({ ctx }) {
             </ResponsiveContainer>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <div className="two-col-split" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <div style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 12, padding: "20px 22px" }}>
               <h3 style={{ margin: "0 0 14px", fontSize: 14.5, fontWeight: 700, color: THEME.text }}>本月支出分類</h3>
               {monthExpenseByCategory.length === 0 ? (
@@ -1351,7 +1356,7 @@ function Dashboard({ ctx }) {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, marginTop: 16 }}>
+      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, marginTop: 16 }}>
         <StatCard label="總累計收入" value={fmtMoney(income)} icon={TrendingUp} tone="success" />
         <StatCard label="總累計支出" value={fmtMoney(expense)} icon={TrendingDown} tone="danger" />
         <StatCard label="淨額" value={fmtMoney(income - expense)} icon={Landmark} tone="brass" />
@@ -1644,7 +1649,7 @@ function PayrollView({ ctx }) {
           </div>
         } />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
+      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
         <StatCard label="本月人數" value={rows.length} icon={Users} tone="ink" />
         <StatCard label="本月薪資總額" value={fmtMoney(totalNet)} icon={Wallet} tone="brass" />
         <StatCard label="已發放" value={rows.filter((r) => r.status === "已發放").length + " / " + rows.length} icon={Check} tone="success" />
@@ -3217,20 +3222,20 @@ function BillingView({ ctx }) {
       </div>
 
       {expenseTab === "零用金" ? (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 18 }}>
+        <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 18 }}>
           <StatCard label="本月零用金支出" value={fmtMoney(pettyCashMonthTotal)} icon={Wallet} tone="brass" />
           <StatCard label="累計零用金支出" value={fmtMoney(pettyCashTotal)} icon={Landmark} tone="ink" />
           <StatCard label="紀錄筆數" value={pettyCash.length} icon={Check} tone="success" />
           <StatCard label="零用金餘額" value={fmtMoney(pettyCashBalance)} icon={Wallet} tone={pettyCashBalance < 0 ? "danger" : "brass"} />
         </div>
       ) : expenseTab === "銀行入帳" ? (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
+        <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
           <StatCard label="本月入帳金額" value={fmtMoney(bankDepositMonthTotal)} icon={Landmark} tone="brass" />
           <StatCard label="累計入帳金額" value={fmtMoney(bankDepositTotal)} icon={TrendingUp} tone="success" />
           <StatCard label="紀錄筆數" value={bankDeposits.length} icon={Check} tone="ink" />
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
+        <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
           <StatCard label="公司應付款項總數" value={companyPayments.length} icon={HandCoins} tone="ink" />
           <StatCard label="未付款金額" value={fmtMoney(pendingTotal)} icon={AlertCircle} tone="warn" />
           <StatCard label="已付款件數" value={companyPayments.filter((b) => b.status === "已付款").length} icon={Check} tone="success" />
@@ -3494,7 +3499,7 @@ function AccountingView({ ctx }) {
       <SectionHeader eyebrow="LEDGER · 13" title="帳務入口"
         action={<Btn variant="brass" icon={Plus} onClick={() => setModal(true)}>新增帳務紀錄</Btn>} />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
+      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
         <StatCard label="總收入" value={fmtMoney(income)} icon={TrendingUp} tone="success" />
         <StatCard label="總支出" value={fmtMoney(expense)} icon={TrendingDown} tone="danger" />
         <StatCard label="淨額" value={fmtMoney(income - expense)} icon={Landmark} tone="brass" />
@@ -3641,7 +3646,7 @@ function ReportsView({ ctx }) {
         ))}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
+      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
         <StatCard label={`${toROCYear(year)} 年營收總額`} value={fmtMoney(yearRevenueTotal)} icon={TrendingUp} tone="success" />
         <StatCard label={`${toROCYear(year)} 年支出總額`} value={fmtMoney(yearExpenseTotal)} icon={TrendingDown} tone="danger" />
         <StatCard label={`${toROCYear(year)} 年薪資成本`} value={fmtMoney(yearPayrollTotal)} icon={Wallet} tone="brass" />
@@ -3758,7 +3763,7 @@ function VendorsView({ ctx }) {
           </div>
         } />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 14, marginBottom: 18 }}>
+      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 14, marginBottom: 18 }}>
         <StatCard label="供應商家數" value={supplierCount} icon={Truck} tone="ink" />
         <StatCard label="業主家數" value={ownerCount} icon={Building2} tone="brass" />
       </div>
@@ -4170,7 +4175,7 @@ function DocumentsView({ ctx }) {
           </div>
         } />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
+      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
         <StatCard label="公文總數" value={documents.length} icon={Stamp} tone="ink" />
         <StatCard label="本月新增" value={monthCount} icon={CalendarDays} tone="brass" />
         <StatCard label="已套用範本" value={templatedCount} icon={FileText} tone="success" />
@@ -4471,7 +4476,7 @@ function ContractsView({ ctx }) {
       <SectionHeader eyebrow="CONTRACT · 09" title="契約管理"
         action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptyContract(vendors) })}>新增契約</Btn>} />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 18 }}>
+      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 18 }}>
         <StatCard label="契約總數" value={contracts.length} icon={FileSignature} tone="ink" />
         <StatCard label={year === "全部" ? "承攬總金額" : `${toROCYear(year)} 年度承攬總金額`} value={fmtMoney(filtered.reduce((s, c) => s + Number(c.amount || 0), 0))} icon={Landmark} tone="brass" />
         <StatCard label="生效中" value={contracts.filter((c) => c.status === "生效中").length} icon={Check} tone="success" />
@@ -4662,7 +4667,7 @@ function ContractBillingView({ ctx }) {
     <div>
       <SectionHeader eyebrow="CONTRACT · 10" title="每月請款追蹤" />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
+      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
         <StatCard label="本月契約數" value={filtered.length} icon={FileSignature} tone="ink" />
         <StatCard label="已請款" value={billedCount} icon={Check} tone="success" />
         <StatCard label="未請款" value={filtered.length - billedCount} icon={AlertCircle} tone="warn" />
@@ -5006,7 +5011,7 @@ function VehiclesView({ ctx }) {
       <SectionHeader eyebrow="VEHICLE · 11" title="車輛管理"
         action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptyVehicle })}>新增車輛</Btn>} />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
+      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
         <StatCard label="車輛總數" value={vehicles.length} icon={Car} tone="ink" />
         <StatCard label="使用中" value={vehicles.filter((v) => v.status === "使用中").length} icon={Check} tone="success" />
         <StatCard label="保險／驗車 30 天內到期" value={expiringVehicles.length} icon={AlertCircle} tone="warn" />
