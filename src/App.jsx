@@ -651,9 +651,11 @@ function TextArea(props) {
 }
 
 function Modal({ title, onClose, children, width = 560 }) {
+  // 點視窗外的暗色背景刻意不關閉——新增／編輯表單填到一半很容易手滑點到外面，
+  // 要關閉一律走右上角 X 或表單自己的「取消」按鈕。
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(27,35,51,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 }} onClick={onClose}>
-      <div style={{ background: "#fff", borderRadius: 14, width, maxWidth: "100%", maxHeight: "88vh", overflow: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(27,35,51,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 }}>
+      <div style={{ background: "#fff", borderRadius: 14, width, maxWidth: "100%", maxHeight: "88vh", overflow: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 22px", borderBottom: `1px solid ${THEME.line}`, position: "sticky", top: 0, background: "#fff", zIndex: 1 }}>
           <h3 style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 17, fontWeight: 700, color: THEME.text }}>{title}</h3>
           <button onClick={onClose} style={{ border: "none", background: "transparent", cursor: "pointer", color: THEME.muted, padding: 4 }}><X size={18} /></button>
