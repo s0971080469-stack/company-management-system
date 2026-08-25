@@ -728,10 +728,23 @@ function Table({ columns, children, maxHeight = "70vh" }) {
 }
 
 function MonthFilterBar({ month, setMonth, label }) {
+  const curYear = new Date().getFullYear();
+  const years = Array.from({ length: 7 }, (_, i) => curYear + 1 - i);
+  const [y, m] = month ? month.split("-") : ["", ""];
+  const update = (ny, nm) => setMonth(ny && nm ? `${ny}-${nm}` : "");
   return (
     <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 16 }}>
       <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600 }}>{label || "月份"}</span>
-      <TextInput type="month" value={month} onChange={(e) => setMonth(e.target.value)} style={{ width: 160 }} />
+      <Select value={y} onChange={(e) => update(e.target.value, m)} style={{ width: 96 }}>
+        <option value="">年</option>
+        {years.map((yy) => <option key={yy} value={yy}>{toROCYear(yy)} 年</option>)}
+      </Select>
+      <Select value={m} onChange={(e) => update(y, e.target.value)} style={{ width: 76 }}>
+        <option value="">月</option>
+        {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0")).map((mm) => (
+          <option key={mm} value={mm}>{Number(mm)} 月</option>
+        ))}
+      </Select>
       {month && <Btn size="sm" onClick={() => setMonth("")}>顯示全部</Btn>}
     </div>
   );
@@ -3111,7 +3124,8 @@ function BillingView({ ctx }) {
   const bankDeposits = billing.filter((b) => expenseKind(b) === "銀行入帳");
   const list = expenseTab === "零用金" ? pettyCash : expenseTab === "銀行入帳" ? bankDeposits : companyPayments;
   const filtered = list.filter((b) => {
-    if (month && !(b.date || "").startsWith(month)) return false;
+    const filterDate = expenseTab === "公司付款" ? (b.plannedPaymentDate || b.date) : b.date;
+    if (month && !(filterDate || "").startsWith(month)) return false;
     if ((expenseTab === "公司付款" || expenseTab === "銀行入帳") && companyFilter !== "全部") {
       if (companyFilter === "其他") return !KNOWN_COMPANIES.includes(b.companyName);
       return b.companyName === companyFilter;
@@ -3248,7 +3262,7 @@ function BillingView({ ctx }) {
         <EmptyState icon={emptyIcon} text={`尚未建立任何${expenseTab === "零用金" ? "零用金紀錄" : expenseTab === "銀行入帳" ? "銀行入帳紀錄" : "公司應付款項"}。`} action={<Btn variant="brass" icon={Plus} onClick={openNew}>{newLabel}</Btn>} />
       ) : (
         <>
-          <MonthFilterBar month={month} setMonth={setMonth} label="日期月份" />
+          <MonthFilterBar month={month} setMonth={setMonth} label={expenseTab === "公司付款" ? "預訂付款月份" : "日期月份"} />
           {(expenseTab === "公司付款" || expenseTab === "銀行入帳") && (
             <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
               {companyTabs.map((c) => (
