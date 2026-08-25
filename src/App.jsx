@@ -85,13 +85,13 @@ const STORAGE_KEYS = {
   leaveRequests: "leave_requests",
 };
 
-const DEFAULT_ROLES = ["管理員", "財務", "人資", "一般員工"];
+const DEFAULT_ROLES = ["夏碩亞", "財務", "人資", "一般員工"];
 const DEFAULT_MATRIX = () => {
   const on = (keys) => Object.fromEntries(NAV.map((n) => [n.key, keys.includes(n.key)]));
   return {
     roles: DEFAULT_ROLES,
     matrix: {
-      "管理員": on(NAV.map((n) => n.key)),
+      "夏碩亞": on(NAV.map((n) => n.key)),
       "財務": on(["dashboard", "payroll", "vendors", "documents", "quotes", "invoices", "billing", "contracts", "accounting", "reports", "attendance"]),
       "人資": on(["dashboard", "employees", "payroll", "documents", "attendance", "reports"]),
       "一般員工": on(["dashboard", "attendance"]),
@@ -698,8 +698,8 @@ function ConfirmDialog({ message, onConfirm, onCancel }) {
 
 /* ---------------- 右下角內部即時對話框（系統帳號一對一聊天） ---------------- */
 // 登入帳號的 Email 對應不到任何系統帳號時（例如尚未把自己加進系統帳號清單），
-// 一律用這組固定代號當「管理員」的對話身分，這樣不必先建立系統帳號也能收發訊息，
-// 其他系統帳號也能看到「管理員」這個對象、直接傳訊息給目前操作系統的人。
+// 一律用這組固定代號當「夏碩亞」的對話身分，這樣不必先建立系統帳號也能收發訊息，
+// 其他系統帳號也能看到「夏碩亞」這個對象、直接傳訊息給目前操作系統的人。
 const ADMIN_CHAT_ID = "__admin__";
 function ChatWidget({ ctx }) {
   const { sysUsers, currentUser } = ctx;
@@ -1115,8 +1115,27 @@ export default function CompanyManagementSystem({ session }) {
       ]);
       setEmployees(emp); setAttendance(att); setPayroll(pay); setQuotes(qt);
       setInvoices(inv); setBilling(bil); setAccounting(acc);
-      setVendors(ven); setDocuments(doc); setDocumentTemplates(doctpl); setContracts(con); setSysUsers(usr);
-      setRolePerms(rp || DEFAULT_MATRIX());
+      setVendors(ven); setDocuments(doc); setDocumentTemplates(doctpl); setContracts(con);
+
+      // 一次性遷移：管理員角色改名為「夏碩亞」，把舊資料裡角色欄位還是舊名稱「管理員」的
+      // 系統帳號、以及角色權限矩陣裡用「管理員」當 key 的設定，一併轉成新名稱，
+      // 這樣既有帳號不會因為改名而暫時抓不到管理員權限。
+      const OLD_ADMIN_ROLE = "管理員";
+      const NEW_ADMIN_ROLE = "夏碩亞";
+      const migratedUsers = usr.map((u) => (u.role === OLD_ADMIN_ROLE ? { ...u, role: NEW_ADMIN_ROLE } : u));
+      if (migratedUsers.some((u, i) => u !== usr[i])) saveKey(STORAGE_KEYS.sysUsers, migratedUsers);
+      setSysUsers(migratedUsers);
+
+      let fixedRolePerms = rp || DEFAULT_MATRIX();
+      if (fixedRolePerms.matrix?.[OLD_ADMIN_ROLE] && !fixedRolePerms.matrix?.[NEW_ADMIN_ROLE]) {
+        const { [OLD_ADMIN_ROLE]: oldPerm, ...restMatrix } = fixedRolePerms.matrix;
+        fixedRolePerms = {
+          roles: (fixedRolePerms.roles || []).map((r) => (r === OLD_ADMIN_ROLE ? NEW_ADMIN_ROLE : r)),
+          matrix: { ...restMatrix, [NEW_ADMIN_ROLE]: oldPerm },
+        };
+        saveKey(STORAGE_KEYS.rolePerms, fixedRolePerms);
+      }
+      setRolePerms(fixedRolePerms);
       const missingSeeds = SEED_QUOTE_TEMPLATES.filter((seed) => !qtpl.some((t) => t.company === seed.company));
       const mergedTemplates = missingSeeds.length ? [...missingSeeds, ...qtpl] : qtpl;
       if (missingSeeds.length) saveKey(STORAGE_KEYS.quoteTemplates, mergedTemplates);
@@ -1175,18 +1194,18 @@ export default function CompanyManagementSystem({ session }) {
   const askDelete = (message, onConfirm) => setConfirmState({ message, onConfirm });
 
   // 「真實身分」以登入帳號的 Email 對應到系統帳號清單為準，不是側邊欄下拉選單
-  // 可以自己亂選的——不然任何人都能把自己切成「管理員」。找不到對應的系統帳號時
-  // （例如系統剛啟用、還沒建立任何帳號）先當管理員，才能進來把第一批帳號設好。
+  // 可以自己亂選的——不然任何人都能把自己切成「夏碩亞」。找不到對應的系統帳號時
+  // （例如系統剛啟用、還沒建立任何帳號）先當夏碩亞，才能進來把第一批帳號設好。
   const myEmail = (session?.user?.email || "").toLowerCase();
   const matchedUser = sysUsers.find((u) => u.email && u.email.toLowerCase() === myEmail) || null;
-  const realIsAdmin = !matchedUser || matchedUser.role === "管理員";
-  // 只有真實身分是管理員，才能用側邊欄下拉選單切換要操作的身分（例如共用打卡機情境）；
-  // 一般員工的身分固定就是自己登入帳號比對到的那筆系統帳號，不能自己改成別人或改成管理員。
+  const realIsAdmin = !matchedUser || matchedUser.role === "夏碩亞";
+  // 只有真實身分是夏碩亞，才能用側邊欄下拉選單切換要操作的身分（例如共用打卡機情境）；
+  // 一般員工的身分固定就是自己登入帳號比對到的那筆系統帳號，不能自己改成別人或改成夏碩亞。
   const currentUser = realIsAdmin ? (sysUsers.find((u) => u.id === currentUserId) || matchedUser) : matchedUser;
-  const isAdmin = !currentUser || currentUser.role === "管理員";
+  const isAdmin = !currentUser || currentUser.role === "夏碩亞";
 
   const allowedNav = NAV.filter((n) => {
-    if (n.key === "permissions") return isAdmin; // 權限設定一律只有管理員能進，角色矩陣裡的勾選對這頁不生效，避免有人把自己的角色設成能改權限
+    if (n.key === "permissions") return isAdmin; // 權限設定一律只有夏碩亞能進，角色矩陣裡的勾選對這頁不生效，避免有人把自己的角色設成能改權限
     return isAdmin || !!rolePerms.matrix[currentUser?.role]?.[n.key];
   });
   const allowedKeys = allowedNav.map((n) => n.key).join(",");
@@ -1342,7 +1361,7 @@ function Sidebar({ tab, setTab, nav, employees, sysUsers, currentUserId, setCurr
             onChange={(e) => setCurrentUserId(e.target.value)}
             style={{ width: "100%", background: THEME.inkSoft, color: "#fff", border: `1px solid ${THEME.inkFaint}`, marginBottom: 10 }}
           >
-            <option value="">管理員（完整權限）</option>
+            <option value="">夏碩亞（完整權限）</option>
             {sysUsers.map((u) => <option key={u.id} value={u.id}>{u.name}（{u.role}）</option>)}
           </Select>
         ) : (
@@ -3155,7 +3174,7 @@ function AttendanceView({ ctx }) {
         <SectionHeader eyebrow="ATTENDANCE · 12" title="打卡上下班" />
         <div style={{ background: THEME.warnSoft, border: `1px solid #E9D8AE`, borderRadius: 10, padding: "14px 18px", fontSize: 13, color: THEME.warn, display: "flex", gap: 8, alignItems: "center" }}>
           <AlertCircle size={16} />
-          您目前的帳號尚未綁定員工資料，請聯絡管理員到「權限設定」→「系統帳號」設定綁定的員工後才能打卡。
+          您目前的帳號尚未綁定員工資料，請聯絡夏碩亞到「權限設定」→「系統帳號」設定綁定的員工後才能打卡。
         </div>
       </div>
     );
@@ -3169,7 +3188,7 @@ function AttendanceView({ ctx }) {
         <div style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 12, padding: "16px 18px" }}>
           <div style={{ fontSize: 12.5, fontWeight: 700, color: THEME.text, marginBottom: 6 }}>打卡地點限制</div>
           <div style={{ fontSize: 12, color: THEME.muted, marginBottom: 10 }}>
-            設定公司座標後，管理員以下所有人員只能在公司 {CLOCK_RADIUS_M} 公尺範圍內打卡。
+            設定公司座標後，夏碩亞以下所有人員只能在公司 {CLOCK_RADIUS_M} 公尺範圍內打卡。
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             {companyLocation && (
@@ -5246,7 +5265,7 @@ function ContractForm({ data, vendors, sysUsers, isAdmin, onSave, onCancel }) {
             {(sysUsers || []).map((u) => <option key={u.id} value={u.name}>{u.name}</option>)}
           </Select>
         ) : (
-          <div style={{ ...inputStyle, background: THEME.canvas, color: THEME.muted }}>{f.owner || "未指定"}（僅管理員可設定）</div>
+          <div style={{ ...inputStyle, background: THEME.canvas, color: THEME.muted }}>{f.owner || "未指定"}（僅夏碩亞可設定）</div>
         )}
       </Field>
 
@@ -5406,7 +5425,7 @@ function PermissionsView({ ctx }) {
 
   if (!isAdmin) {
     return (
-      <EmptyState icon={ShieldCheck} text="只有管理員可以開啟權限設定。" />
+      <EmptyState icon={ShieldCheck} text="只有夏碩亞可以開啟權限設定。" />
     );
   }
 
@@ -5447,7 +5466,7 @@ function PermissionsView({ ctx }) {
 
       <div style={{ background: "#FBF7EC", border: `1px solid ${THEME.brassSoft}`, borderRadius: 10, padding: "10px 16px", fontSize: 12.5, color: THEME.brassDeep, marginBottom: 16, display: "flex", gap: 8, alignItems: "center" }}>
         <AlertCircle size={14} />
-        側邊欄下方可切換「目前身分」。非管理員角色在打卡上下班頁面，只能選自己綁定的員工打卡，也只能看到自己的出勤紀錄。
+        側邊欄下方可切換「目前身分」。非夏碩亞角色在打卡上下班頁面，只能選自己綁定的員工打卡，也只能看到自己的出勤紀錄。
       </div>
 
       <h3 style={{ fontSize: 14.5, fontWeight: 700, color: THEME.text, marginBottom: 12 }}>系統帳號</h3>
