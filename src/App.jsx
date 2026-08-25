@@ -563,6 +563,7 @@ function StatusBadge({ status }) {
     "已作廢": { bg: "#EEEEEE", fg: THEME.muted },
     "逾期": { bg: THEME.dangerSoft, fg: THEME.danger },
     "待審核": { bg: THEME.warnSoft, fg: THEME.warn },
+    "待核准": { bg: THEME.warnSoft, fg: THEME.warn },
     "供應商": { bg: "#E4E9F0", fg: "#3E5872" },
     "業主": { bg: "#F5E9EE", fg: "#8B3A5C" },
     "有": { bg: THEME.successSoft, fg: THEME.success },
@@ -941,7 +942,7 @@ function MonthFilterBar({ month, setMonth, label }) {
   );
 }
 
-function DatePickerButton({ value, onChange, placeholder = "選擇日期" }) {
+function DatePickerButton({ value, onChange, placeholder = "選擇日期", disabled }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const [viewYear, setViewYear] = useState(() => (value ? new Date(value) : new Date()).getFullYear());
@@ -976,6 +977,7 @@ function DatePickerButton({ value, onChange, placeholder = "選擇日期" }) {
   }, [open]);
 
   const openCalendar = () => {
+    if (disabled) return;
     const d = value ? new Date(value) : new Date();
     setViewYear(d.getFullYear());
     setViewMonth(d.getMonth());
@@ -994,7 +996,7 @@ function DatePickerButton({ value, onChange, placeholder = "選擇日期" }) {
 
   return (
     <div ref={wrapRef} style={{ display: "inline-block" }}>
-      <Btn size="sm" icon={CalendarDays} onClick={openCalendar}>{value ? fmtDate(value) : placeholder}</Btn>
+      <Btn size="sm" icon={CalendarDays} onClick={openCalendar} disabled={disabled}>{value ? fmtDate(value) : placeholder}</Btn>
       {open && createPortal(
         <div ref={popRef} style={{ position: "fixed", zIndex: 300, top: pos.top, left: pos.left, background: "#fff", border: `1px solid ${THEME.line}`, borderRadius: 10, boxShadow: "0 12px 32px rgba(0,0,0,0.18)", padding: 12, width: 240 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
@@ -3294,11 +3296,11 @@ function AttendanceView({ ctx }) {
    COMPANY EXPENSES (公司支出) — 零用金紀錄 / 公司付款
 ========================================================= */
 const emptyPettyCash = () => ({ expenseType: "零用金", flowType: "支出", date: todayStr(), item: "", amount: "", handler: "", note: "" });
-const emptyCompanyPayment = () => ({ expenseType: "公司付款", vendor: "", category: "", amount: "", date: todayStr(), plannedPaymentDate: "", status: "未付款", note: "", posted: false, companyName: "", paymentDate: "" });
+const emptyCompanyPayment = () => ({ expenseType: "公司付款", vendor: "", category: "", amount: "", date: todayStr(), plannedPaymentDate: "", status: "未付款", note: "", posted: false, companyName: "", paymentDate: "", approved: false });
 const emptyBankDeposit = () => ({ expenseType: "銀行入帳", date: todayStr(), source: "", amount: "", note: "", companyName: "" });
 
 function BillingView({ ctx }) {
-  const { billing, persist, addAccountingEntry, removeAccountingBySource, askDelete } = ctx;
+  const { billing, persist, addAccountingEntry, removeAccountingBySource, askDelete, isAdmin } = ctx;
   const [expenseTab, setExpenseTab] = useState("銀行入帳");
   const [modal, setModal] = useState(null);
   const [month, setMonth] = useState(monthStr());
@@ -3373,6 +3375,10 @@ function BillingView({ ctx }) {
     if (status === "已付款" && !b.posted) {
       addAccountingEntry({ type: "支出", category: b.category || "公司付款", amount: b.amount, desc: `公司付款 ${b.no} — ${b.vendor}`, sourceType: "billing", sourceId: b.id });
     }
+  };
+
+  const setApproved = (b) => {
+    persist.billing(billing.map((x) => x.id === b.id ? { ...x, approved: true, updatedAt: new Date().toISOString() } : x));
   };
 
   const setPaymentDate = (b, paymentDate) => {
@@ -3522,7 +3528,7 @@ function BillingView({ ctx }) {
               ))}
             </Table>
           ) : (
-            <Table columns={["單號", "廠商／申請人", "項目類別", "申請日期", "預訂付款日", "金額", "付款公司", "付款日", "狀態", ""]}>
+            <Table columns={["單號", "廠商／申請人", "項目類別", "申請日期", "預訂付款日", "金額", "付款公司", "核准", "付款日", "狀態", ""]}>
               {filtered.map((b) => (
                 <tr key={b.id}>
                   <td style={{ ...td, fontFamily: FONT_NUM }}>{b.no}</td>
@@ -3533,7 +3539,12 @@ function BillingView({ ctx }) {
                   <td style={{ ...td, fontFamily: FONT_NUM, fontWeight: 700 }}>{fmtMoney(b.amount)}</td>
                   <td style={td}>{b.companyName ? <StatusBadge status={KNOWN_COMPANIES.includes(b.companyName) ? b.companyName : "其他"} /> : "—"}</td>
                   <td style={td}>
-                    <DatePickerButton value={b.paymentDate} onChange={(v) => setPaymentDate(b, v)} />
+                    {b.approved ? <StatusBadge status="已核准" /> : isAdmin ? (
+                      <Btn size="sm" variant="brass" onClick={() => setApproved(b)}>核准</Btn>
+                    ) : <StatusBadge status="待核准" />}
+                  </td>
+                  <td style={td}>
+                    <DatePickerButton value={b.paymentDate} onChange={(v) => setPaymentDate(b, v)} disabled={!b.approved} />
                   </td>
                   <td style={td}>
                     <Select value={b.status} onChange={(e) => setStatus(b, e.target.value)} style={{ padding: "4px 8px", fontSize: 12 }}>
