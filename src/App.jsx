@@ -1390,16 +1390,16 @@ function TopBar({ tab, now, onMenuClick }) {
 ========================================================= */
 function Dashboard({ ctx }) {
   const { employees, invoices, billing, attendance, accounting, contracts, vendors, vehicles, payroll, quotes, contractBilling, setTab } = ctx;
-  const soon = new Date(); soon.setDate(soon.getDate() + 30);
-  const expiringContracts = (contracts || []).filter((c) => c.status === "生效中" && c.endDate && new Date(c.endDate) <= soon && new Date(c.endDate) >= new Date());
-
+  const dateOnly = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+  const today = dateOnly(new Date());
+  const isToday = (d) => d && dateOnly(d).getTime() === today.getTime();
   const isExpiringSoon = (d, days) => {
     if (!d) return false;
-    const today = new Date(); today.setHours(0, 0, 0, 0);
     const limit = new Date(today); limit.setDate(limit.getDate() + days);
-    const target = new Date(d); target.setHours(0, 0, 0, 0);
+    const target = dateOnly(d);
     return target <= limit && target >= today;
   };
+  const expiringContracts = (contracts || []).filter((c) => c.status === "生效中" && isExpiringSoon(c.endDate, 30));
   const expiringVehicles = (vehicles || []).filter((v) => isExpiringSoon(v.insuranceExpiry, 30) || isExpiringSoon(v.inspectionExpiry, 30));
   const billingKind = (b) => b.expenseType === "零用金" ? "零用金" : b.expenseType === "銀行入帳" ? "銀行入帳" : b.expenseType === "公司付款" ? "公司付款" : (b.vendor !== undefined ? "公司付款" : "零用金");
   const duePayments = (billing || []).filter((b) => billingKind(b) === "公司付款" && b.status !== "已付款" && isExpiringSoon(b.plannedPaymentDate, 5));
@@ -1478,21 +1478,45 @@ function Dashboard({ ctx }) {
 
       {(expiringContracts.length > 0 || expiringVehicles.length > 0 || duePayments.length > 0) && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 18 }}>
-          {expiringContracts.length > 0 && (
-            <button onClick={() => setTab("contracts")} style={{ display: "flex", alignItems: "center", gap: 6, background: THEME.warnSoft, border: `1px solid #E9D8AE`, borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: THEME.warn, cursor: "pointer" }}>
-              <AlertCircle size={13} />{expiringContracts.length} 份契約 30 天內到期
-            </button>
-          )}
-          {expiringVehicles.length > 0 && (
-            <button onClick={() => setTab("vehicles")} style={{ display: "flex", alignItems: "center", gap: 6, background: THEME.warnSoft, border: `1px solid #E9D8AE`, borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: THEME.warn, cursor: "pointer" }}>
-              <AlertCircle size={13} />{expiringVehicles.length} 輛車保險／驗車 30 天內到期
-            </button>
-          )}
-          {duePayments.length > 0 && (
-            <button onClick={() => setTab("billing")} style={{ display: "flex", alignItems: "center", gap: 6, background: THEME.warnSoft, border: `1px solid #E9D8AE`, borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: THEME.warn, cursor: "pointer" }}>
-              <AlertCircle size={13} />{duePayments.length} 筆應付款項 5 天內到期
-            </button>
-          )}
+          {expiringContracts.length > 0 && (() => {
+            const todayCount = expiringContracts.filter((c) => isToday(c.endDate)).length;
+            const label = todayCount === expiringContracts.length
+              ? `${expiringContracts.length} 份契約今日到期`
+              : todayCount > 0
+              ? `${expiringContracts.length} 份契約 30 天內到期（${todayCount} 份今日到期）`
+              : `${expiringContracts.length} 份契約 30 天內到期`;
+            return (
+              <button onClick={() => setTab("contracts")} style={{ display: "flex", alignItems: "center", gap: 6, background: THEME.warnSoft, border: `1px solid #E9D8AE`, borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: THEME.warn, cursor: "pointer" }}>
+                <AlertCircle size={13} />{label}
+              </button>
+            );
+          })()}
+          {expiringVehicles.length > 0 && (() => {
+            const todayCount = expiringVehicles.filter((v) => isToday(v.insuranceExpiry) || isToday(v.inspectionExpiry)).length;
+            const label = todayCount === expiringVehicles.length
+              ? `${expiringVehicles.length} 輛車保險／驗車今日到期`
+              : todayCount > 0
+              ? `${expiringVehicles.length} 輛車保險／驗車 30 天內到期（${todayCount} 輛今日到期）`
+              : `${expiringVehicles.length} 輛車保險／驗車 30 天內到期`;
+            return (
+              <button onClick={() => setTab("vehicles")} style={{ display: "flex", alignItems: "center", gap: 6, background: THEME.warnSoft, border: `1px solid #E9D8AE`, borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: THEME.warn, cursor: "pointer" }}>
+                <AlertCircle size={13} />{label}
+              </button>
+            );
+          })()}
+          {duePayments.length > 0 && (() => {
+            const todayCount = duePayments.filter((b) => isToday(b.plannedPaymentDate)).length;
+            const label = todayCount === duePayments.length
+              ? `${duePayments.length} 筆應付款項今日到期`
+              : todayCount > 0
+              ? `${duePayments.length} 筆應付款項 5 天內到期（${todayCount} 筆今日到期）`
+              : `${duePayments.length} 筆應付款項 5 天內到期`;
+            return (
+              <button onClick={() => setTab("billing")} style={{ display: "flex", alignItems: "center", gap: 6, background: THEME.warnSoft, border: `1px solid #E9D8AE`, borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: THEME.warn, cursor: "pointer" }}>
+                <AlertCircle size={13} />{label}
+              </button>
+            );
+          })()}
         </div>
       )}
 
