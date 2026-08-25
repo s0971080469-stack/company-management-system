@@ -994,7 +994,7 @@ export default function CompanyManagementSystem({ session }) {
     employees, attendance, payroll, quotes, invoices, billing, accounting,
     vendors, documents, documentTemplates, contracts, sysUsers, rolePerms, quoteTemplates, vehicles, companyLocation, contractBilling, leaveRequests,
     currentUser, isAdmin, realIsAdmin,
-    persist, addAccountingEntry, removeAccountingBySource, askDelete, now,
+    persist, addAccountingEntry, removeAccountingBySource, askDelete, now, setTab,
   };
 
   return (
@@ -1182,7 +1182,7 @@ function TopBar({ tab, now, onMenuClick }) {
    DASHBOARD
 ========================================================= */
 function Dashboard({ ctx }) {
-  const { employees, invoices, billing, attendance, accounting, contracts, vendors, vehicles, payroll, quotes, contractBilling } = ctx;
+  const { employees, invoices, billing, attendance, accounting, contracts, vendors, vehicles, payroll, quotes, contractBilling, setTab } = ctx;
   const soon = new Date(); soon.setDate(soon.getDate() + 30);
   const expiringContracts = (contracts || []).filter((c) => c.status === "生效中" && c.endDate && new Date(c.endDate) <= soon && new Date(c.endDate) >= new Date());
 
@@ -1272,19 +1272,19 @@ function Dashboard({ ctx }) {
       {(expiringContracts.length > 0 || expiringVehicles.length > 0 || duePayments.length > 0) && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 18 }}>
           {expiringContracts.length > 0 && (
-            <div style={{ display: "flex", alignItems: "center", gap: 6, background: THEME.warnSoft, border: `1px solid #E9D8AE`, borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: THEME.warn }}>
+            <button onClick={() => setTab("contracts")} style={{ display: "flex", alignItems: "center", gap: 6, background: THEME.warnSoft, border: `1px solid #E9D8AE`, borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: THEME.warn, cursor: "pointer" }}>
               <AlertCircle size={13} />{expiringContracts.length} 份契約 30 天內到期
-            </div>
+            </button>
           )}
           {expiringVehicles.length > 0 && (
-            <div style={{ display: "flex", alignItems: "center", gap: 6, background: THEME.warnSoft, border: `1px solid #E9D8AE`, borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: THEME.warn }}>
+            <button onClick={() => setTab("vehicles")} style={{ display: "flex", alignItems: "center", gap: 6, background: THEME.warnSoft, border: `1px solid #E9D8AE`, borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: THEME.warn, cursor: "pointer" }}>
               <AlertCircle size={13} />{expiringVehicles.length} 輛車保險／驗車 30 天內到期
-            </div>
+            </button>
           )}
           {duePayments.length > 0 && (
-            <div style={{ display: "flex", alignItems: "center", gap: 6, background: THEME.warnSoft, border: `1px solid #E9D8AE`, borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: THEME.warn }}>
+            <button onClick={() => setTab("billing")} style={{ display: "flex", alignItems: "center", gap: 6, background: THEME.warnSoft, border: `1px solid #E9D8AE`, borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: THEME.warn, cursor: "pointer" }}>
               <AlertCircle size={13} />{duePayments.length} 筆應付款項 5 天內到期
-            </div>
+            </button>
           )}
         </div>
       )}
