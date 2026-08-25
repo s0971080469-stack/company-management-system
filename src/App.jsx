@@ -3460,10 +3460,11 @@ function BillingView({ ctx }) {
           <StatCard label="紀錄筆數" value={bankDeposits.length} icon={Check} tone="ink" />
         </div>
       ) : (
-        <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 14 }}>
+        <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 18 }}>
           <StatCard label="公司應付款項總數" value={companyPayments.length} icon={HandCoins} tone="ink" />
           <StatCard label="未付款金額" value={fmtMoney(pendingTotal)} icon={AlertCircle} tone="warn" />
           <StatCard label="已付款件數" value={companyPayments.filter((b) => b.status === "已付款").length} icon={Check} tone="success" />
+          <StatCard label="核准金額" value={fmtMoney(approvedTotal)} icon={Check} tone="ink" />
         </div>
       )}
 
@@ -3564,12 +3565,6 @@ function BillingView({ ctx }) {
             </Table>
           )}
         </>
-      )}
-
-      {expenseTab === "公司付款" && (
-        <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginTop: 18 }}>
-          <StatCard label="核准金額" value={fmtMoney(approvedTotal)} icon={Check} tone="ink" />
-        </div>
       )}
 
       {modal && (
