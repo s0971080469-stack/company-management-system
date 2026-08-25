@@ -3389,6 +3389,7 @@ function BillingView({ ctx }) {
   };
 
   const pendingTotal = filtered.filter((b) => b.status !== "已付款").reduce((s, b) => s + Number(b.amount || 0), 0);
+  const approvedTotal = filtered.filter((b) => b.approved).reduce((s, b) => s + Number(b.amount || 0), 0);
   const isPettyCashExpense = (b) => (b.flowType || "支出") === "支出";
   const pettyCashTotal = pettyCash.filter(isPettyCashExpense).reduce((s, b) => s + Math.abs(Number(b.amount) || 0), 0);
   const pettyCashMonthTotal = pettyCash.filter((b) => isPettyCashExpense(b) && (b.date || "").startsWith(monthStr())).reduce((s, b) => s + Math.abs(Number(b.amount) || 0), 0);
@@ -3459,10 +3460,15 @@ function BillingView({ ctx }) {
           <StatCard label="紀錄筆數" value={bankDeposits.length} icon={Check} tone="ink" />
         </div>
       ) : (
-        <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
+        <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 14 }}>
           <StatCard label="公司應付款項總數" value={companyPayments.length} icon={HandCoins} tone="ink" />
           <StatCard label="未付款金額" value={fmtMoney(pendingTotal)} icon={AlertCircle} tone="warn" />
           <StatCard label="已付款件數" value={companyPayments.filter((b) => b.status === "已付款").length} icon={Check} tone="success" />
+        </div>
+      )}
+      {expenseTab === "公司付款" && (
+        <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
+          <StatCard label="核准金額" value={fmtMoney(approvedTotal)} icon={Check} tone="ink" />
         </div>
       )}
 
