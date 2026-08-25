@@ -978,9 +978,16 @@ function DatePickerButton({ value, onChange, placeholder = "選擇日期", disab
 
   useEffect(() => {
     if (!open) return;
+    // 月曆彈窗固定大約 240 寬、300 高——如果下方或右側空間不夠就翻到上方／往左貼齊，
+    // 避免清單最下面幾列的日期選擇器彈出來被畫面邊緣或右下角聊天按鈕卡住看不全。
+    const POPUP_W = 240;
+    const POPUP_H = 300;
     const updatePos = () => {
       const r = wrapRef.current?.getBoundingClientRect();
-      if (r) setPos({ top: r.bottom + 6, left: r.left });
+      if (!r) return;
+      const top = window.innerHeight - r.bottom < POPUP_H + 10 ? Math.max(8, r.top - POPUP_H - 6) : r.bottom + 6;
+      const left = Math.min(r.left, window.innerWidth - POPUP_W - 8);
+      setPos({ top, left: Math.max(8, left) });
     };
     updatePos();
     window.addEventListener("scroll", updatePos, true);
