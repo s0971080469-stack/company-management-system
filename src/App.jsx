@@ -849,8 +849,10 @@ function ChatWidget({ ctx }) {
               <div style={{ flex: 1, overflow: "auto", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8, background: THEME.canvas }}>
                 {threadWith(activeId).map((m) => {
                   const mine = m.sender_id === myId;
+                  const sent = new Date(m.created_at);
+                  const timeLabel = isNaN(sent) ? "" : `${fmtDate(m.created_at)} ${String(sent.getHours()).padStart(2, "0")}:${String(sent.getMinutes()).padStart(2, "0")}`;
                   return (
-                    <div key={m.id} style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start" }}>
+                    <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: mine ? "flex-end" : "flex-start" }}>
                       <div style={{
                         maxWidth: "78%", padding: "8px 12px", borderRadius: 14,
                         borderBottomRightRadius: mine ? 3 : 14, borderBottomLeftRadius: mine ? 14 : 3,
@@ -859,6 +861,7 @@ function ChatWidget({ ctx }) {
                       }}>
                         {m.content}
                       </div>
+                      {timeLabel && <div style={{ fontSize: 10, color: THEME.muted, margin: "2px 3px 0" }}>{timeLabel}</div>}
                     </div>
                   );
                 })}
