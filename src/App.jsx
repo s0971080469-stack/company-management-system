@@ -1186,7 +1186,13 @@ function Dashboard({ ctx }) {
   const soon = new Date(); soon.setDate(soon.getDate() + 30);
   const expiringContracts = (contracts || []).filter((c) => c.status === "生效中" && c.endDate && new Date(c.endDate) <= soon && new Date(c.endDate) >= new Date());
 
-  const isExpiringSoon = (d, days) => { const limit = new Date(); limit.setDate(limit.getDate() + days); return d && new Date(d) <= limit && new Date(d) >= new Date(); };
+  const isExpiringSoon = (d, days) => {
+    if (!d) return false;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const limit = new Date(today); limit.setDate(limit.getDate() + days);
+    const target = new Date(d); target.setHours(0, 0, 0, 0);
+    return target <= limit && target >= today;
+  };
   const expiringVehicles = (vehicles || []).filter((v) => isExpiringSoon(v.insuranceExpiry, 30) || isExpiringSoon(v.inspectionExpiry, 30));
   const billingKind = (b) => b.expenseType === "零用金" ? "零用金" : b.expenseType === "銀行入帳" ? "銀行入帳" : b.expenseType === "公司付款" ? "公司付款" : (b.vendor !== undefined ? "公司付款" : "零用金");
   const duePayments = (billing || []).filter((b) => billingKind(b) === "公司付款" && b.status !== "已付款" && isExpiringSoon(b.plannedPaymentDate, 5));
@@ -3201,9 +3207,12 @@ function BillingView({ ctx }) {
   const newLabel = expenseTab === "零用金" ? "新增零用金紀錄" : expenseTab === "銀行入帳" ? "新增銀行入帳紀錄" : "新增公司應付款項";
   const emptyIcon = expenseTab === "零用金" ? Wallet : expenseTab === "銀行入帳" ? Landmark : HandCoins;
 
-  const soon = new Date(); soon.setDate(soon.getDate() + 5);
-  const isDueSoon = (d) => d && new Date(d) <= soon && new Date(d) >= new Date();
-  const daysUntil = (d) => Math.ceil((new Date(d) - new Date()) / (1000 * 60 * 60 * 24));
+  const dateOnly = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+  const today = dateOnly(new Date());
+  const soon = new Date(today); soon.setDate(soon.getDate() + 5);
+  // 用「只看日期、不看時分秒」比較，避免當天已過中午就被誤判成「已經過期」而不再提醒
+  const isDueSoon = (d) => d && dateOnly(d) <= soon && dateOnly(d) >= today;
+  const daysUntil = (d) => Math.round((dateOnly(d) - today) / (1000 * 60 * 60 * 24));
   const duePayments = companyPayments.filter((b) => b.status !== "已付款" && isDueSoon(b.plannedPaymentDate));
 
   return (
