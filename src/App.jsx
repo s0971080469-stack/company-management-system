@@ -3466,11 +3466,6 @@ function BillingView({ ctx }) {
           <StatCard label="已付款件數" value={companyPayments.filter((b) => b.status === "已付款").length} icon={Check} tone="success" />
         </div>
       )}
-      {expenseTab === "公司付款" && (
-        <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
-          <StatCard label="核准金額" value={fmtMoney(approvedTotal)} icon={Check} tone="ink" />
-        </div>
-      )}
 
       {list.length === 0 ? (
         <EmptyState icon={emptyIcon} text={`尚未建立任何${expenseTab === "零用金" ? "零用金紀錄" : expenseTab === "銀行入帳" ? "銀行入帳紀錄" : "公司應付款項"}。`} action={<Btn variant="brass" icon={Plus} onClick={openNew}>{newLabel}</Btn>} />
@@ -3569,6 +3564,12 @@ function BillingView({ ctx }) {
             </Table>
           )}
         </>
+      )}
+
+      {expenseTab === "公司付款" && (
+        <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginTop: 18 }}>
+          <StatCard label="核准金額" value={fmtMoney(approvedTotal)} icon={Check} tone="ink" />
+        </div>
       )}
 
       {modal && (
