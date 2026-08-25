@@ -535,15 +535,27 @@ function IconBadge({ icon: Icon, tone = "brass" }) {
   );
 }
 
-function StatCard({ label, value, sub, icon, tone }) {
+function StatCard({ label, value, sub, icon: Icon, tone = "brass" }) {
+  const tones = {
+    brass: { bg: THEME.brassSoft, fg: THEME.brassDeep },
+    success: { bg: THEME.successSoft, fg: THEME.success },
+    danger: { bg: THEME.dangerSoft, fg: THEME.danger },
+    warn: { bg: THEME.warnSoft, fg: THEME.warn },
+    ink: { bg: "#EEF0F4", fg: THEME.ink },
+  };
+  const t = tones[tone];
   return (
-    <div style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 12, padding: "18px 20px", display: "flex", flexDirection: "column", gap: 10, minHeight: 108 }}>
+    <div style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 10, padding: "13px 15px", display: "flex", flexDirection: "column", gap: 6, minHeight: 78 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span style={{ fontSize: 12.5, color: THEME.muted, letterSpacing: 0.3 }}>{label}</span>
-        {icon && <IconBadge icon={icon} tone={tone} />}
+        <span style={{ fontSize: 11, color: THEME.muted, letterSpacing: 0.3 }}>{label}</span>
+        {Icon && (
+          <div style={{ width: 30, height: 30, borderRadius: 8, background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <Icon size={14} color={t.fg} strokeWidth={2} />
+          </div>
+        )}
       </div>
-      <div style={{ fontFamily: FONT_NUM, fontSize: 24, fontWeight: 700, color: THEME.text, letterSpacing: -0.3 }}>{value}</div>
-      {sub && <div style={{ fontSize: 12, color: THEME.muted }}>{sub}</div>}
+      <div style={{ fontFamily: FONT_NUM, fontSize: 18.5, fontWeight: 700, color: THEME.text, letterSpacing: -0.3 }}>{value}</div>
+      {sub && <div style={{ fontSize: 10.5, color: THEME.muted }}>{sub}</div>}
     </div>
   );
 }
