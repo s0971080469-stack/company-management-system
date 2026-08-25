@@ -3438,7 +3438,7 @@ function BillingView({ ctx }) {
           <div style={{ fontSize: 12.5, color: THEME.warn, lineHeight: 1.8 }}>
             <strong>{duePayments.length} 筆公司應付款項將於 5 天內到期：</strong>
             {duePayments.map((b) => (
-              <div key={b.id}>{b.vendor}（{fmtMoney(b.amount)}）— 剩 {daysUntil(b.plannedPaymentDate)} 天</div>
+              <div key={b.id}>{b.vendor}（{fmtMoney(b.amount)}）— {daysUntil(b.plannedPaymentDate) === 0 ? "今日到期" : `剩 ${daysUntil(b.plannedPaymentDate)} 天`}</div>
             ))}
           </div>
         </div>
@@ -5244,9 +5244,12 @@ function VehiclesView({ ctx }) {
     setModal(null);
   };
 
-  const soon = new Date(); soon.setDate(soon.getDate() + 30);
-  const isExpiringSoon = (d) => d && new Date(d) <= soon && new Date(d) >= new Date();
-  const daysUntil = (d) => Math.ceil((new Date(d) - new Date()) / (1000 * 60 * 60 * 24));
+  const dateOnly = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+  const today = dateOnly(new Date());
+  const soon = new Date(today); soon.setDate(soon.getDate() + 30);
+  // 用「只看日期、不看時分秒」比較，避免當天已過中午就被誤判成「已經過期」而不再提醒
+  const isExpiringSoon = (d) => d && dateOnly(d) <= soon && dateOnly(d) >= today;
+  const daysUntil = (d) => Math.round((dateOnly(d) - today) / (1000 * 60 * 60 * 24));
   const expiringVehicles = vehicles.filter((v) => isExpiringSoon(v.insuranceExpiry) || isExpiringSoon(v.inspectionExpiry));
 
   return (
@@ -5267,8 +5270,8 @@ function VehiclesView({ ctx }) {
             <strong>{expiringVehicles.length} 輛車保險或驗車將於 30 天內到期：</strong>
             {expiringVehicles.map((v) => {
               const parts = [];
-              if (isExpiringSoon(v.insuranceExpiry)) parts.push(`保險剩 ${daysUntil(v.insuranceExpiry)} 天`);
-              if (isExpiringSoon(v.inspectionExpiry)) parts.push(`驗車剩 ${daysUntil(v.inspectionExpiry)} 天`);
+              if (isExpiringSoon(v.insuranceExpiry)) parts.push(daysUntil(v.insuranceExpiry) === 0 ? "保險今日到期" : `保險剩 ${daysUntil(v.insuranceExpiry)} 天`);
+              if (isExpiringSoon(v.inspectionExpiry)) parts.push(daysUntil(v.inspectionExpiry) === 0 ? "驗車今日到期" : `驗車剩 ${daysUntil(v.inspectionExpiry)} 天`);
               return <div key={v.id}>{v.plate}（{v.model || "未填車型"}）— {parts.join("、")}</div>;
             })}
           </div>
