@@ -3183,7 +3183,7 @@ function BillingView({ ctx }) {
     }
   };
 
-  const pendingTotal = companyPayments.filter((b) => b.status !== "已付款").reduce((s, b) => s + Number(b.amount || 0), 0);
+  const pendingTotal = filtered.filter((b) => b.status !== "已付款").reduce((s, b) => s + Number(b.amount || 0), 0);
   const isPettyCashExpense = (b) => (b.flowType || "支出") === "支出";
   const pettyCashTotal = pettyCash.filter(isPettyCashExpense).reduce((s, b) => s + Math.abs(Number(b.amount) || 0), 0);
   const pettyCashMonthTotal = pettyCash.filter((b) => isPettyCashExpense(b) && (b.date || "").startsWith(monthStr())).reduce((s, b) => s + Math.abs(Number(b.amount) || 0), 0);
