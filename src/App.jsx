@@ -4,8 +4,8 @@ import {
   LayoutDashboard, Users, Wallet, FileText, Receipt, Clock, HandCoins,
   Landmark, BarChart3, Plus, Trash2, Pencil, X, Check, Search,
   LogIn, LogOut, Building2, TrendingUp, TrendingDown, CalendarDays,
-  ChevronRight, RotateCcw, ArrowRight, AlertCircle, FileSignature, Truck, ShieldCheck, UserCog, Download, Car,
-  Paperclip, Eye, Upload, Image as ImageIcon, Loader2, MapPin, Printer, Menu, Stamp
+  ChevronRight, ChevronLeft, RotateCcw, ArrowRight, AlertCircle, FileSignature, Truck, ShieldCheck, UserCog, Download, Car,
+  Paperclip, Eye, Upload, Image as ImageIcon, Loader2, MapPin, Printer, Menu, Stamp, MessageCircle, Send
 } from "lucide-react";
 import {
   BarChart, Bar, LineChart, Line, ComposedChart, PieChart, Pie, Cell, XAxis, YAxis,
@@ -683,6 +683,197 @@ function ConfirmDialog({ message, onConfirm, onCancel }) {
   );
 }
 
+/* ---------------- 右下角內部即時對話框（系統帳號一對一聊天） ---------------- */
+// 登入帳號的 Email 對應不到任何系統帳號時（例如尚未把自己加進系統帳號清單），
+// 一律用這組固定代號當「管理員」的對話身分，這樣不必先建立系統帳號也能收發訊息，
+// 其他系統帳號也能看到「管理員」這個對象、直接傳訊息給目前操作系統的人。
+const ADMIN_CHAT_ID = "__admin__";
+function ChatWidget({ ctx }) {
+  const { sysUsers, currentUser } = ctx;
+  const myId = currentUser?.id || ADMIN_CHAT_ID;
+  const namedContacts = (sysUsers || []).filter((u) => u.id !== myId && u.status !== "停用");
+  const contacts = currentUser ? [...namedContacts, { id: ADMIN_CHAT_ID, name: "管理員" }] : namedContacts;
+
+  const [open, setOpen] = useState(false);
+  const [activeId, setActiveId] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [draft, setDraft] = useState("");
+  const listEndRef = React.useRef(null);
+
+  // 載入自己收發過的所有訊息，並訂閱 Supabase Realtime 即時推播新訊息／已讀狀態
+  useEffect(() => {
+    if (!myId) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from("chat_messages")
+        .select("*")
+        .or(`sender_id.eq.${myId},recipient_id.eq.${myId}`)
+        .order("created_at", { ascending: true });
+      if (!cancelled && !error) setMessages(data || []);
+    })();
+
+    const channel = supabase
+      .channel(`chat_messages_${myId}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" }, (payload) => {
+        const row = payload.new;
+        if (row.sender_id !== myId && row.recipient_id !== myId) return;
+        setMessages((prev) => (prev.some((m) => m.id === row.id) ? prev : [...prev, row]));
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_messages" }, (payload) => {
+        const row = payload.new;
+        if (row.sender_id !== myId && row.recipient_id !== myId) return;
+        setMessages((prev) => prev.map((m) => (m.id === row.id ? row : m)));
+      })
+      .subscribe();
+
+    return () => { cancelled = true; supabase.removeChannel(channel); };
+  }, [myId]);
+
+  // 開啟某個對話串時，把對方傳給我、還沒讀的訊息標記為已讀
+  useEffect(() => {
+    if (!myId || !activeId) return;
+    const unreadIds = messages.filter((m) => m.sender_id === activeId && m.recipient_id === myId && !m.read_at).map((m) => m.id);
+    if (unreadIds.length === 0) return;
+    const readAt = new Date().toISOString();
+    setMessages((prev) => prev.map((m) => (unreadIds.includes(m.id) ? { ...m, read_at: readAt } : m)));
+    supabase.from("chat_messages").update({ read_at: readAt }).in("id", unreadIds).then(() => {});
+  }, [activeId, messages, myId]);
+
+  useEffect(() => {
+    if (open && activeId) listEndRef.current?.scrollIntoView({ block: "end" });
+  }, [messages, open, activeId]);
+
+  const threadWith = (id) => messages.filter((m) => (m.sender_id === myId && m.recipient_id === id) || (m.sender_id === id && m.recipient_id === myId));
+  const unreadTotal = messages.filter((m) => m.recipient_id === myId && !m.read_at).length;
+
+  const contactMeta = contacts.map((u) => {
+    const thread = threadWith(u.id);
+    const last = thread[thread.length - 1];
+    const unread = thread.filter((m) => m.recipient_id === myId && m.sender_id === u.id && !m.read_at).length;
+    return { user: u, last, unread };
+  }).sort((a, b) => {
+    const at = a.last?.created_at || "";
+    const bt = b.last?.created_at || "";
+    return at < bt ? 1 : at > bt ? -1 : 0;
+  });
+
+  const send = async () => {
+    const content = draft.trim();
+    if (!content || !activeId) return;
+    setDraft("");
+    const { data, error } = await supabase.from("chat_messages").insert({ sender_id: myId, recipient_id: activeId, content }).select().single();
+    if (!error && data) setMessages((prev) => (prev.some((m) => m.id === data.id) ? prev : [...prev, data]));
+  };
+
+  const activeUser = activeId ? contacts.find((u) => u.id === activeId) : null;
+
+  return (
+    <>
+      <button onClick={() => setOpen((v) => !v)} style={{
+        position: "fixed", right: 24, bottom: 24, width: 54, height: 54, borderRadius: "50%",
+        background: THEME.brass, color: "#fff", border: "none", cursor: "pointer",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        boxShadow: "0 8px 24px rgba(184,145,43,0.4)", zIndex: 60,
+      }}>
+        <MessageCircle size={24} />
+        {unreadTotal > 0 && (
+          <span style={{ position: "absolute", top: -2, right: -2, minWidth: 18, height: 18, borderRadius: 9, background: THEME.danger, color: "#fff", fontSize: 10.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", border: "2px solid #fff" }}>
+            {unreadTotal > 99 ? "99+" : unreadTotal}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div style={{
+          position: "fixed", right: 24, bottom: 90, width: 320, height: 440, background: "#fff",
+          borderRadius: 14, boxShadow: "0 20px 60px rgba(0,0,0,0.25)", border: `1px solid ${THEME.line}`,
+          display: "flex", flexDirection: "column", overflow: "hidden", zIndex: 60,
+        }}>
+          <div style={{ padding: "14px 16px", borderBottom: `1px solid ${THEME.line}`, display: "flex", alignItems: "center", gap: 8, background: THEME.ink, color: "#fff", flexShrink: 0 }}>
+            {activeUser ? (
+              <>
+                <button onClick={() => setActiveId(null)} style={{ border: "none", background: "transparent", color: "#fff", cursor: "pointer", padding: 2, display: "flex" }}><ChevronLeft size={18} /></button>
+                <strong style={{ fontSize: 13.5, flex: 1 }}>{activeUser.name}</strong>
+              </>
+            ) : (
+              <strong style={{ fontSize: 13.5, flex: 1 }}>內部對話</strong>
+            )}
+            <button onClick={() => setOpen(false)} style={{ border: "none", background: "transparent", color: "#fff", cursor: "pointer", padding: 2, display: "flex" }}><X size={16} /></button>
+          </div>
+
+          {!activeUser ? (
+            <div style={{ flex: 1, overflow: "auto" }}>
+              {contactMeta.length === 0 && (
+                <div style={{ padding: 24, textAlign: "center", color: THEME.muted, fontSize: 12.5, lineHeight: 1.7 }}>
+                  目前沒有其他可對話的系統帳號。<br />請先到「權限設定」新增其他帳號。
+                </div>
+              )}
+              {contactMeta.map(({ user, last, unread }) => (
+                <button key={user.id} onClick={() => setActiveId(user.id)} style={{
+                  display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "12px 16px",
+                  border: "none", borderBottom: `1px solid ${THEME.line}`, background: "#fff", cursor: "pointer", textAlign: "left",
+                }}>
+                  <div style={{ width: 36, height: 36, borderRadius: "50%", background: THEME.brassSoft, color: THEME.brassDeep, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 13, flexShrink: 0 }}>
+                    {user.name?.[0] || "?"}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: THEME.text }}>{user.name}</div>
+                    <div style={{ fontSize: 11.5, color: THEME.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {last ? `${last.sender_id === myId ? "我：" : ""}${last.content}` : "尚無訊息"}
+                    </div>
+                  </div>
+                  {unread > 0 && (
+                    <span style={{ minWidth: 18, height: 18, borderRadius: 9, background: THEME.danger, color: "#fff", fontSize: 10.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", flexShrink: 0 }}>
+                      {unread}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <>
+              <div style={{ flex: 1, overflow: "auto", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8, background: THEME.canvas }}>
+                {threadWith(activeId).map((m) => {
+                  const mine = m.sender_id === myId;
+                  return (
+                    <div key={m.id} style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start" }}>
+                      <div style={{
+                        maxWidth: "78%", padding: "8px 12px", borderRadius: 14,
+                        borderBottomRightRadius: mine ? 3 : 14, borderBottomLeftRadius: mine ? 14 : 3,
+                        background: mine ? THEME.brass : "#fff", color: mine ? "#fff" : THEME.text,
+                        fontSize: 12.5, lineHeight: 1.5, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", wordBreak: "break-word",
+                      }}>
+                        {m.content}
+                      </div>
+                    </div>
+                  );
+                })}
+                <div ref={listEndRef} />
+              </div>
+              <div style={{ display: "flex", gap: 8, padding: 10, borderTop: `1px solid ${THEME.line}`, flexShrink: 0 }}>
+                <input
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+                  placeholder="輸入訊息…"
+                  style={{ flex: 1, border: `1px solid ${THEME.line}`, borderRadius: 8, padding: "8px 10px", fontSize: 12.5, fontFamily: FONT_BODY, outline: "none" }}
+                />
+                <button onClick={send} disabled={!draft.trim()} style={{
+                  border: "none", borderRadius: 8, width: 36, height: 36, background: draft.trim() ? THEME.brass : THEME.line,
+                  color: "#fff", cursor: draft.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                }}>
+                  <Send size={15} />
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
 function EmptyState({ icon: Icon, text, action }) {
   return (
     <div style={{ padding: "60px 20px", textAlign: "center", color: THEME.muted }}>
@@ -1072,6 +1263,8 @@ export default function CompanyManagementSystem({ session }) {
           onConfirm={() => { confirmState.onConfirm(); setConfirmState(null); }}
         />
       )}
+
+      <ChatWidget ctx={ctx} />
     </div>
   );
 }

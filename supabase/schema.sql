@@ -71,6 +71,52 @@ create policy "authenticated can delete quote-scans"
   to authenticated
   using (bucket_id = 'quote-scans');
 
+-- 3) 內部即時通訊（系統帳號之間一對一聊天，右下角對話框功能）
+create table if not exists chat_messages (
+  id uuid primary key default gen_random_uuid(),
+  sender_id text not null,
+  recipient_id text not null,
+  content text not null,
+  created_at timestamptz not null default now(),
+  read_at timestamptz
+);
+
+create index if not exists chat_messages_sender_idx on chat_messages (sender_id, created_at);
+create index if not exists chat_messages_recipient_idx on chat_messages (recipient_id, created_at);
+
+alter table chat_messages enable row level security;
+
+drop policy if exists "authenticated can read chat_messages" on chat_messages;
+create policy "authenticated can read chat_messages"
+  on chat_messages for select
+  to authenticated
+  using (true);
+
+drop policy if exists "authenticated can insert chat_messages" on chat_messages;
+create policy "authenticated can insert chat_messages"
+  on chat_messages for insert
+  to authenticated
+  with check (true);
+
+drop policy if exists "authenticated can update chat_messages" on chat_messages;
+create policy "authenticated can update chat_messages"
+  on chat_messages for update
+  to authenticated
+  using (true);
+
+-- 把這張表加進 Supabase 的即時推播（Realtime）發布清單，
+-- 對話框才能不重新整理就馬上收到新訊息；用 DO 區塊包起來
+-- 判斷是否已經加過，這樣整份 SQL 重複執行也不會噴錯。
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'chat_messages'
+  ) then
+    alter publication supabase_realtime add table chat_messages;
+  end if;
+end $$;
+
 -- ============================================================
 -- 重要提醒（請務必閱讀）
 -- ============================================================
