@@ -3540,7 +3540,7 @@ function BillingView({ ctx }) {
                   <td style={td}>{b.companyName ? <StatusBadge status={KNOWN_COMPANIES.includes(b.companyName) ? b.companyName : "其他"} /> : "—"}</td>
                   <td style={td}>
                     {b.approved ? <StatusBadge status="已核准" /> : isAdmin ? (
-                      <Btn size="sm" variant="brass" onClick={() => setApproved(b)}>核准</Btn>
+                      <Btn size="sm" variant="success" onClick={() => setApproved(b)}>核准</Btn>
                     ) : <StatusBadge status="待核准" />}
                   </td>
                   <td style={td}>
