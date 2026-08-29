@@ -615,7 +615,7 @@ function StatusBadge({ status }) {
   );
 }
 
-function Btn({ children, onClick, variant = "default", icon: Icon, size = "md", type = "button", disabled }) {
+function Btn({ children, onClick, variant = "default", icon: Icon, size = "md", type = "button", disabled, className = "" }) {
   const base = {
     display: "inline-flex", alignItems: "center", gap: 6, borderRadius: 8, cursor: disabled ? "not-allowed" : "pointer",
     fontSize: size === "sm" ? 12.5 : 13.5, fontWeight: 600, border: "1px solid transparent",
@@ -630,7 +630,7 @@ function Btn({ children, onClick, variant = "default", icon: Icon, size = "md", 
     success: { background: THEME.successSoft, color: THEME.success },
   };
   return (
-    <button type={type} disabled={disabled} onClick={onClick} style={{ ...base, ...variants[variant] }}
+    <button className={`app-btn ${className}`} type={type} disabled={disabled} onClick={onClick} style={{ ...base, ...variants[variant] }}
       onMouseEnter={(e) => { if (!disabled) e.currentTarget.style.filter = "brightness(0.96)"; }}
       onMouseLeave={(e) => { e.currentTarget.style.filter = "none"; }}>
       {Icon && <Icon size={size === "sm" ? 13 : 15} />}
@@ -641,7 +641,7 @@ function Btn({ children, onClick, variant = "default", icon: Icon, size = "md", 
 
 function Field({ label, children, span }) {
   return (
-    <label style={{ display: "flex", flexDirection: "column", gap: 5, gridColumn: span ? `span ${span}` : undefined }}>
+    <label className="app-field" style={{ display: "flex", flexDirection: "column", gap: 5, gridColumn: span ? `span ${span}` : undefined }}>
       <span style={{ fontSize: 12, color: THEME.muted, fontWeight: 600 }}>{label}</span>
       {children}
     </label>
@@ -667,13 +667,13 @@ function Modal({ title, onClose, children, width = 560 }) {
   // 點視窗外的暗色背景刻意不關閉——新增／編輯表單填到一半很容易手滑點到外面，
   // 要關閉一律走右上角 X 或表單自己的「取消」按鈕。
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(27,35,51,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 }}>
-      <div style={{ background: "#fff", borderRadius: 14, width, maxWidth: "100%", maxHeight: "88vh", overflow: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 22px", borderBottom: `1px solid ${THEME.line}`, position: "sticky", top: 0, background: "#fff", zIndex: 1 }}>
+    <div className="app-modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(27,35,51,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 }}>
+      <div className="app-modal" style={{ background: "#fff", borderRadius: 14, width, maxWidth: "100%", maxHeight: "88vh", overflow: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
+        <div className="app-modal-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 22px", borderBottom: `1px solid ${THEME.line}`, position: "sticky", top: 0, background: "#fff", zIndex: 1 }}>
           <h3 style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 17, fontWeight: 700, color: THEME.text }}>{title}</h3>
           <button onClick={onClose} style={{ border: "none", background: "transparent", cursor: "pointer", color: THEME.muted, padding: 4 }}><X size={18} /></button>
         </div>
-        <div style={{ padding: 22 }}>{children}</div>
+        <div className="app-modal-content" style={{ padding: 22 }}>{children}</div>
       </div>
     </div>
   );
@@ -681,8 +681,8 @@ function Modal({ title, onClose, children, width = 560 }) {
 
 function ConfirmDialog({ message, onConfirm, onCancel }) {
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(27,35,51,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }} onClick={onCancel}>
-      <div style={{ background: "#fff", borderRadius: 14, padding: 24, width: 340, maxWidth: "90%", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
+    <div className="confirm-overlay" style={{ position: "fixed", inset: 0, background: "rgba(27,35,51,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }} onClick={onCancel}>
+      <div className="confirm-dialog" style={{ background: "#fff", borderRadius: 14, padding: 24, width: 340, maxWidth: "90%", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 18 }}>
           <IconBadge icon={AlertCircle} tone="danger" />
           <p style={{ margin: 0, fontSize: 14, color: THEME.text, lineHeight: 1.6, paddingTop: 6 }}>{message}</p>
@@ -783,7 +783,7 @@ function ChatWidget({ ctx }) {
 
   return (
     <>
-      <button onClick={() => setOpen((v) => !v)} style={{
+      <button className="app-chat-launcher" onClick={() => setOpen((v) => !v)} style={{
         position: "fixed", right: 24, bottom: 24, width: 54, height: 54, borderRadius: "50%",
         background: THEME.brass, color: "#fff", border: "none", cursor: "pointer",
         display: "flex", alignItems: "center", justifyContent: "center",
@@ -798,7 +798,7 @@ function ChatWidget({ ctx }) {
       </button>
 
       {open && (
-        <div style={{
+        <div className="app-chat-panel" style={{
           position: "fixed", right: 24, bottom: 90, width: 320, height: 440, background: "#fff",
           borderRadius: 14, boxShadow: "0 20px 60px rgba(0,0,0,0.25)", border: `1px solid ${THEME.line}`,
           display: "flex", flexDirection: "column", overflow: "hidden", zIndex: 60,
@@ -906,12 +906,12 @@ function EmptyState({ icon: Icon, text, action }) {
 
 function SectionHeader({ eyebrow, title, action }) {
   return (
-    <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+    <div className="section-header" style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
       <div>
         <div style={{ fontSize: 11.5, color: THEME.brassDeep, fontWeight: 700, letterSpacing: 1.5, marginBottom: 4 }}>{eyebrow}</div>
         <h2 style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 22, fontWeight: 700, color: THEME.text }}>{title}</h2>
       </div>
-      {action}
+      {action && <div className="section-header-action">{action}</div>}
     </div>
   );
 }
@@ -921,11 +921,11 @@ const td = { padding: "12px 14px", fontSize: 13.5, color: THEME.text, borderBott
 
 function Table({ columns, children, maxHeight = "70vh" }) {
   return (
-    <div style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 12, overflow: "hidden" }}>
+    <div className="app-table-card" style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 12, overflow: "hidden" }}>
       {/* 這層同時處理水平與垂直捲動，並且是 sticky 表頭實際依附的捲動容器 —
           若外層另外包一層只有 overflowX 的 div，表頭會依附到那層而失效，往下捲時整個表格會一起被捲走 */}
-      <div style={{ overflow: "auto", maxHeight }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <div className="app-table-scroll" style={{ overflow: "auto", maxHeight }}>
+        <table style={{ width: "100%", minWidth: "max-content", borderCollapse: "collapse" }}>
           <thead><tr>{columns.map((c) => <th key={c} style={th}>{c}</th>)}</tr></thead>
           <tbody>{children}</tbody>
         </table>
@@ -940,7 +940,7 @@ function MonthFilterBar({ month, setMonth, label }) {
   const [y, m] = month ? month.split("-") : ["", ""];
   const update = (ny, nm) => setMonth(ny && nm ? `${ny}-${nm}` : "");
   return (
-    <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 16 }}>
+    <div className="month-filter-bar" style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 16 }}>
       <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600 }}>{label || "月份"}</span>
       <Select value={y} onChange={(e) => update(e.target.value, m)} style={{ width: 96 }}>
         <option value="">年</option>
@@ -1247,7 +1247,11 @@ export default function CompanyManagementSystem({ session }) {
         .mobile-nav-toggle { display: none; }
         .mobile-nav-backdrop { display: none; }
         @media (max-width: 900px) {
-          .app-shell { position: relative; }
+          .app-shell {
+            position: relative; width: 100%; height: 100dvh; min-height: 100dvh !important;
+            border: 0 !important; border-radius: 0 !important; overflow: hidden !important;
+          }
+          .app-topbar { flex-shrink: 0; }
           .mobile-nav-toggle {
             display: flex; align-items: center; justify-content: center; flex-shrink: 0;
             width: 34px; height: 34px; border-radius: 8px; border: none; cursor: pointer;
@@ -1264,11 +1268,55 @@ export default function CompanyManagementSystem({ session }) {
           .mobile-nav-backdrop.nav-open {
             display: block; position: fixed; inset: 0; background: rgba(15,18,28,.45); z-index: 39;
           }
-          .app-content { padding: 20px 16px !important; }
+          .app-content {
+            padding: 20px 16px calc(24px + env(safe-area-inset-bottom, 0px)) !important;
+            min-width: 0; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+          }
+          .app-table-card { max-width: 100%; }
+          .app-table-scroll { max-height: 65dvh !important; -webkit-overflow-scrolling: touch; }
+          .section-header { align-items: flex-start !important; }
+          .section-header-action { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+          .month-filter-bar { flex-wrap: wrap; }
+          .app-modal-overlay {
+            padding: max(10px, env(safe-area-inset-top, 0px)) 10px max(10px, env(safe-area-inset-bottom, 0px)) !important;
+          }
+          .app-modal { max-height: calc(100dvh - 20px) !important; overscroll-behavior: contain; }
+          .app-modal-content { padding: 18px !important; }
+          .app-chat-launcher {
+            right: 16px !important; bottom: calc(16px + env(safe-area-inset-bottom, 0px)) !important;
+          }
+          .app-chat-panel {
+            left: 12px !important; right: 12px !important; width: auto !important;
+            height: min(440px, calc(100dvh - 112px)) !important;
+            bottom: calc(82px + env(safe-area-inset-bottom, 0px)) !important;
+          }
           .stat-grid { grid-template-columns: repeat(2, 1fr) !important; }
           .dashboard-split, .two-col-split { grid-template-columns: 1fr !important; }
         }
         @media (max-width: 480px) {
+          .app-content { padding: 16px 12px calc(22px + env(safe-area-inset-bottom, 0px)) !important; }
+          .app-topbar > div { padding: 11px 12px !important; }
+          .topbar-clock > div:first-child { font-size: 15px !important; }
+          .topbar-clock > div:last-child { font-size: 10.5px !important; }
+          .section-header { margin-bottom: 16px !important; }
+          .section-header h2 { font-size: 20px !important; }
+          .section-header-action { width: 100%; justify-content: flex-start; }
+          .app-modal-overlay { padding: max(8px, env(safe-area-inset-top, 0px)) 0 0 !important; align-items: flex-end !important; }
+          .app-modal { width: 100% !important; max-height: calc(100dvh - max(8px, env(safe-area-inset-top, 0px))) !important; border-radius: 16px 16px 0 0 !important; }
+          .app-modal-header { padding: 14px 16px !important; }
+          .app-modal-content { padding: 16px 14px calc(18px + env(safe-area-inset-bottom, 0px)) !important; }
+          .confirm-overlay { padding: 14px; }
+          .confirm-dialog { width: 100% !important; max-width: 360px !important; padding: 20px !important; }
+          .month-filter-bar > span { width: 100%; }
+          .month-filter-bar select { flex: 1; min-width: 92px; }
+          .app-btn { min-height: 38px; }
+          .app-content [style*="grid-template-columns: 1fr 1fr"],
+          .app-modal-content [style*="grid-template-columns: 1fr 1fr"],
+          .app-content [style*="grid-template-columns: 1fr 1fr 1fr"],
+          .app-modal-content [style*="grid-template-columns: 1fr 1fr 1fr"] {
+            grid-template-columns: minmax(0, 1fr) !important;
+          }
+          .app-field { grid-column: auto !important; min-width: 0; }
           .stat-grid { grid-template-columns: 1fr !important; }
         }
       `}</style>
@@ -1403,7 +1451,7 @@ function TopBar({ tab, now, onMenuClick }) {
           <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18, color: THEME.text }}>{current.label}</div>
         </div>
       </div>
-      <div style={{ textAlign: "right" }}>
+      <div className="topbar-clock" style={{ textAlign: "right", flexShrink: 0 }}>
         <div style={{ fontFamily: FONT_NUM, fontSize: 18, fontWeight: 700, color: THEME.text, letterSpacing: 1 }}>
           {now.toLocaleTimeString("zh-TW", { hour12: false })}
         </div>
