@@ -1255,7 +1255,8 @@ export default function CompanyManagementSystem({ session }) {
           }
           .app-topbar > div { padding: 14px 16px !important; }
           .app-sidebar {
-            position: fixed; top: 0; left: 0; height: 100vh; z-index: 40;
+            position: fixed; top: 0; left: 0; height: 100dvh; max-height: 100dvh; z-index: 40;
+            overflow: hidden;
             transform: translateX(-100%); transition: transform .2s ease;
             box-shadow: 0 8px 28px rgba(0,0,0,.3);
           }
@@ -1316,7 +1317,7 @@ export default function CompanyManagementSystem({ session }) {
 function Sidebar({ tab, setTab, nav, employees, sysUsers, currentUserId, setCurrentUserId, realIsAdmin, matchedUser, session }) {
   const active = employees.filter((e) => e.status === "在職").length;
   return (
-    <div style={{ width: 232, height: "100%", background: THEME.ink, color: "#fff", display: "flex", flexDirection: "column", flexShrink: 0 }}>
+    <div style={{ width: 232, height: "100%", minHeight: 0, overflow: "hidden", background: THEME.ink, color: "#fff", display: "flex", flexDirection: "column", flexShrink: 0 }}>
       <div style={{ padding: "24px 22px 18px", borderBottom: `1px solid ${THEME.inkSoft}` }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 34, height: 34, borderRadius: 8, background: THEME.brass, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -1329,7 +1330,7 @@ function Sidebar({ tab, setTab, nav, employees, sysUsers, currentUserId, setCurr
         </div>
       </div>
 
-      <div style={{ flex: 1, padding: "14px 12px", overflow: "auto" }}>
+      <div style={{ flex: 1, minHeight: 0, padding: "14px 12px", overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
         {nav.map((n, i) => {
           const isActive = tab === n.key;
           return (
@@ -1353,7 +1354,7 @@ function Sidebar({ tab, setTab, nav, employees, sysUsers, currentUserId, setCurr
         })}
       </div>
 
-      <div style={{ padding: "14px 22px 16px", borderTop: `1px solid ${THEME.inkSoft}` }}>
+      <div style={{ flexShrink: 0, padding: "14px 22px calc(16px + env(safe-area-inset-bottom, 0px))", borderTop: `1px solid ${THEME.inkSoft}` }}>
         <div style={{ fontSize: 10.5, color: "#8B93A8", letterSpacing: 0.5, marginBottom: 6 }}>目前身分</div>
         {realIsAdmin ? (
           <Select
