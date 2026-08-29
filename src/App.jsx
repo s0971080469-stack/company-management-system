@@ -1239,6 +1239,9 @@ export default function CompanyManagementSystem({ session }) {
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-thumb { background: #D8D5C8; border-radius: 8px; }
         @keyframes spin { to { transform: rotate(360deg); } }
+        .app-shell { height: 100dvh; min-height: 0 !important; }
+        .app-sidebar { height: 100%; min-height: 0; overflow: hidden; flex-shrink: 0; }
+        .app-content { min-height: 0; }
         @media print {
           .app-sidebar, .app-topbar, .no-print { display: none !important; }
           .app-shell { border: none !important; border-radius: 0 !important; overflow: visible !important; min-height: 0 !important; }
