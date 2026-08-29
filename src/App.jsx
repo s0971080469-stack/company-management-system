@@ -1316,7 +1316,7 @@ export default function CompanyManagementSystem({ session }) {
 function Sidebar({ tab, setTab, nav, employees, sysUsers, currentUserId, setCurrentUserId, realIsAdmin, matchedUser, session }) {
   const active = employees.filter((e) => e.status === "在職").length;
   return (
-    <div style={{ width: 232, background: THEME.ink, color: "#fff", display: "flex", flexDirection: "column", flexShrink: 0 }}>
+    <div style={{ width: 232, height: "100%", background: THEME.ink, color: "#fff", display: "flex", flexDirection: "column", flexShrink: 0 }}>
       <div style={{ padding: "24px 22px 18px", borderBottom: `1px solid ${THEME.inkSoft}` }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 34, height: 34, borderRadius: 8, background: THEME.brass, display: "flex", alignItems: "center", justifyContent: "center" }}>
