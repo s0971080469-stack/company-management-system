@@ -1524,13 +1524,17 @@ function Dashboard({ ctx }) {
     return Object.entries(map).map(([name, value]) => ({ name, value: Math.round(value) }));
   }, [accounting, thisMonth]);
 
+  // 請款卡片跟每月請款追蹤一樣是「作業週期」概念，但請款通常要等到隔月 20 號才會全部請完，
+  // 所以這裡用比較晚的 cutoffDay（20），在隔月 20 號前都先顯示上個月的請款狀況。
+  const billingMonth = periodDefaultMonth(20);
+  const billingMonthNum = Number(billingMonth.slice(5, 7));
   const contractsThisMonth = (contracts || []).filter((c) => {
     if (!c.startDate && !c.endDate) return true;
     const start = c.startDate || "0000-01-01";
     const end = c.endDate || "9999-12-31";
-    return start <= `${thisMonth}-31` && end >= `${thisMonth}-01`;
+    return start <= `${billingMonth}-31` && end >= `${billingMonth}-01`;
   });
-  const billedCount = contractsThisMonth.filter((c) => (contractBilling || []).some((b) => b.contractId === c.id && b.month === thisMonth && b.billed)).length;
+  const billedCount = contractsThisMonth.filter((c) => (contractBilling || []).some((b) => b.contractId === c.id && b.month === billingMonth && b.billed)).length;
   const unbilledCount = contractsThisMonth.length - billedCount;
 
   const unclockedToday = Math.max(activeEmp - clockedInCount, 0);
@@ -1616,8 +1620,8 @@ function Dashboard({ ctx }) {
         <StatCard label="今日已打卡" value={`${clockedInCount} / ${activeEmp}`} sub={todayStr()} icon={Clock} tone="success" />
         <StatCard label="供應商家數" value={(vendors || []).filter((v) => v.vendorType === "供應商").length} sub={`共 ${(vendors || []).length} 家`} icon={Truck} tone="ink" />
         <StatCard label="生效中契約" value={(contracts || []).filter((c) => c.status === "生效中").length} sub={`共 ${(contracts || []).length} 份`} icon={FileSignature} tone="brass" />
-        <StatCard label="本月已請款" value={billedCount} sub={`共 ${contractsThisMonth.length} 份契約`} icon={Check} tone="success" />
-        <StatCard label="本月未請款" value={unbilledCount} sub={`共 ${contractsThisMonth.length} 份契約`} icon={AlertCircle} tone="warn" />
+        <StatCard label={`${billingMonthNum}月份已請款`} value={billedCount} sub={`共 ${contractsThisMonth.length} 份契約`} icon={Check} tone="success" />
+        <StatCard label={`${billingMonthNum}月份未請款`} value={unbilledCount} sub={`共 ${contractsThisMonth.length} 份契約`} icon={AlertCircle} tone="warn" />
       </div>
 
       <div className="dashboard-split" style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 16 }}>
