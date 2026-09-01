@@ -1494,8 +1494,12 @@ function Dashboard({ ctx }) {
   const duePayments = (billing || []).filter((b) => billingKind(b) === "公司付款" && b.status !== "已付款" && isExpiringSoon(b.plannedPaymentDate, 5));
   const activeEmp = employees.filter((e) => e.status === "在職").length;
   const thisMonth = monthStr();
+  // 發票／請款相關卡片跟每月請款追蹤一樣是「作業週期」概念，通常要等到隔月才會全部處理完，
+  // 所以這裡用比較晚的 cutoffDay（20），在隔月 20 號前都先顯示上個月的資料。
+  const billingMonth = periodDefaultMonth(20);
+  const billingMonthNum = Number(billingMonth.slice(5, 7));
   const monthInvoiceTotal = invoices
-    .filter((i) => (i.date || "").startsWith(thisMonth))
+    .filter((i) => (i.date || "").startsWith(billingMonth))
     .reduce((s, i) => s + (i.total || sumItems(i.items) * (1 + (i.taxRate || 0) / 100)), 0);
   const pendingBilling = billing.filter((b) => b.status === "未付款").reduce((s, b) => s + Number(b.amount || 0), 0);
   const todayAtt = attendance.filter((a) => a.date === todayStr());
@@ -1524,10 +1528,6 @@ function Dashboard({ ctx }) {
     return Object.entries(map).map(([name, value]) => ({ name, value: Math.round(value) }));
   }, [accounting, thisMonth]);
 
-  // 請款卡片跟每月請款追蹤一樣是「作業週期」概念，但請款通常要等到隔月 20 號才會全部請完，
-  // 所以這裡用比較晚的 cutoffDay（20），在隔月 20 號前都先顯示上個月的請款狀況。
-  const billingMonth = periodDefaultMonth(20);
-  const billingMonthNum = Number(billingMonth.slice(5, 7));
   const contractsThisMonth = (contracts || []).filter((c) => {
     if (!c.startDate && !c.endDate) return true;
     const start = c.startDate || "0000-01-01";
@@ -1615,7 +1615,7 @@ function Dashboard({ ctx }) {
 
       <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 22 }}>
         <StatCard label="在職員工人數" value={activeEmp} sub={`共登錄 ${employees.length} 位`} icon={Users} tone="ink" />
-        <StatCard label="本月發票金額" value={fmtMoney(monthInvoiceTotal)} sub={thisMonth} icon={Receipt} tone="brass" />
+        <StatCard label={`${billingMonthNum}月份發票金額`} value={fmtMoney(monthInvoiceTotal)} sub={billingMonth} icon={Receipt} tone="brass" />
         <StatCard label="待付款金額" value={fmtMoney(pendingBilling)} sub="未付款（公司付款）" icon={HandCoins} tone="warn" />
         <StatCard label="今日已打卡" value={`${clockedInCount} / ${activeEmp}`} sub={todayStr()} icon={Clock} tone="success" />
         <StatCard label="供應商家數" value={(vendors || []).filter((v) => v.vendorType === "供應商").length} sub={`共 ${(vendors || []).length} 家`} icon={Truck} tone="ink" />
