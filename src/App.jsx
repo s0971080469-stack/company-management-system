@@ -182,12 +182,12 @@ const SEED_QUOTE_TEMPLATES = [
 const uid = () => Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4);
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const monthStr = (d = new Date()) => d.toISOString().slice(0, 7);
-// 薪資表管理預設顯示的月份，不是單純跟著日曆月份走，而是跟著「當月薪資作業期間」走：
-// 每月 1～16 日都還顯示上一個週期（例如本月）的薪資表，直到 17 日才自動跳到下個月，
-// 讓薪資人員在發放作業還沒結束前，畫面預設不會提早切到還沒開始處理的下個月份。
-const payrollDefaultMonth = () => {
+// 某些「作業週期」類頁面（薪資表管理、每月請款追蹤）預設顯示的月份不是單純跟著日曆月份走，
+// 而是跟著「當月作業期間」走：每月 1 日到 cutoffDay-1 日都還顯示上一個週期（例如上個月）的表格，
+// 直到 cutoffDay 那天才自動跳到當月，讓還沒處理完上個週期作業前，畫面不會提早切到下個月份。
+const periodDefaultMonth = (cutoffDay) => {
   const now = new Date();
-  const target = now.getDate() <= 16 ? new Date(now.getFullYear(), now.getMonth() - 1, 1) : new Date(now.getFullYear(), now.getMonth(), 1);
+  const target = now.getDate() < cutoffDay ? new Date(now.getFullYear(), now.getMonth() - 1, 1) : new Date(now.getFullYear(), now.getMonth(), 1);
   return `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, "0")}`;
 };
 // 系統內所有西元年顯示（含日期、月份標籤、流水編號）一律改用民國年。
@@ -1928,7 +1928,7 @@ const emptyPayrollRow = (e, month) => ({
 
 function PayrollView({ ctx }) {
   const { employees, payroll, persist, addAccountingEntry, removeAccountingBySource, askDelete } = ctx;
-  const [month, setMonth] = useState(payrollDefaultMonth());
+  const [month, setMonth] = useState(periodDefaultMonth(17));
   const [modal, setModal] = useState(null);
   const [siteFilter, setSiteFilter] = useState("全部");
 
@@ -4944,7 +4944,7 @@ function ContractsView({ ctx }) {
 
 function ContractBillingView({ ctx }) {
   const { contracts, contractBilling, persist, isAdmin, askDelete } = ctx;
-  const [month, setMonth] = useState(monthStr());
+  const [month, setMonth] = useState(periodDefaultMonth(11));
   const [companyFilter, setCompanyFilter] = useState("全部");
   const [query, setQuery] = useState("");
   const [attachModal, setAttachModal] = useState(null); // { contractId }
