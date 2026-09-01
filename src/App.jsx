@@ -927,14 +927,31 @@ function SectionHeader({ eyebrow, title, action }) {
 const th = { textAlign: "left", fontSize: 11.5, color: THEME.muted, fontWeight: 700, letterSpacing: 0.5, padding: "10px 14px", borderBottom: `1px solid ${THEME.line}`, whiteSpace: "nowrap", position: "sticky", top: 0, background: THEME.surface, zIndex: 1 };
 const td = { padding: "12px 14px", fontSize: 13.5, color: THEME.text, borderBottom: `1px solid ${THEME.line}`, verticalAlign: "middle" };
 
-function Table({ columns, children, maxHeight = "70vh" }) {
+function Table({ columns, children, maxHeight = "70vh", sortKey, sortDir, onSort }) {
   return (
     <div className="app-table-card" style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 12, overflow: "hidden" }}>
       {/* 這層同時處理水平與垂直捲動，並且是 sticky 表頭實際依附的捲動容器 —
           若外層另外包一層只有 overflowX 的 div，表頭會依附到那層而失效，往下捲時整個表格會一起被捲走 */}
       <div className="app-table-scroll" style={{ overflow: "auto", maxHeight }}>
         <table style={{ width: "100%", minWidth: "max-content", borderCollapse: "collapse" }}>
-          <thead><tr>{columns.map((c) => <th key={c} style={th}>{c}</th>)}</tr></thead>
+          <thead>
+            <tr>
+              {columns.map((c) => {
+                // columns 每一項可以是純文字（維持原本不可排序的行為），
+                // 也可以是 { key, label, sortable: true } 讓表頭可以點擊切換排序，不影響其他既有頁面的表格。
+                const isObj = c && typeof c === "object";
+                const label = isObj ? c.label : c;
+                const sortable = isObj && c.sortable;
+                const active = sortable && sortKey === c.key;
+                return (
+                  <th key={isObj ? c.key : c} style={{ ...th, cursor: sortable ? "pointer" : undefined, userSelect: sortable ? "none" : undefined }}
+                    onClick={sortable ? () => onSort(c.key) : undefined}>
+                    {label}{active ? (sortDir === "desc" ? " ▼" : " ▲") : ""}
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
           <tbody>{children}</tbody>
         </table>
       </div>
@@ -4792,6 +4809,12 @@ function ContractsView({ ctx }) {
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [companyFilter, setCompanyFilter] = useState("全部");
   const [query, setQuery] = useState("");
+  const [sortKey, setSortKey] = useState(null);
+  const [sortDir, setSortDir] = useState("asc");
+  const onSort = (key) => {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir("asc"); }
+  };
 
   const years = Array.from(new Set([
     String(new Date().getFullYear()),
@@ -4817,6 +4840,30 @@ function ContractsView({ ctx }) {
     if (query && !(c.no + c.title + (c.party || "")).toLowerCase().includes(query.toLowerCase())) return false;
     return true;
   });
+
+  const sortedFiltered = useMemo(() => {
+    if (!sortKey) return filtered;
+    const dir = sortDir === "desc" ? -1 : 1;
+    const valueOf = (c) => {
+      switch (sortKey) {
+        case "party": return c.party || "";
+        case "contractorCompany": return c.contractorCompany || "";
+        case "type": return c.type || "";
+        case "startDate": return c.startDate || "";
+        case "amount": return Number(c.amount) || 0;
+        case "performanceBond": return c.hasPerformanceBond === "有" ? (Number(c.performanceBondAmount) || 0) : -1;
+        case "insurance": return c.hasInsurance === "有" ? 1 : 0;
+        case "owner": return c.owner || "";
+        case "status": return c.status || "";
+        default: return "";
+      }
+    };
+    return [...filtered].sort((a, b) => {
+      const va = valueOf(a), vb = valueOf(b);
+      if (typeof va === "number" && typeof vb === "number") return (va - vb) * dir;
+      return String(va).localeCompare(String(vb), "zh-Hant") * dir;
+    });
+  }, [filtered, sortKey, sortDir]);
 
   const save = (data) => {
     if (data.id) {
@@ -4880,8 +4927,23 @@ function ContractsView({ ctx }) {
           {filtered.length === 0 ? (
             <EmptyState icon={FileSignature} text="這個篩選條件下沒有契約。" />
           ) : (
-        <Table columns={["契約編號", "契約名稱", "對方單位", "承攬公司", "類型", "起訖日期", "契約金額", "履保金", "保險", "負責人員", "狀態", ""]}>
-          {filtered.map((c) => (
+        <Table
+          sortKey={sortKey} sortDir={sortDir} onSort={onSort}
+          columns={[
+            "契約編號", "契約名稱",
+            { key: "party", label: "對方單位", sortable: true },
+            { key: "contractorCompany", label: "承攬公司", sortable: true },
+            { key: "type", label: "類型", sortable: true },
+            { key: "startDate", label: "起訖日期", sortable: true },
+            { key: "amount", label: "契約金額", sortable: true },
+            { key: "performanceBond", label: "履保金", sortable: true },
+            { key: "insurance", label: "保險", sortable: true },
+            { key: "owner", label: "負責人員", sortable: true },
+            { key: "status", label: "狀態", sortable: true },
+            "",
+          ]}
+        >
+          {sortedFiltered.map((c) => (
             <tr key={c.id} style={isExpiringSoon(c) ? { background: THEME.warnSoft } : undefined}>
               <td style={{ ...td, fontFamily: FONT_NUM }}>{c.no}</td>
               <td style={td}><strong>{c.title}</strong></td>
@@ -4953,6 +5015,12 @@ function ContractBillingView({ ctx }) {
   const [query, setQuery] = useState("");
   const [attachModal, setAttachModal] = useState(null); // { contractId }
   const [preview, setPreview] = useState(null); // { name, url } | { name, loading: true }
+  const [sortKey, setSortKey] = useState(null);
+  const [sortDir, setSortDir] = useState("asc");
+  const onSort = (key) => {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir("asc"); }
+  };
 
   const inMonth = (c) => {
     if (!month) return true;
@@ -4991,6 +5059,32 @@ function ContractBillingView({ ctx }) {
   };
 
   const billedCount = filtered.filter((c) => recordFor(c.id)?.billed).length;
+
+  const sortedFiltered = useMemo(() => {
+    if (!sortKey) return filtered;
+    const dir = sortDir === "desc" ? -1 : 1;
+    const valueOf = (c) => {
+      const rec = recordFor(c.id);
+      const attachCount = (rec?.attachments || []).length;
+      switch (sortKey) {
+        case "contractorCompany": return c.contractorCompany || "";
+        case "type": return c.type || "";
+        case "startDate": return c.startDate || "";
+        case "amount": return Number(c.amount) || 0;
+        case "billingAmount": return Number(rec?.amount) || 0;
+        case "owner": return c.owner || "";
+        case "status": return c.status || "";
+        case "attachments": case "previewAttachments": case "downloadAttachments": return attachCount;
+        case "billed": return rec?.billed ? 1 : 0;
+        default: return "";
+      }
+    };
+    return [...filtered].sort((a, b) => {
+      const va = valueOf(a), vb = valueOf(b);
+      if (typeof va === "number" && typeof vb === "number") return (va - vb) * dir;
+      return String(va).localeCompare(String(vb), "zh-Hant") * dir;
+    });
+  }, [filtered, sortKey, sortDir, contractBilling, month]);
 
   const openPreview = async (att) => {
     setPreview({ name: att.name, loading: true, isPdf: isPdfFile(att.name) });
@@ -5057,8 +5151,24 @@ function ContractBillingView({ ctx }) {
       {filtered.length === 0 ? (
         <EmptyState icon={FileSignature} text="這個篩選條件下沒有契約。" />
       ) : (
-        <Table columns={["契約編號", "契約名稱", "承攬公司", "類型", "起訖日期", "契約金額", "本期請款金額", "負責人員", "狀態", "掃描檔上傳", "本月請款", "預覽", "下載掃描檔"]}>
-          {filtered.map((c) => {
+        <Table
+          sortKey={sortKey} sortDir={sortDir} onSort={onSort}
+          columns={[
+            "契約編號", "契約名稱",
+            { key: "contractorCompany", label: "承攬公司", sortable: true },
+            { key: "type", label: "類型", sortable: true },
+            { key: "startDate", label: "起訖日期", sortable: true },
+            { key: "amount", label: "契約金額", sortable: true },
+            { key: "billingAmount", label: "本期請款金額", sortable: true },
+            { key: "owner", label: "負責人員", sortable: true },
+            { key: "status", label: "狀態", sortable: true },
+            { key: "attachments", label: "掃描檔上傳", sortable: true },
+            { key: "billed", label: "本月請款", sortable: true },
+            { key: "previewAttachments", label: "預覽", sortable: true },
+            { key: "downloadAttachments", label: "下載掃描檔", sortable: true },
+          ]}
+        >
+          {sortedFiltered.map((c) => {
             const rec = recordFor(c.id);
             const billed = !!rec?.billed;
             const locked = billed && !isAdmin;
