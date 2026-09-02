@@ -546,7 +546,7 @@ function IconBadge({ icon: Icon, tone = "brass" }) {
   );
 }
 
-function StatCard({ label, value, sub, icon: Icon, tone = "brass" }) {
+function StatCard({ label, value, sub, subNode, icon: Icon, tone = "brass" }) {
   const tones = {
     brass: { bg: THEME.brassSoft, fg: THEME.brassDeep },
     success: { bg: THEME.successSoft, fg: THEME.success },
@@ -566,7 +566,7 @@ function StatCard({ label, value, sub, icon: Icon, tone = "brass" }) {
         )}
       </div>
       <div style={{ fontFamily: FONT_NUM, fontSize: 18.5, fontWeight: 700, color: THEME.text, letterSpacing: -0.3 }}>{value}</div>
-      {sub && <div style={{ fontSize: 10.5, color: THEME.muted }}>{sub}</div>}
+      {subNode ? subNode : sub && <div style={{ fontSize: 10.5, color: THEME.muted }}>{sub}</div>}
     </div>
   );
 }
@@ -2008,6 +2008,8 @@ function PayrollView({ ctx }) {
   };
 
   const totalNet = rows.reduce((s, r) => s + payrollNet(r), 0);
+  const paidNet = rows.filter((r) => r.status === "已發放").reduce((s, r) => s + payrollNet(r), 0);
+  const unpaidNet = totalNet - paidNet;
 
   return (
     <div>
@@ -2024,7 +2026,13 @@ function PayrollView({ ctx }) {
 
       <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
         <StatCard label="本月人數" value={rows.length} icon={Users} tone="ink" />
-        <StatCard label="本月薪資總額" value={fmtMoney(totalNet)} icon={Wallet} tone="brass" />
+        <StatCard label="本月薪資總額" value={fmtMoney(totalNet)} icon={Wallet} tone="brass"
+          subNode={
+            <div style={{ display: "flex", gap: 12, fontFamily: FONT_NUM, fontSize: 13.5, fontWeight: 700 }}>
+              <span style={{ color: THEME.success }}>已發放 {fmtMoney(paidNet)}</span>
+              <span style={{ color: THEME.warn }}>尚未發放 {fmtMoney(unpaidNet)}</span>
+            </div>
+          } />
         <StatCard label="已發放" value={rows.filter((r) => r.status === "已發放").length + " / " + rows.length} icon={Check} tone="success" />
       </div>
 
