@@ -1951,7 +1951,7 @@ const emptyPayrollRow = (e, month) => ({
 });
 
 function PayrollView({ ctx }) {
-  const { employees, payroll, persist, addAccountingEntry, removeAccountingBySource, askDelete } = ctx;
+  const { employees, payroll, persist, addAccountingEntry, removeAccountingBySource, askDelete, isAdmin } = ctx;
   const [month, setMonth] = useState(periodDefaultMonth(17));
   const [modal, setModal] = useState(null);
   const [siteFilter, setSiteFilter] = useState("全部");
@@ -1981,7 +1981,13 @@ function PayrollView({ ctx }) {
   const rows = allRows.filter((r) => siteFilter === "全部" || siteOf(r) === siteFilter);
   const activeEmployees = employees.filter((e) => e.status === "在職");
 
+  // 非管理員在本月薪資表已經產生過之後，「產生本月薪資表」鎖定不能再點——
+  // 避免重複點擊時系統又跑一次產生邏輯，把畫面/狀態弄亂，讓已經編輯過的加項、減項等資料看起來像不見了。
+  // 管理員不受限制，仍可隨時點擊（例如當月中途有新進員工，需要補產生那個人的薪資表）。
+  const alreadyGenerated = allRows.length > 0;
+  const generateLocked = !isAdmin && alreadyGenerated;
   const generate = () => {
+    if (generateLocked) return;
     const existingIds = new Set(allRows.map((r) => r.employeeId));
     const news = activeEmployees.filter((e) => !existingIds.has(e.id)).map((e) => emptyPayrollRow(e, month));
     if (news.length) persist.payroll([...payroll, ...news]);
@@ -2010,7 +2016,9 @@ function PayrollView({ ctx }) {
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <TextInput type="month" value={month} onChange={(e) => setMonth(e.target.value)} style={{ width: 150 }} />
             <Btn icon={Printer} onClick={() => window.print()}>列印</Btn>
-            <Btn variant="brass" icon={Plus} onClick={generate}>產生本月薪資表</Btn>
+            <Btn variant="brass" icon={generateLocked ? Check : Plus} onClick={generate} disabled={generateLocked}>
+              {generateLocked ? "本月薪資表已產生" : "產生本月薪資表"}
+            </Btn>
           </div>
         } />
 
