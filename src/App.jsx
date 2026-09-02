@@ -223,7 +223,10 @@ const nextNo = (prefix, list, dateKey = "date") => {
   return `${prefix}-${y}-${String(count).padStart(3, "0")}`;
 };
 const sumItems = (items = []) => items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.price) || 0), 0);
-const actorName = (ctx) => ctx.currentUser?.name || ctx.currentUser?.email || "—";
+// 登入帳號沒有對應到任何系統帳號時（例如系統剛啟用、還沒建帳號），currentUser 會是 null，
+// 這種情況一律視為「夏碩亞」在操作（跟權限判斷、聊天室預設身分用同一套邏輯），
+// 不能顯示成「—」，否則這個人新增的紀錄（估價單等）新增人員欄位會變成一片空白。
+const actorName = (ctx) => ctx.currentUser?.name || ctx.currentUser?.email || "夏碩亞";
 
 /* ---------------- 打卡地點限制 ---------------- */
 const CLOCK_RADIUS_M = 200;
@@ -1708,7 +1711,7 @@ function Dashboard({ ctx }) {
                 <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 13, color: THEME.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.text}</div>
-                    <div style={{ fontSize: 11, color: THEME.muted }}>{a.dt ? fmtDateTime(a.dt) : fmtDate(a.t)}{a.by ? ` · ${a.by}` : ""}</div>
+                    <div style={{ fontSize: 11, color: THEME.muted }}>{a.dt ? fmtDateTime(a.dt) : fmtDate(a.t)}{a.by ? ` · ${a.by === "—" ? "夏碩亞" : a.by}` : ""}</div>
                   </div>
                   <StatusBadge status={a.tag} />
                 </div>
@@ -2267,6 +2270,7 @@ function QuotesView({ ctx, setTab }) {
   const [templateModal, setTemplateModal] = useState(null);
   const [attachModal, setAttachModal] = useState(null);
   const [companyFilter, setCompanyFilter] = useState("全部");
+  const [query, setQuery] = useState("");
   const [preview, setPreview] = useState(null); // { name, url } | { name, loading: true }
 
   // 估價單的報價公司是自由輸入欄位（不像發票鎖定固定公司清單），
@@ -2276,9 +2280,11 @@ function QuotesView({ ctx, setTab }) {
   const hasUnset = quotes.some((q) => !q.companyName);
   const companyTabs = ["全部", ...quoteCompanies, ...(hasUnset ? ["未填公司"] : [])];
   const filteredQuotes = quotes.filter((q) => {
-    if (companyFilter === "全部") return true;
-    if (companyFilter === "未填公司") return !q.companyName;
-    return q.companyName === companyFilter;
+    if (companyFilter === "全部") { /* no company filter */ }
+    else if (companyFilter === "未填公司") { if (q.companyName) return false; }
+    else if (q.companyName !== companyFilter) return false;
+    if (query && !(q.client || "").toLowerCase().includes(query.toLowerCase())) return false;
+    return true;
   });
 
   const groupedByMonth = useMemo(() => {
@@ -2376,16 +2382,22 @@ function QuotesView({ ctx, setTab }) {
         } />
 
       {quotes.length > 0 && (
-        <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
-          {companyTabs.map((c) => (
-            <button key={c} onClick={() => setCompanyFilter(c)}
-              style={{
-                padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-                border: `1px solid ${companyFilter === c ? THEME.brass : THEME.line}`,
-                background: companyFilter === c ? THEME.brass : "#fff",
-                color: companyFilter === c ? "#fff" : THEME.text,
-              }}>{c === "全部" || c === "未填公司" ? c : c.slice(0, 4)}</button>
-          ))}
+        <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {companyTabs.map((c) => (
+              <button key={c} onClick={() => setCompanyFilter(c)}
+                style={{
+                  padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
+                  border: `1px solid ${companyFilter === c ? THEME.brass : THEME.line}`,
+                  background: companyFilter === c ? THEME.brass : "#fff",
+                  color: companyFilter === c ? "#fff" : THEME.text,
+                }}>{c === "全部" || c === "未填公司" ? c : c.slice(0, 4)}</button>
+            ))}
+          </div>
+          <div style={{ position: "relative", maxWidth: 260 }}>
+            <Search size={14} style={{ position: "absolute", left: 10, top: 10, color: THEME.muted }} />
+            <TextInput placeholder="搜尋客戶名稱" value={query} onChange={(e) => setQuery(e.target.value)} style={{ paddingLeft: 30 }} />
+          </div>
         </div>
       )}
 
@@ -2394,58 +2406,62 @@ function QuotesView({ ctx, setTab }) {
       ) : filteredQuotes.length === 0 ? (
         <EmptyState icon={FileText} text="這個篩選條件下沒有估價單。" />
       ) : (
-        groupedByMonth.map(([key, list]) => (
-          <div key={key} style={{ marginBottom: 28 }}>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 10 }}>
-              <span style={{ fontSize: 14.5, fontWeight: 700, color: THEME.text }}>{fmtMonthLabel(key)}</span>
-              <span style={{ fontSize: 12.5, color: THEME.muted }}>共 {list.length} 張・小計 <span style={{ fontFamily: FONT_NUM, color: THEME.text }}>{fmtMoney(list.reduce((s, q) => s + sumItems(q.items), 0))}</span></span>
-            </div>
-            <Table columns={["單號", "客戶", "新增人員", "日期", "有效期限", "金額", "報價公司", "狀態", "掃描檔上傳", "預覽", "下載掃描檔", ""]}>
-              {list.map((q) => {
-                const attachments = q.attachments || [];
-                const hasAttachment = attachments.length > 0;
-                const latestAttachment = hasAttachment ? attachments[attachments.length - 1] : null;
-                return (
-                <tr key={q.id}>
-                  <td style={{ ...td, fontFamily: FONT_NUM }}>{q.no}</td>
-                  <td style={td}><strong>{q.client}</strong></td>
-                  <td style={td}>{q.createdBy || "—"}</td>
-                  <td style={td}>{fmtDate(q.date)}</td>
-                  <td style={td}>{fmtDate(q.validUntil)}</td>
-                  <td style={{ ...td, fontFamily: FONT_NUM }}>{fmtMoney(sumItems(q.items))}</td>
-                  <td style={td}>{q.companyName ? <StatusBadge status={q.companyName.slice(0, 4)} /> : "—"}</td>
-                  <td style={td}>
-                    <Select value={q.status} onChange={(e) => persist.quotes(quotes.map((x) => x.id === q.id ? { ...x, status: e.target.value, updatedAt: new Date().toISOString() } : x))} style={{ padding: "4px 8px", fontSize: 12 }}>
-                      <option value="草擬">草擬</option>
-                      <option value="已送出">已送出</option>
-                      <option value="已核准">已核准</option>
-                      <option value="已拒絕">已拒絕</option>
-                    </Select>
-                  </td>
-                  <td style={td}>
-                    <Btn size="sm" icon={Upload} onClick={() => setAttachModal(q)}>
-                      {hasAttachment ? `掃描檔（${attachments.length}）` : "上傳掃描檔"}
-                    </Btn>
-                  </td>
-                  <td style={td}>
-                    <Btn size="sm" icon={Eye} disabled={!hasAttachment} onClick={() => hasAttachment && openPreview(latestAttachment)}>預覽</Btn>
-                  </td>
-                  <td style={td}>
-                    <Btn size="sm" icon={Download} disabled={!hasAttachment} onClick={() => hasAttachment && downloadAttachment(latestAttachment)}>下載</Btn>
-                  </td>
-                  <td style={{ ...td, textAlign: "right" }}>
-                    <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                      <Btn size="sm" icon={ArrowRight} onClick={() => convertToInvoice(q)}>轉發票</Btn>
-                      <Btn size="sm" icon={Pencil} onClick={() => setModal({ mode: "edit", data: q })} />
-                      <Btn size="sm" variant="danger" icon={Trash2} onClick={() => askDelete(`確定要刪除估價單 ${q.no} 嗎？`, () => persist.quotes(quotes.filter((x) => x.id !== q.id)))} />
-                    </div>
-                  </td>
-                </tr>
-                );
-              })}
-            </Table>
-          </div>
-        ))
+        // 每個月份原本各自用一個 <Table>，每個表格會各自根據自己那個月的內容
+        // 獨立計算欄位寬度，導致客戶名稱較短的月份，整欄跟著變窄、跟其他月份對不齊
+        // （視覺上看起來像「往左邊跑」）。改成整份估價單共用同一個 <Table>，
+        // 月份用一列橫跨全部欄位的分隔列顯示，欄寬只會算一次，各月份之間才會對齊。
+        <Table columns={["單號", "客戶", "新增人員", "日期", "有效期限", "金額", "報價公司", "狀態", "掃描檔上傳", "預覽", "下載掃描檔", ""]}>
+          {groupedByMonth.flatMap(([key, list]) => [
+            <tr key={`month-${key}`}>
+              <td colSpan={12} style={{ padding: "12px 14px", background: THEME.canvas, borderBottom: `1px solid ${THEME.line}` }}>
+                <span style={{ fontSize: 14.5, fontWeight: 700, color: THEME.text }}>{fmtMonthLabel(key)}</span>
+                <span style={{ fontSize: 12.5, color: THEME.muted, marginLeft: 10 }}>共 {list.length} 張・小計 <span style={{ fontFamily: FONT_NUM, color: THEME.text }}>{fmtMoney(list.reduce((s, q) => s + sumItems(q.items), 0))}</span></span>
+              </td>
+            </tr>,
+            ...list.map((q) => {
+              const attachments = q.attachments || [];
+              const hasAttachment = attachments.length > 0;
+              const latestAttachment = hasAttachment ? attachments[attachments.length - 1] : null;
+              return (
+              <tr key={q.id}>
+                <td style={{ ...td, fontFamily: FONT_NUM }}>{q.no}</td>
+                <td style={td}><strong>{q.client}</strong></td>
+                <td style={td}>{(q.createdBy && q.createdBy !== "—") ? q.createdBy : "夏碩亞"}</td>
+                <td style={td}>{fmtDate(q.date)}</td>
+                <td style={td}>{fmtDate(q.validUntil)}</td>
+                <td style={{ ...td, fontFamily: FONT_NUM }}>{fmtMoney(sumItems(q.items))}</td>
+                <td style={td}>{q.companyName ? <StatusBadge status={q.companyName.slice(0, 4)} /> : "—"}</td>
+                <td style={td}>
+                  <Select value={q.status} onChange={(e) => persist.quotes(quotes.map((x) => x.id === q.id ? { ...x, status: e.target.value, updatedAt: new Date().toISOString() } : x))} style={{ padding: "4px 8px", fontSize: 12 }}>
+                    <option value="草擬">草擬</option>
+                    <option value="已送出">已送出</option>
+                    <option value="已核准">已核准</option>
+                    <option value="已拒絕">已拒絕</option>
+                  </Select>
+                </td>
+                <td style={td}>
+                  <Btn size="sm" icon={Upload} onClick={() => setAttachModal(q)}>
+                    {hasAttachment ? `掃描檔（${attachments.length}）` : "上傳掃描檔"}
+                  </Btn>
+                </td>
+                <td style={td}>
+                  <Btn size="sm" icon={Eye} disabled={!hasAttachment} onClick={() => hasAttachment && openPreview(latestAttachment)}>預覽</Btn>
+                </td>
+                <td style={td}>
+                  <Btn size="sm" icon={Download} disabled={!hasAttachment} onClick={() => hasAttachment && downloadAttachment(latestAttachment)}>下載</Btn>
+                </td>
+                <td style={{ ...td, textAlign: "right" }}>
+                  <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                    <Btn size="sm" icon={ArrowRight} onClick={() => convertToInvoice(q)}>轉發票</Btn>
+                    <Btn size="sm" icon={Pencil} onClick={() => setModal({ mode: "edit", data: q })} />
+                    <Btn size="sm" variant="danger" icon={Trash2} onClick={() => askDelete(`確定要刪除估價單 ${q.no} 嗎？`, () => persist.quotes(quotes.filter((x) => x.id !== q.id)))} />
+                  </div>
+                </td>
+              </tr>
+              );
+            }),
+          ])}
+        </Table>
       )}
 
       {pickerOpen && (
