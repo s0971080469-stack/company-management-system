@@ -37,6 +37,19 @@ create policy "authenticated can update app_storage"
   to authenticated
   using (true);
 
+-- 把這張表加進 Supabase 的即時推播（Realtime）發布清單，這樣某個人新增／修改任何模組的資料時，
+-- 其他人畫面上的清單會自動更新，不用手動重新整理；用 DO 區塊包起來判斷是否已經加過，
+-- 這樣整份 SQL 重複執行也不會噴錯。
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'app_storage'
+  ) then
+    alter publication supabase_realtime add table app_storage;
+  end if;
+end $$;
+
 -- 2) 估價單附件（掃描檔圖片）Storage bucket
 --    每張估價單可以上傳掃描檔圖片保存，實際檔案存在 Supabase Storage，
 --    估價單資料裡只存檔案路徑（見 app_storage 的 quotations）。

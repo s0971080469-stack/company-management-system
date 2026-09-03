@@ -1159,6 +1159,42 @@ export default function CompanyManagementSystem({ session }) {
     })();
   }, []);
 
+  // 即時同步：訂閱 app_storage 資料表的異動，別人（或自己其他分頁）新增／修改任何模組的資料時，
+  // 畫面會自動更新成最新內容，不用手動重新整理。currentUserId（側邊欄「目前身分」）刻意不列入
+  // 同步範圍，因為那是每個瀏覽器自己選用哪個身分操作，不該被別人的選擇即時蓋掉。
+  useEffect(() => {
+    const setterByKey = {
+      [STORAGE_KEYS.employees]: setEmployees,
+      [STORAGE_KEYS.attendance]: setAttendance,
+      [STORAGE_KEYS.payroll]: setPayroll,
+      [STORAGE_KEYS.quotes]: setQuotes,
+      [STORAGE_KEYS.invoices]: setInvoices,
+      [STORAGE_KEYS.billing]: setBilling,
+      [STORAGE_KEYS.accounting]: setAccounting,
+      [STORAGE_KEYS.vendors]: setVendors,
+      [STORAGE_KEYS.documents]: setDocuments,
+      [STORAGE_KEYS.documentTemplates]: setDocumentTemplates,
+      [STORAGE_KEYS.contracts]: setContracts,
+      [STORAGE_KEYS.sysUsers]: setSysUsers,
+      [STORAGE_KEYS.rolePerms]: setRolePerms,
+      [STORAGE_KEYS.quoteTemplates]: setQuoteTemplates,
+      [STORAGE_KEYS.vehicles]: setVehicles,
+      [STORAGE_KEYS.companyLocation]: setCompanyLocation,
+      [STORAGE_KEYS.contractBilling]: setContractBilling,
+      [STORAGE_KEYS.leaveRequests]: setLeaveRequests,
+    };
+    const applyChange = (row) => {
+      const setter = setterByKey[row?.storage_key];
+      if (setter) setter(row.value);
+    };
+    const channel = supabase
+      .channel("app_storage_live")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "app_storage" }, (payload) => applyChange(payload.new))
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "app_storage" }, (payload) => applyChange(payload.new))
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
   // persist helpers — update state + storage together
   const persist = {
     employees: (v) => { setEmployees(v); saveKey(STORAGE_KEYS.employees, v); },
