@@ -1773,9 +1773,46 @@ function quotesActivity(ctx) {
    EMPLOYEES
 ========================================================= */
 const SITE_FIXED_OPTIONS = ["公司總部", "機動組"];
+const BANK_OPTIONS = [
+  { code: "004", name: "臺灣銀行" },
+  { code: "005", name: "臺灣土地銀行" },
+  { code: "006", name: "合作金庫商業銀行" },
+  { code: "007", name: "第一商業銀行" },
+  { code: "008", name: "華南商業銀行" },
+  { code: "009", name: "彰化商業銀行" },
+  { code: "011", name: "上海商業儲蓄銀行" },
+  { code: "012", name: "台北富邦商業銀行" },
+  { code: "013", name: "國泰世華商業銀行" },
+  { code: "016", name: "高雄銀行" },
+  { code: "017", name: "兆豐國際商業銀行" },
+  { code: "021", name: "花旗（台灣）商業銀行" },
+  { code: "050", name: "臺灣中小企業銀行" },
+  { code: "052", name: "渣打國際商業銀行" },
+  { code: "053", name: "台中商業銀行" },
+  { code: "054", name: "京城商業銀行" },
+  { code: "081", name: "滙豐（台灣）商業銀行" },
+  { code: "101", name: "瑞興商業銀行" },
+  { code: "102", name: "華泰商業銀行" },
+  { code: "103", name: "臺灣新光商業銀行" },
+  { code: "108", name: "陽信商業銀行" },
+  { code: "147", name: "三信商業銀行" },
+  { code: "700", name: "中華郵政" },
+  { code: "803", name: "聯邦商業銀行" },
+  { code: "805", name: "遠東國際商業銀行" },
+  { code: "806", name: "元大商業銀行" },
+  { code: "807", name: "永豐商業銀行" },
+  { code: "808", name: "玉山商業銀行" },
+  { code: "809", name: "凱基商業銀行" },
+  { code: "810", name: "星展（台灣）商業銀行" },
+  { code: "812", name: "台新國際商業銀行" },
+  { code: "815", name: "日盛國際商業銀行" },
+  { code: "816", name: "安泰商業銀行" },
+  { code: "822", name: "中國信託商業銀行" },
+];
 const emptyEmployee = {
   name: "", company: "", dept: "", title: "", phone: "", email: "", hireDate: todayStr(), baseSalary: "", status: "在職", siteName: "",
   additions: [], deductions: [], laborInsurance: 0, healthInsurance: 0, pensionSelf: 0, advances: [], insuranceStatus: "加保", insuranceGrade: "",
+  bankCode: "", bankName: "", bankAccount: "",
 };
 
 function EmployeesView({ ctx }) {
@@ -1863,7 +1900,7 @@ function EmployeesView({ ctx }) {
       {filtered.length === 0 ? (
         <EmptyState icon={Users} text="尚未建立任何員工資料。" action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptyEmployee })}>新增第一位員工</Btn>} />
       ) : (
-        <Table columns={["姓名", "部門", "職位", "投保公司", "到職日", "底薪", "聯絡方式", "投保級距", "狀態", "所屬案場", ""]}>
+        <Table columns={["姓名", "部門", "職位", "投保公司", "到職日", "底薪", "聯絡方式", "銀行帳號", "投保級距", "狀態", "所屬案場", ""]}>
           {filtered.map((e) => (
             <tr key={e.id}>
               <td style={td}><strong>{e.name}</strong></td>
@@ -1875,6 +1912,14 @@ function EmployeesView({ ctx }) {
               <td style={td}>
                 <div style={{ fontSize: 12.5 }}>{e.phone || "—"}</div>
                 <div style={{ fontSize: 11.5, color: THEME.muted }}>{e.email || "—"}</div>
+              </td>
+              <td style={td}>
+                {e.bankName ? (
+                  <>
+                    <div style={{ fontSize: 12.5 }}>{e.bankCode ? `${e.bankCode} ` : ""}{e.bankName}</div>
+                    <div style={{ fontSize: 14.5, fontWeight: 400, color: THEME.text, fontFamily: FONT_NUM }}>{e.bankAccount || "—"}</div>
+                  </>
+                ) : "—"}
               </td>
               <td style={{ ...td, fontFamily: FONT_NUM }}>{e.insuranceGrade || "—"}</td>
               <td style={td}><StatusBadge status={e.status} /></td>
@@ -1900,7 +1945,7 @@ function EmployeesView({ ctx }) {
 }
 
 function EmployeeForm({ data, siteOptions, onSave, onCancel }) {
-  const [f, setF] = useState({ additions: [], deductions: [], laborInsurance: 0, healthInsurance: 0, pensionSelf: 0, advances: [], insuranceStatus: "加保", insuranceGrade: "", ...data });
+  const [f, setF] = useState({ additions: [], deductions: [], laborInsurance: 0, healthInsurance: 0, pensionSelf: 0, advances: [], insuranceStatus: "加保", insuranceGrade: "", bankCode: "", bankName: "", bankAccount: "", ...data });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   return (
     <div>
@@ -1930,6 +1975,16 @@ function EmployeeForm({ data, siteOptions, onSave, onCancel }) {
         </Field>
         <Field label="聯絡電話"><TextInput value={f.phone} onChange={set("phone")} placeholder="0912-345-678" /></Field>
         <Field label="Email"><TextInput value={f.email} onChange={set("email")} placeholder="name@company.com" /></Field>
+        <Field label="銀行">
+          <Select value={f.bankCode || ""} onChange={(e) => {
+            const bank = BANK_OPTIONS.find((b) => b.code === e.target.value);
+            setF({ ...f, bankCode: bank?.code || "", bankName: bank?.name || "" });
+          }}>
+            <option value="">未指定</option>
+            {BANK_OPTIONS.map((b) => <option key={b.code} value={b.code}>{b.code} {b.name}</option>)}
+          </Select>
+        </Field>
+        <Field label="銀行帳號"><TextInput value={f.bankAccount} onChange={set("bankAccount")} placeholder="請輸入帳號" /></Field>
       </div>
 
       <div style={{ fontSize: 12, color: THEME.muted, fontWeight: 700, margin: "18px 0 8px" }}>薪資表預設項目（產生薪資時自動套入，仍可在薪資表內個別調整）</div>
@@ -2012,6 +2067,7 @@ function PayrollView({ ctx }) {
   const deptOf = (r) => r.department || employees.find((e) => e.id === r.employeeId)?.dept || "";
   const siteOf = (r) => r.siteName || employees.find((e) => e.id === r.employeeId)?.siteName || "";
   const companyOf = (r) => r.company || employees.find((e) => e.id === r.employeeId)?.company || "";
+  const bankOf = (r) => employees.find((e) => e.id === r.employeeId) || {};
   const allRows = payroll.filter((p) => p.month === month);
   const sites = ["全部", ...Array.from(new Set(allRows.map(siteOf).filter(Boolean)))];
   const rows = allRows.filter((r) => siteFilter === "全部" || siteOf(r) === siteFilter);
@@ -2084,10 +2140,11 @@ function PayrollView({ ctx }) {
       {allRows.length === 0 ? (
         <EmptyState icon={Wallet} text={`尚未建立 ${month} 的薪資表。`} action={<Btn variant="brass" icon={Plus} onClick={generate}>依在職員工產生薪資表</Btn>} />
       ) : (
-        <Table columns={["員工", "部門", "所屬案場", "底薪", "加項", "減項／保費", "借支", "實發淨額", "保險狀態", "加保公司", "付款日", "狀態", ""]}>
+        <Table columns={["員工", "部門", "所屬案場", "底薪", "加項", "減項／保費", "借支", "實發淨額", "保險狀態", "加保公司", "銀行帳號", "付款日", "狀態", ""]}>
           {rows.map((r) => {
             const net = payrollNet(r);
             const deductTotal = sumAmounts(r.deductions) + Number(r.laborInsurance || 0) + Number(r.healthInsurance || 0) + Number(r.pensionSelf || 0);
+            const emp = bankOf(r);
             return (
               <tr key={r.id}>
                 <td style={td}><strong>{r.employeeName}</strong></td>
@@ -2113,12 +2170,20 @@ function PayrollView({ ctx }) {
                 <td style={{ ...td, fontFamily: FONT_NUM, fontWeight: 700 }}>{fmtMoney(net)}</td>
                 <td style={td}>{r.insuranceStatus || "—"}</td>
                 <td style={td}>{companyOf(r) ? <StatusBadge status={BILLING_COMPANY_OPTIONS.includes(companyOf(r)) ? companyOf(r) : "其他"} /> : "—"}</td>
+                <td style={td}>
+                  {emp.bankName ? (
+                    <>
+                      <div style={{ fontSize: 12.5 }}>{emp.bankCode ? `${emp.bankCode} ` : ""}{emp.bankName}</div>
+                      <div style={{ fontSize: 14.5, fontWeight: 400, color: THEME.text, fontFamily: FONT_NUM }}>{emp.bankAccount || "—"}</div>
+                    </>
+                  ) : "—"}
+                </td>
                 <td style={td}>{r.paymentDate ? fmtDate(r.paymentDate) : "—"}</td>
                 <td style={td}><StatusBadge status={r.status} /></td>
                 <td style={{ ...td, textAlign: "right" }}>
                   <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                     <Btn size="sm" icon={Pencil} onClick={() => setModal(r)}>編輯</Btn>
-                    {r.status !== "已發放" && <Btn size="sm" variant="success" icon={Check} onClick={() => markPaid(r)}>標記已發放</Btn>}
+                    {r.status !== "已發放" && <Btn size="sm" variant="success" icon={Check} onClick={() => markPaid(r)}>已發放請打勾</Btn>}
                     <Btn size="sm" variant="danger" icon={Trash2} onClick={() => askDelete(`確定要刪除 ${r.employeeName} 的薪資紀錄嗎？`, () => { persist.payroll(payroll.filter((x) => x.id !== r.id)); removeAccountingBySource("payroll", r.id); })} />
                   </div>
                 </td>
