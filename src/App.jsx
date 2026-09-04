@@ -2182,8 +2182,8 @@ function PayrollView({ ctx }) {
                 <td style={td}><StatusBadge status={r.status} /></td>
                 <td style={{ ...td, textAlign: "right" }}>
                   <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                    <Btn size="sm" icon={Pencil} onClick={() => setModal(r)}>編輯</Btn>
                     {r.status !== "已發放" && <Btn size="sm" variant="success" icon={Check} onClick={() => markPaid(r)}>已發放請打勾</Btn>}
+                    <Btn size="sm" icon={Pencil} onClick={() => setModal(r)}>編輯</Btn>
                     <Btn size="sm" variant="danger" icon={Trash2} onClick={() => askDelete(`確定要刪除 ${r.employeeName} 的薪資紀錄嗎？`, () => { persist.payroll(payroll.filter((x) => x.id !== r.id)); removeAccountingBySource("payroll", r.id); })} />
                   </div>
                 </td>
