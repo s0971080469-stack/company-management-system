@@ -3603,7 +3603,7 @@ const emptyCompanyPayment = () => ({ expenseType: "公司付款", vendor: "", ca
 const emptyBankDeposit = () => ({ expenseType: "銀行入帳", date: todayStr(), source: "", amount: "", note: "", companyName: "" });
 
 function BillingView({ ctx }) {
-  const { billing, persist, addAccountingEntry, removeAccountingBySource, askDelete, isAdmin } = ctx;
+  const { billing, persist, addAccountingEntry, removeAccountingBySource, askDelete, isAdmin, sysUsers, currentUser } = ctx;
   const [expenseTab, setExpenseTab] = useState("銀行入帳");
   const [modal, setModal] = useState(null);
   const [month, setMonth] = useState(monthStr());
@@ -3680,8 +3680,19 @@ function BillingView({ ctx }) {
     }
   };
 
-  const setApproved = (b) => {
+  const setApproved = async (b) => {
     persist.billing(billing.map((x) => x.id === b.id ? { ...x, approved: true, updatedAt: new Date().toISOString() } : x));
+    // 核准後自動傳訊息通知內部對話裡所有「財務」角色的人，不用等他們自己點進來看才發現
+    try {
+      const senderId = currentUser?.id || ADMIN_CHAT_ID;
+      const financeUsers = (sysUsers || []).filter((u) => u.role === "財務" && u.status !== "停用" && u.id !== senderId);
+      const content = `公司應付款項已核准：${b.vendor || "（未填廠商／申請人）"}，金額 ${fmtMoney(b.amount)}，預訂付款日 ${b.plannedPaymentDate ? fmtDate(b.plannedPaymentDate) : "未填"}`;
+      await Promise.all(financeUsers.map((u) =>
+        supabase.from("chat_messages").insert({ sender_id: senderId, recipient_id: u.id, content })
+      ));
+    } catch (err) {
+      console.error("核准通知傳送失敗", err);
+    }
   };
 
   const setPaymentDate = (b, paymentDate) => {
