@@ -1534,7 +1534,7 @@ function TopBar({ tab, now, onMenuClick }) {
    DASHBOARD
 ========================================================= */
 function Dashboard({ ctx }) {
-  const { employees, invoices, billing, attendance, accounting, contracts, vendors, vehicles, payroll, quotes, contractBilling, setTab } = ctx;
+  const { employees, invoices, billing, attendance, accounting, contracts, vendors, vehicles, payroll, quotes, contractBilling, setTab, isAdmin } = ctx;
   const dateOnly = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
   const today = dateOnly(new Date());
   const isToday = (d) => d && dateOnly(d).getTime() === today.getTime();
@@ -1548,6 +1548,19 @@ function Dashboard({ ctx }) {
   const expiringVehicles = (vehicles || []).filter((v) => isExpiringSoon(v.insuranceExpiry, 30) || isExpiringSoon(v.inspectionExpiry, 30));
   const billingKind = (b) => b.expenseType === "零用金" ? "零用金" : b.expenseType === "銀行入帳" ? "銀行入帳" : b.expenseType === "公司付款" ? "公司付款" : (b.vendor !== undefined ? "公司付款" : "零用金");
   const duePayments = (billing || []).filter((b) => billingKind(b) === "公司付款" && b.status !== "已付款" && isExpiringSoon(b.plannedPaymentDate, 5));
+  // 只有夏碩亞（管理員）看得到「待核准」件數，因為只有夏碩亞能核准公司應付款項，
+  // 一般員工看到這個數字也沒辦法處理，秀出來只會造成困惑。統計範圍是預訂付款日落在本月或下個月的。
+  // 這裡刻意不用 new Date(y, m, 1) 再轉字串的寫法——在 UTC+8 時區，日期 1 號的本地午夜轉成 UTC
+  // 會退回上個月最後一天，monthStr()（走 toISOString）算出來的月份會整個錯一個月，改用純數字運算避開這個陷阱。
+  let nmY = new Date().getFullYear();
+  let nmM = new Date().getMonth() + 1; // 0-indexed 當月 + 1 = 下個月（0-indexed）
+  if (nmM > 11) { nmM = 0; nmY += 1; }
+  const nextMonthStr = `${nmY}-${String(nmM + 1).padStart(2, "0")}`;
+  const pendingApprovalCount = (billing || []).filter((b) => {
+    if (billingKind(b) !== "公司付款" || b.approved) return false;
+    const pd = (b.plannedPaymentDate || "").slice(0, 7);
+    return pd === monthStr() || pd === nextMonthStr;
+  }).length;
   const activeEmp = employees.filter((e) => e.status === "在職").length;
   const thisMonth = monthStr();
   // 發票／請款相關卡片跟每月請款追蹤一樣是「作業週期」概念，通常要等到隔月才會全部處理完，
@@ -1558,6 +1571,10 @@ function Dashboard({ ctx }) {
     .filter((i) => (i.date || "").startsWith(billingMonth))
     .reduce((s, i) => s + (i.total || sumItems(i.items) * (1 + (i.taxRate || 0) / 100)), 0);
   const pendingBilling = billing.filter((b) => b.status === "未付款").reduce((s, b) => s + Number(b.amount || 0), 0);
+  // 發票待入帳金額：所有發票裡還沒填入帳日（dueDate）的，不分月份全部加總
+  const pendingDepositAmount = invoices
+    .filter((i) => !i.dueDate)
+    .reduce((s, i) => s + (i.total || sumItems(i.items) * (1 + (i.taxRate || 0) / 100)), 0);
   const todayAtt = attendance.filter((a) => a.date === todayStr());
   const clockedInCount = todayAtt.filter((a) => a.clockIn).length;
 
@@ -1669,7 +1686,7 @@ function Dashboard({ ctx }) {
         </div>
       )}
 
-      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 22 }}>
+      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 22 }}>
         <StatCard label="在職員工人數" value={activeEmp} sub={`共登錄 ${employees.length} 位`} icon={Users} tone="ink" />
         <StatCard label={`${billingMonthNum}月份發票金額`} value={fmtMoney(monthInvoiceTotal)} sub={billingMonth} icon={Receipt} tone="brass" />
         <StatCard label="待付款金額" value={fmtMoney(pendingBilling)} sub="未付款（公司付款）" icon={HandCoins} tone="warn" />
@@ -1678,6 +1695,10 @@ function Dashboard({ ctx }) {
         <StatCard label="生效中契約" value={(contracts || []).filter((c) => c.status === "生效中").length} sub={`共 ${(contracts || []).length} 份`} icon={FileSignature} tone="brass" />
         <StatCard label={`${billingMonthNum}月份已請款`} value={billedCount} sub={`共 ${contractsThisMonth.length} 份契約`} icon={Check} tone="success" />
         <StatCard label={`${billingMonthNum}月份未請款`} value={unbilledCount} sub={`共 ${contractsThisMonth.length} 份契約`} icon={AlertCircle} tone="warn" />
+        {isAdmin && (
+          <StatCard label="公司應付款項待核准" value={pendingApprovalCount} sub="本月＋下月" icon={AlertCircle} tone="danger" />
+        )}
+        <StatCard label="發票待入帳金額" value={fmtMoney(pendingDepositAmount)} sub="未填入帳日" icon={Receipt} tone="warn" />
       </div>
 
       <div className="dashboard-split" style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 16 }}>
