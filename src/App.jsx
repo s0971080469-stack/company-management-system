@@ -1812,7 +1812,7 @@ const BANK_OPTIONS = [
 const emptyEmployee = {
   name: "", company: "", dept: "", title: "", phone: "", email: "", hireDate: todayStr(), baseSalary: "", status: "在職", siteName: "",
   additions: [], deductions: [], laborInsurance: 0, healthInsurance: 0, pensionSelf: 0, advances: [], insuranceStatus: "加保", insuranceGrade: "",
-  bankCode: "", bankName: "", bankAccount: "",
+  bankCode: "", bankName: "", bankAccount: "", bankAccountNote: "",
 };
 
 function EmployeesView({ ctx }) {
@@ -1918,6 +1918,7 @@ function EmployeesView({ ctx }) {
                   <>
                     <div style={{ fontSize: 12.5 }}>{e.bankCode ? `${e.bankCode} ` : ""}{e.bankName}</div>
                     <div style={{ fontSize: 14.5, fontWeight: 400, color: THEME.text, fontFamily: FONT_NUM }}>{e.bankAccount || "—"}</div>
+                    {e.bankAccountNote && <div style={{ fontSize: 11, color: THEME.warn }}>備註：{e.bankAccountNote}</div>}
                   </>
                 ) : "—"}
               </td>
@@ -1945,7 +1946,7 @@ function EmployeesView({ ctx }) {
 }
 
 function EmployeeForm({ data, siteOptions, onSave, onCancel }) {
-  const [f, setF] = useState({ additions: [], deductions: [], laborInsurance: 0, healthInsurance: 0, pensionSelf: 0, advances: [], insuranceStatus: "加保", insuranceGrade: "", bankCode: "", bankName: "", bankAccount: "", ...data });
+  const [f, setF] = useState({ additions: [], deductions: [], laborInsurance: 0, healthInsurance: 0, pensionSelf: 0, advances: [], insuranceStatus: "加保", insuranceGrade: "", bankCode: "", bankName: "", bankAccount: "", bankAccountNote: "", ...data });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   return (
     <div>
@@ -1985,6 +1986,7 @@ function EmployeeForm({ data, siteOptions, onSave, onCancel }) {
           </Select>
         </Field>
         <Field label="銀行帳號"><TextInput value={f.bankAccount} onChange={set("bankAccount")} placeholder="請輸入帳號" /></Field>
+        <Field label="備註（戶名與本人不同填列）"><TextInput value={f.bankAccountNote} onChange={set("bankAccountNote")} placeholder="選填" /></Field>
       </div>
 
       <div style={{ fontSize: 12, color: THEME.muted, fontWeight: 700, margin: "18px 0 8px" }}>薪資表預設項目（產生薪資時自動套入，仍可在薪資表內個別調整）</div>
@@ -2175,6 +2177,7 @@ function PayrollView({ ctx }) {
                     <>
                       <div style={{ fontSize: 12.5 }}>{emp.bankCode ? `${emp.bankCode} ` : ""}{emp.bankName}</div>
                       <div style={{ fontSize: 14.5, fontWeight: 400, color: THEME.text, fontFamily: FONT_NUM }}>{emp.bankAccount || "—"}</div>
+                      {emp.bankAccountNote && <div style={{ fontSize: 11, color: THEME.warn }}>備註：{emp.bankAccountNote}</div>}
                     </>
                   ) : "—"}
                 </td>
