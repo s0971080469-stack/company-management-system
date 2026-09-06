@@ -3686,7 +3686,7 @@ function BillingView({ ctx }) {
     try {
       const senderId = currentUser?.id || ADMIN_CHAT_ID;
       const financeUsers = (sysUsers || []).filter((u) => u.role === "財務" && u.status !== "停用" && u.id !== senderId);
-      const content = `公司應付款項已核准：${b.vendor || "（未填廠商／申請人）"}，金額 ${fmtMoney(b.amount)}，預訂付款日 ${b.plannedPaymentDate ? fmtDate(b.plannedPaymentDate) : "未填"}`;
+      const content = `系統通知：公司應付款項已核准：${b.vendor || "（未填廠商／申請人）"}，金額 ${fmtMoney(b.amount)}，預訂付款日 ${b.plannedPaymentDate ? fmtDate(b.plannedPaymentDate) : "未填"}`;
       await Promise.all(financeUsers.map((u) =>
         supabase.from("chat_messages").insert({ sender_id: senderId, recipient_id: u.id, content })
       ));
