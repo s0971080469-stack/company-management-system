@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
   LayoutDashboard, Users, Wallet, FileText, Receipt, Clock, HandCoins,
@@ -1534,7 +1534,7 @@ function TopBar({ tab, now, onMenuClick }) {
    DASHBOARD
 ========================================================= */
 function Dashboard({ ctx }) {
-  const { employees, invoices, billing, attendance, accounting, contracts, vendors, vehicles, payroll, quotes, contractBilling, setTab, isAdmin } = ctx;
+  const { employees, invoices, billing, attendance, accounting, contracts, vendors, vehicles, payroll, quotes, contractBilling, setTab, isAdmin, sysUsers, currentUser, persist } = ctx;
   const dateOnly = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
   const today = dateOnly(new Date());
   const isToday = (d) => d && dateOnly(d).getTime() === today.getTime();
@@ -1544,8 +1544,69 @@ function Dashboard({ ctx }) {
     const target = dateOnly(d);
     return target <= limit && target >= today;
   };
+  const isOverdue = (d) => d && dateOnly(d) < today;
+  const daysOverdue = (d) => Math.round((today - dateOnly(d)) / (1000 * 60 * 60 * 24));
   const expiringContracts = (contracts || []).filter((c) => c.status === "生效中" && isExpiringSoon(c.endDate, 30));
   const expiringVehicles = (vehicles || []).filter((v) => isExpiringSoon(v.insuranceExpiry, 30) || isExpiringSoon(v.inspectionExpiry, 30));
+  const overdueVehicles = (vehicles || []).filter((v) => isOverdue(v.insuranceExpiry) || isOverdue(v.inspectionExpiry));
+
+  // 保險／驗車到期日超過 1 天還沒處理，自動傳「系統通知」給行政跟夏碩亞角色，不用等他們自己發現。
+  // 用 xxxOverdueNotifiedFor 記錄「已經針對哪一個到期日通知過」，避免同一輛車同一個到期日每次開儀表板都重複發送；
+  // 如果之後換了新的到期日（表示續保/驗車過了），欄位對不上就會再重新通知一次。
+  // notifiedInFlightRef 是額外的同步保險：因為 persist.vehicles 是非同步的，
+  // StrictMode 或其他 state 變動可能讓這個 effect 在 patch 還沒寫回之前又跑一次，
+  // 光靠 vehicles 裡的 NotifiedFor 欄位會擋不住，所以先用 ref 記一份「這次 mount 已經處理過」的清單。
+  const notifiedInFlightRef = useRef(new Set());
+  useEffect(() => {
+    const notifyRoles = ["行政", "夏碩亞"];
+    const targets = (sysUsers || []).filter((u) => notifyRoles.includes(u.role) && u.status !== "停用");
+    if (!targets.length || !(vehicles || []).length) return;
+    const senderId = currentUser?.id || ADMIN_CHAT_ID;
+    const recipients = targets.filter((u) => u.id !== senderId);
+    if (!recipients.length) return;
+
+    const pending = [];
+    vehicles.forEach((v) => {
+      const patch = {};
+      const insKey = `${v.id}:insurance:${v.insuranceExpiry}`;
+      if (v.insuranceExpiry && isOverdue(v.insuranceExpiry) && v.insuranceOverdueNotifiedFor !== v.insuranceExpiry && !notifiedInFlightRef.current.has(insKey)) {
+        notifiedInFlightRef.current.add(insKey);
+        pending.push({ content: `系統通知：車輛 ${v.plate || "（未填車牌）"} 保險已逾期 ${daysOverdue(v.insuranceExpiry)} 天（到期日 ${fmtDate(v.insuranceExpiry)}），請盡快處理。` });
+        patch.insuranceOverdueNotifiedFor = v.insuranceExpiry;
+      }
+      const inspKey = `${v.id}:inspection:${v.inspectionExpiry}`;
+      if (v.inspectionExpiry && isOverdue(v.inspectionExpiry) && v.inspectionOverdueNotifiedFor !== v.inspectionExpiry && !notifiedInFlightRef.current.has(inspKey)) {
+        notifiedInFlightRef.current.add(inspKey);
+        pending.push({ content: `系統通知：車輛 ${v.plate || "（未填車牌）"} 驗車已逾期 ${daysOverdue(v.inspectionExpiry)} 天（到期日 ${fmtDate(v.inspectionExpiry)}），請盡快處理。` });
+        patch.inspectionOverdueNotifiedFor = v.inspectionExpiry;
+      }
+      if (Object.keys(patch).length) pending.push({ vehicleId: v.id, patch });
+    });
+    const messages = pending.filter((p) => p.content);
+    const patches = pending.filter((p) => p.vehicleId);
+    if (!messages.length) return;
+
+    (async () => {
+      try {
+        await Promise.all(
+          messages.flatMap(({ content }) =>
+            recipients.map((u) => supabase.from("chat_messages").insert({ sender_id: senderId, recipient_id: u.id, content }))
+          )
+        );
+        const next = vehicles.map((v) => {
+          const p = patches.find((x) => x.vehicleId === v.id);
+          return p ? { ...v, ...p.patch } : v;
+        });
+        persist.vehicles(next);
+      } catch (err) {
+        console.error("保險／驗車逾期通知傳送失敗", err);
+        patches.forEach((p) => {
+          if (p.patch.insuranceOverdueNotifiedFor) notifiedInFlightRef.current.delete(`${p.vehicleId}:insurance:${p.patch.insuranceOverdueNotifiedFor}`);
+          if (p.patch.inspectionOverdueNotifiedFor) notifiedInFlightRef.current.delete(`${p.vehicleId}:inspection:${p.patch.inspectionOverdueNotifiedFor}`);
+        });
+      }
+    })();
+  }, [vehicles, sysUsers]);
   const billingKind = (b) => b.expenseType === "零用金" ? "零用金" : b.expenseType === "銀行入帳" ? "銀行入帳" : b.expenseType === "公司付款" ? "公司付款" : (b.vendor !== undefined ? "公司付款" : "零用金");
   const duePayments = (billing || []).filter((b) => billingKind(b) === "公司付款" && b.status !== "已付款" && isExpiringSoon(b.plannedPaymentDate, 5));
   // 只有夏碩亞（管理員）看得到「待核准」件數，因為只有夏碩亞能核准公司應付款項，
@@ -1642,8 +1703,13 @@ function Dashboard({ ctx }) {
     <div>
       <SectionHeader eyebrow="OVERVIEW · 01" title="總覽儀表板" />
 
-      {(expiringContracts.length > 0 || expiringVehicles.length > 0 || duePayments.length > 0) && (
+      {(expiringContracts.length > 0 || expiringVehicles.length > 0 || duePayments.length > 0 || overdueVehicles.length > 0) && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 18 }}>
+          {overdueVehicles.length > 0 && (
+            <button onClick={() => setTab("vehicles")} style={{ display: "flex", alignItems: "center", gap: 6, background: THEME.dangerSoft, border: "1px solid #F0C2BC", borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: THEME.danger, cursor: "pointer" }}>
+              <AlertCircle size={13} />{overdueVehicles.length} 輛車保險／驗車已逾期
+            </button>
+          )}
           {expiringContracts.length > 0 && (() => {
             const todayCount = expiringContracts.filter((c) => isToday(c.endDate)).length;
             const label = todayCount === expiringContracts.length
@@ -5645,18 +5711,36 @@ function VehiclesView({ ctx }) {
   // 用「只看日期、不看時分秒」比較，避免當天已過中午就被誤判成「已經過期」而不再提醒
   const isExpiringSoon = (d) => d && dateOnly(d) <= soon && dateOnly(d) >= today;
   const daysUntil = (d) => Math.round((dateOnly(d) - today) / (1000 * 60 * 60 * 24));
+  const isOverdue = (d) => d && dateOnly(d) < today;
   const expiringVehicles = vehicles.filter((v) => isExpiringSoon(v.insuranceExpiry) || isExpiringSoon(v.inspectionExpiry));
+  const overdueVehicles = vehicles.filter((v) => isOverdue(v.insuranceExpiry) || isOverdue(v.inspectionExpiry));
 
   return (
     <div>
       <SectionHeader eyebrow="VEHICLE · 11" title="車輛管理"
         action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptyVehicle })}>新增車輛</Btn>} />
 
-      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
+      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 18 }}>
         <StatCard label="車輛總數" value={vehicles.length} icon={Car} tone="ink" />
         <StatCard label="使用中" value={vehicles.filter((v) => v.status === "使用中").length} icon={Check} tone="success" />
         <StatCard label="保險／驗車 30 天內到期" value={expiringVehicles.length} icon={AlertCircle} tone="warn" />
+        <StatCard label="保險／驗車已逾期" value={overdueVehicles.length} icon={AlertCircle} tone="danger" />
       </div>
+
+      {overdueVehicles.length > 0 && (
+        <div style={{ background: THEME.dangerSoft, border: "1px solid #F0C2BC", borderRadius: 10, padding: "12px 16px", marginBottom: 18, display: "flex", gap: 8, alignItems: "flex-start" }}>
+          <AlertCircle size={14} color={THEME.danger} style={{ marginTop: 2, flexShrink: 0 }} />
+          <div style={{ fontSize: 12.5, color: THEME.danger, lineHeight: 1.8 }}>
+            <strong>{overdueVehicles.length} 輛車保險或驗車已經逾期，請盡快處理：</strong>
+            {overdueVehicles.map((v) => {
+              const parts = [];
+              if (isOverdue(v.insuranceExpiry)) parts.push(`保險已逾期 ${-daysUntil(v.insuranceExpiry)} 天`);
+              if (isOverdue(v.inspectionExpiry)) parts.push(`驗車已逾期 ${-daysUntil(v.inspectionExpiry)} 天`);
+              return <div key={v.id}>{v.plate}（{v.model || "未填車型"}）— {parts.join("、")}</div>;
+            })}
+          </div>
+        </div>
+      )}
 
       {expiringVehicles.length > 0 && (
         <div style={{ background: THEME.warnSoft, border: `1px solid #E9D8AE`, borderRadius: 10, padding: "12px 16px", marginBottom: 18, display: "flex", gap: 8, alignItems: "flex-start" }}>
