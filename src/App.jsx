@@ -1609,6 +1609,51 @@ function Dashboard({ ctx }) {
   }, [vehicles, sysUsers]);
   const billingKind = (b) => b.expenseType === "零用金" ? "零用金" : b.expenseType === "銀行入帳" ? "銀行入帳" : b.expenseType === "公司付款" ? "公司付款" : (b.vendor !== undefined ? "公司付款" : "零用金");
   const duePayments = (billing || []).filter((b) => billingKind(b) === "公司付款" && b.status !== "已付款" && isExpiringSoon(b.plannedPaymentDate, 5));
+  const overduePayments = (billing || []).filter((b) => billingKind(b) === "公司付款" && b.approved && b.status !== "已付款" && isOverdue(b.plannedPaymentDate));
+
+  // 已核准的公司應付款項，若預訂付款日已過還沒標記「已付款」，自動傳「系統通知」給財務角色，不用等他們自己發現。
+  // 用 approvedOverdueNotifiedFor 記錄「已經針對哪一個預訂付款日通知過」，避免每次開儀表板都重複發送；
+  // 如果之後改了預訂付款日，欄位對不上就會再重新通知一次。做法跟上面車輛保險／驗車逾期通知一致。
+  const billingNotifiedInFlightRef = useRef(new Set());
+  useEffect(() => {
+    const targets = (sysUsers || []).filter((u) => u.role === "財務" && u.status !== "停用");
+    if (!targets.length || !(billing || []).length) return;
+    const senderId = currentUser?.id || ADMIN_CHAT_ID;
+    const recipients = targets.filter((u) => u.id !== senderId);
+    if (!recipients.length) return;
+
+    const pending = [];
+    billing.forEach((b) => {
+      if (billingKind(b) !== "公司付款" || !b.approved || b.status === "已付款" || !isOverdue(b.plannedPaymentDate)) return;
+      const key = `${b.id}:${b.plannedPaymentDate}`;
+      if (b.approvedOverdueNotifiedFor === b.plannedPaymentDate || billingNotifiedInFlightRef.current.has(key)) return;
+      billingNotifiedInFlightRef.current.add(key);
+      pending.push({
+        content: `系統通知：公司應付款項已逾期未付款：${b.vendor || "（未填廠商／申請人）"}，金額 ${fmtMoney(b.amount)}，預訂付款日 ${fmtDate(b.plannedPaymentDate)}，已逾期 ${daysOverdue(b.plannedPaymentDate)} 天，請盡快處理。`,
+        billingId: b.id,
+        patch: { approvedOverdueNotifiedFor: b.plannedPaymentDate },
+      });
+    });
+    if (!pending.length) return;
+
+    (async () => {
+      try {
+        await Promise.all(
+          pending.flatMap(({ content }) =>
+            recipients.map((u) => supabase.from("chat_messages").insert({ sender_id: senderId, recipient_id: u.id, content }))
+          )
+        );
+        const next = billing.map((b) => {
+          const p = pending.find((x) => x.billingId === b.id);
+          return p ? { ...b, ...p.patch } : b;
+        });
+        persist.billing(next);
+      } catch (err) {
+        console.error("公司應付款項逾期通知傳送失敗", err);
+        pending.forEach((p) => billingNotifiedInFlightRef.current.delete(`${p.billingId}:${p.patch.approvedOverdueNotifiedFor}`));
+      }
+    })();
+  }, [billing, sysUsers]);
   // 只有夏碩亞（管理員）看得到「待核准」件數，因為只有夏碩亞能核准公司應付款項，
   // 一般員工看到這個數字也沒辦法處理，秀出來只會造成困惑。統計範圍是預訂付款日落在本月或下個月的。
   // 這裡刻意不用 new Date(y, m, 1) 再轉字串的寫法——在 UTC+8 時區，日期 1 號的本地午夜轉成 UTC
@@ -1703,11 +1748,16 @@ function Dashboard({ ctx }) {
     <div>
       <SectionHeader eyebrow="OVERVIEW · 01" title="總覽儀表板" />
 
-      {(expiringContracts.length > 0 || expiringVehicles.length > 0 || duePayments.length > 0 || overdueVehicles.length > 0) && (
+      {(expiringContracts.length > 0 || expiringVehicles.length > 0 || duePayments.length > 0 || overdueVehicles.length > 0 || overduePayments.length > 0) && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 18 }}>
           {overdueVehicles.length > 0 && (
             <button onClick={() => setTab("vehicles")} style={{ display: "flex", alignItems: "center", gap: 6, background: THEME.dangerSoft, border: "1px solid #F0C2BC", borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: THEME.danger, cursor: "pointer" }}>
               <AlertCircle size={13} />{overdueVehicles.length} 輛車保險／驗車已逾期
+            </button>
+          )}
+          {overduePayments.length > 0 && (
+            <button onClick={() => setTab("billing")} style={{ display: "flex", alignItems: "center", gap: 6, background: THEME.dangerSoft, border: "1px solid #F0C2BC", borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: THEME.danger, cursor: "pointer" }}>
+              <AlertCircle size={13} />{overduePayments.length} 筆已核准款項逾期未付款
             </button>
           )}
           {expiringContracts.length > 0 && (() => {
@@ -3794,11 +3844,26 @@ function BillingView({ ctx }) {
   const isDueSoon = (d) => d && dateOnly(d) <= soon && dateOnly(d) >= today;
   const daysUntil = (d) => Math.round((dateOnly(d) - today) / (1000 * 60 * 60 * 24));
   const duePayments = companyPayments.filter((b) => b.status !== "已付款" && isDueSoon(b.plannedPaymentDate));
+  const isOverdue = (d) => d && dateOnly(d) < today;
+  const daysOverdue = (d) => Math.round((today - dateOnly(d)) / (1000 * 60 * 60 * 24));
+  const overdueApproved = companyPayments.filter((b) => b.approved && b.status !== "已付款" && isOverdue(b.plannedPaymentDate));
 
   return (
     <div>
       <SectionHeader eyebrow="EXPENSE MANAGEMENT · 08" title="收支管理"
         action={<Btn variant="brass" icon={Plus} onClick={openNew}>{newLabel}</Btn>} />
+
+      {overdueApproved.length > 0 && (
+        <div style={{ background: THEME.dangerSoft, border: "1px solid #F0C2BC", borderRadius: 10, padding: "12px 16px", marginBottom: 18, display: "flex", gap: 8, alignItems: "flex-start" }}>
+          <AlertCircle size={14} color={THEME.danger} style={{ marginTop: 2, flexShrink: 0 }} />
+          <div style={{ fontSize: 12.5, color: THEME.danger, lineHeight: 1.8 }}>
+            <strong>{overdueApproved.length} 筆已核准公司應付款項逾期未付款：</strong>
+            {overdueApproved.map((b) => (
+              <div key={b.id}>{b.vendor}（{fmtMoney(b.amount)}）— 已逾期 {daysOverdue(b.plannedPaymentDate)} 天（預訂付款日 {fmtDate(b.plannedPaymentDate)}）</div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {duePayments.length > 0 && (
         <div style={{ background: THEME.warnSoft, border: `1px solid #E9D8AE`, borderRadius: 10, padding: "12px 16px", marginBottom: 18, display: "flex", gap: 8, alignItems: "flex-start" }}>
@@ -3840,11 +3905,12 @@ function BillingView({ ctx }) {
           <StatCard label="紀錄筆數" value={bankDeposits.length} icon={Check} tone="ink" />
         </div>
       ) : (
-        <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 18 }}>
+        <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 14, marginBottom: 18 }}>
           <StatCard label="公司應付款項總數" value={companyPayments.length} icon={HandCoins} tone="ink" />
           <StatCard label="未付款金額" value={fmtMoney(pendingTotal)} icon={AlertCircle} tone="warn" />
           <StatCard label="已付款件數" value={companyPayments.filter((b) => b.status === "已付款").length} icon={Check} tone="success" />
           <StatCard label="核准金額" value={fmtMoney(approvedTotal)} icon={Check} tone="ink" />
+          <StatCard label="已核准逾期未付" value={overdueApproved.length} icon={AlertCircle} tone="danger" />
         </div>
       )}
 
