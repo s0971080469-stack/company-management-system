@@ -1222,7 +1222,11 @@ export default function CompanyManagementSystem({ session }) {
     payroll: (v) => { setPayroll(v); saveKey(STORAGE_KEYS.payroll, v); },
     quotes: (v) => { setQuotes(v); saveKey(STORAGE_KEYS.quotes, v); },
     invoices: (v) => { setInvoices(v); saveKey(STORAGE_KEYS.invoices, v); },
-    billing: (v) => { setBilling(v); saveKey(STORAGE_KEYS.billing, v); },
+    billing: (v) => {
+      if (typeof v === "function") {
+        setBilling((prev) => { const next = v(prev); saveKey(STORAGE_KEYS.billing, next); return next; });
+      } else { setBilling(v); saveKey(STORAGE_KEYS.billing, v); }
+    },
     accounting: (v) => { setAccounting(v); saveKey(STORAGE_KEYS.accounting, v); },
     vendors: (v) => { setVendors(v); saveKey(STORAGE_KEYS.vendors, v); },
     documents: (v) => { setDocuments(v); saveKey(STORAGE_KEYS.documents, v); },
@@ -1643,11 +1647,13 @@ function Dashboard({ ctx }) {
             recipients.map((u) => supabase.from("chat_messages").insert({ sender_id: senderId, recipient_id: u.id, content }))
           )
         );
-        const next = billing.map((b) => {
+        // 用 setState 的函式寫法，讓合併永遠是對「寫入當下最新的」billing 做，
+        // 不是對 effect 觸發當時（可能已經過時）的 billing 做，避免蓋掉這段等待期間
+        // 別人（或自己切到別分頁）新增／編輯的收支資料（例如廠商欄位）。
+        persist.billing((prevBilling) => prevBilling.map((b) => {
           const p = pending.find((x) => x.billingId === b.id);
           return p ? { ...b, ...p.patch } : b;
-        });
-        persist.billing(next);
+        }));
       } catch (err) {
         console.error("公司應付款項逾期通知傳送失敗", err);
         pending.forEach((p) => billingNotifiedInFlightRef.current.delete(`${p.billingId}:${p.patch.approvedOverdueNotifiedFor}`));
