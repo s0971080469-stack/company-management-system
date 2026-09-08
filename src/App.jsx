@@ -690,7 +690,7 @@ function Modal({ title, onClose, children, width = 560 }) {
   );
 }
 
-function ConfirmDialog({ message, onConfirm, onCancel }) {
+function ConfirmDialog({ message, onConfirm, onCancel, confirmLabel = "確認刪除" }) {
   return (
     <div className="confirm-overlay" style={{ position: "fixed", inset: 0, background: "rgba(27,35,51,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }} onClick={onCancel}>
       <div className="confirm-dialog" style={{ background: "#fff", borderRadius: 14, padding: 24, width: 340, maxWidth: "90%", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
@@ -700,7 +700,7 @@ function ConfirmDialog({ message, onConfirm, onCancel }) {
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
           <Btn onClick={onCancel}>取消</Btn>
-          <Btn variant="danger" onClick={onConfirm}>確認刪除</Btn>
+          <Btn variant="danger" onClick={onConfirm}>{confirmLabel}</Btn>
         </div>
       </div>
     </div>
@@ -1299,7 +1299,7 @@ export default function CompanyManagementSystem({ session }) {
     });
   }, []);
 
-  const askDelete = (message, onConfirm) => setConfirmState({ message, onConfirm });
+  const askDelete = (message, onConfirm, confirmLabel = "確認刪除") => setConfirmState({ message, onConfirm, confirmLabel });
 
   // 「真實身分」以登入帳號的 Email 對應到系統帳號清單為準，不是側邊欄下拉選單
   // 可以自己亂選的——不然任何人都能把自己切成「夏碩亞」。找不到對應的系統帳號時
@@ -1473,6 +1473,7 @@ export default function CompanyManagementSystem({ session }) {
       {confirmState && (
         <ConfirmDialog
           message={confirmState.message}
+          confirmLabel={confirmState.confirmLabel}
           onCancel={() => setConfirmState(null)}
           onConfirm={() => { confirmState.onConfirm(); setConfirmState(null); }}
         />
@@ -3146,7 +3147,6 @@ function InvoicesView({ ctx }) {
   const [modal, setModal] = useState(null);
   const [companyFilter, setCompanyFilter] = useState("全部");
   const [month, setMonth] = useState(monthStr());
-  const [checkedIds, setCheckedIds] = useState(new Set());
 
   const KNOWN_COMPANIES = BILLING_COMPANY_OPTIONS.filter((o) => o !== "其他");
   const companyTabs = ["全部", ...KNOWN_COMPANIES, "其他"];
@@ -3167,56 +3167,69 @@ function InvoicesView({ ctx }) {
     setModal(null);
   };
 
-  // 發票本身不再自動登記到帳務入口，避免和「新增至銀行入帳紀錄」的收入重複計算；
-  // 實際收款請透過「新增至銀行入帳紀錄」登記，帳務入口才會有對應的收入。
+  // 發票本身不直接登記到帳務入口；選擇入帳日時，會建立一筆銀行入帳紀錄，
+  // 再由該銀行紀錄建立帳務收入，避免同一張發票重複計算。
   const setStatus = (inv, status) => {
     persist.invoices(invoices.map((x) => x.id === inv.id ? { ...x, status, posted: status === "已付款", updatedAt: new Date().toISOString() } : x));
   };
 
   const setDueDate = (inv, dueDate) => {
-    persist.invoices(invoices.map((x) => x.id === inv.id ? { ...x, dueDate, status: "已付款", posted: true, updatedAt: new Date().toISOString() } : x));
-  };
+    if (!dueDate) return;
+    const total = inv.total ?? sumItems(inv.items) * (1 + Number(inv.taxRate) / 100);
+    const source = `發票 ${inv.no} — ${inv.client}`;
+    const existingDeposit = billing.find((b) => b.expenseType === "銀行入帳" && b.sourceInvoiceId === inv.id);
+    let deposit;
 
-  const toggleChecked = (id) => {
-    setCheckedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
-
-  const addSelectedToBankDeposits = () => {
-    const selected = invoices.filter((inv) => checkedIds.has(inv.id));
-    if (!selected.length) return;
-    const year = toROCYear(new Date().getFullYear());
-    const existingCount = billing.filter((b) => (b.no || "").startsWith(`BD-${year}`)).length;
-    const entries = selected.map((inv, i) => {
-      const total = inv.total ?? sumItems(inv.items) * (1 + Number(inv.taxRate) / 100);
-      const no = `BD-${year}-${String(existingCount + i + 1).padStart(3, "0")}`;
-      return {
-        id: uid(), no, expenseType: "銀行入帳", date: todayStr(), source: `發票 ${inv.no} — ${inv.client}`,
+    if (existingDeposit) {
+      deposit = {
+        ...existingDeposit,
+        date: dueDate,
+        source,
+        amount: total,
+        companyName: inv.companyName || "",
+        updatedAt: new Date().toISOString(),
+      };
+      persist.billing(billing.map((b) => b.id === existingDeposit.id ? deposit : b));
+      removeAccountingBySource("billing", existingDeposit.id);
+    } else {
+      const bankDeposits = billing.filter((b) => b.expenseType === "銀行入帳");
+      deposit = {
+        id: uid(), no: nextNo("BD", bankDeposits), expenseType: "銀行入帳", date: dueDate, source,
         amount: total, note: "", companyName: inv.companyName || "", posted: true,
         sourceInvoiceId: inv.id,
         createdBy: actorName(ctx), createdAt: new Date().toISOString(),
       };
+      persist.billing([deposit, ...billing]);
+    }
+
+    addAccountingEntry({
+      type: "收入", category: "銀行入帳", amount: deposit.amount,
+      desc: `銀行入帳 — ${deposit.source}`, date: deposit.date,
+      sourceType: "billing", sourceId: deposit.id,
     });
-    persist.billing([...entries, ...billing]);
-    entries.forEach((entry) => {
-      addAccountingEntry({ type: "收入", category: "銀行入帳", amount: entry.amount, desc: `銀行入帳 — ${entry.source}`, date: entry.date, sourceType: "billing", sourceId: entry.id });
-    });
-    persist.invoices(invoices.map((inv) => checkedIds.has(inv.id) ? { ...inv, addedToBankDeposit: true, updatedAt: new Date().toISOString() } : inv));
-    setCheckedIds(new Set());
+    persist.invoices(invoices.map((x) => x.id === inv.id ? {
+      ...x, dueDate, status: "已付款", posted: true, addedToBankDeposit: true,
+      updatedAt: new Date().toISOString(),
+    } : x));
+  };
+
+  const cancelDueDate = (inv) => {
+    const linkedDeposits = billing.filter((b) => b.expenseType === "銀行入帳" && b.sourceInvoiceId === inv.id);
+    persist.invoices(invoices.map((x) => x.id === inv.id ? {
+      ...x, dueDate: "", status: "未付款", posted: false, addedToBankDeposit: false,
+      updatedAt: new Date().toISOString(),
+    } : x));
+    if (linkedDeposits.length) {
+      persist.billing(billing.filter((b) => !(b.expenseType === "銀行入帳" && b.sourceInvoiceId === inv.id)));
+      linkedDeposits.forEach((b) => removeAccountingBySource("billing", b.id));
+    }
+    removeAccountingBySource("invoice", inv.id);
   };
 
   return (
     <div>
       <SectionHeader eyebrow="INVOICE · 07" title="發票"
-        action={
-          <div style={{ display: "flex", gap: 8 }}>
-            <Btn icon={Landmark} disabled={checkedIds.size === 0} onClick={addSelectedToBankDeposits}>新增至銀行入帳紀錄{checkedIds.size ? `（${checkedIds.size}）` : ""}</Btn>
-            <Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: { ...emptyInvoice(), no: nextNo("INV", invoices) } })}>開立發票</Btn>
-          </div>
-        } />
+        action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: { ...emptyInvoice(), no: nextNo("INV", invoices) } })}>開立發票</Btn>} />
 
       {invoices.length > 0 && (
         <>
@@ -3240,7 +3253,7 @@ function InvoicesView({ ctx }) {
       ) : filtered.length === 0 ? (
         <EmptyState icon={Receipt} text="這個篩選條件下沒有發票。" />
       ) : (
-        <Table columns={["發票號碼", "開票公司", "估價單號碼", "客戶", "含稅金額", "開立日", "入帳日", "等待天數", "狀態", "選取", ""]}>
+        <Table columns={["發票號碼", "開票公司", "估價單號碼", "客戶", "含稅金額", "開立日", "入帳日", "等待天數", "狀態", ""]}>
           {filtered.map((inv) => {
             const total = inv.total ?? sumItems(inv.items) * (1 + Number(inv.taxRate) / 100);
             const waitDays = inv.date && inv.dueDate ? Math.round((new Date(inv.dueDate) - new Date(inv.date)) / (1000 * 60 * 60 * 24)) : null;
@@ -3253,7 +3266,16 @@ function InvoicesView({ ctx }) {
                 <td style={{ ...td, fontFamily: FONT_NUM, fontWeight: 700 }}>{fmtMoney(total)}</td>
                 <td style={td}>{fmtDate(inv.date)}</td>
                 <td style={td}>
-                  <DatePickerButton value={inv.dueDate} onChange={(v) => setDueDate(inv, v)} />
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <DatePickerButton value={inv.dueDate} onChange={(v) => setDueDate(inv, v)} />
+                    {inv.dueDate && (
+                      <Btn size="sm" variant="danger" icon={X} onClick={() => askDelete(
+                        `確定要取消發票 ${inv.no} 的入帳日嗎？對應的銀行入帳與帳務紀錄也會一併移除。`,
+                        () => cancelDueDate(inv),
+                        "確認取消"
+                      )}>取消</Btn>
+                    )}
+                  </div>
                 </td>
                 <td style={{ ...td, fontFamily: FONT_NUM }}>{waitDays !== null ? `${waitDays} 天` : "—"}</td>
                 <td style={td}>
@@ -3263,11 +3285,6 @@ function InvoicesView({ ctx }) {
                     <option value="逾期">逾期</option>
                     <option value="已作廢">已作廢</option>
                   </Select>
-                </td>
-                <td style={{ ...td, textAlign: "center" }}>
-                  <input type="checkbox" checked={inv.addedToBankDeposit || checkedIds.has(inv.id)} disabled={inv.addedToBankDeposit} onChange={() => toggleChecked(inv.id)}
-                    style={{ width: 16, height: 16, cursor: inv.addedToBankDeposit ? "not-allowed" : "pointer" }}
-                    title={inv.addedToBankDeposit ? "已新增至銀行入帳紀錄" : undefined} />
                 </td>
                 <td style={{ ...td, textAlign: "right" }}>
                   <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
