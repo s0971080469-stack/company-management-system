@@ -116,8 +116,15 @@ git push -u origin main
 
 ## 之後資料存在哪？可以匯出嗎？
 
-所有資料都存在 Supabase 的 Postgres 資料庫裡（`app_storage` 這張表）。
-Supabase 後台「Table Editor」可以直接看到、也能匯出成 CSV 備份。
+所有資料都存在 Supabase 的 Postgres 資料庫裡：
+
+- `app_records`：人員、估價單、發票、收支、契約等清單，每筆資料各自一列。
+- `app_collection_versions`：保存各清單的版本，攔截多人同時修改造成的舊資料覆蓋。
+- `app_record_history`：保存每筆新增、修改、刪除前的歷史快照，供管理員復原。
+- `app_storage`：只保留公司座標、權限等設定，以及遷移前的舊資料備份。
+
+Supabase 後台「Table Editor」可以直接查看；NAS 備份程式也會備份上述資料表、
+內部聊天紀錄與掃描附件。
 
 ---
 

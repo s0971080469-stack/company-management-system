@@ -1112,6 +1112,7 @@ export default function CompanyManagementSystem({ session }) {
   const [leaveRequests, setLeaveRequests] = useState([]);
 
   const [confirmState, setConfirmState] = useState(null);
+  const [storageNotice, setStorageNotice] = useState("");
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
@@ -1179,9 +1180,10 @@ export default function CompanyManagementSystem({ session }) {
     })();
   }, []);
 
-  // 即時同步：訂閱 app_storage 資料表的異動，別人（或自己其他分頁）新增／修改任何模組的資料時，
-  // 畫面會自動更新成最新內容，不用手動重新整理。currentUserId（側邊欄「目前身分」）刻意不列入
-  // 同步範圍，因為那是每個瀏覽器自己選用哪個身分操作，不該被別人的選擇即時蓋掉。
+  // 即時同步：設定型資料仍監聽 app_storage；清單型資料改監聽
+  // app_collection_versions，版本變動後重新讀取該清單的逐筆資料。
+  // currentUserId（側邊欄「目前身分」）刻意不列入同步範圍，因為那是每個瀏覽器
+  // 自己選用哪個身分操作，不該被別人的選擇即時蓋掉。
   useEffect(() => {
     const setterByKey = {
       [STORAGE_KEYS.employees]: setEmployees,
@@ -1207,13 +1209,47 @@ export default function CompanyManagementSystem({ session }) {
       const setter = setterByKey[row?.storage_key];
       if (setter) setter(row.value);
     };
-    const channel = supabase
+    const reloadCollection = async (row) => {
+      const key = row?.collection_key;
+      const setter = setterByKey[key];
+      if (!setter) return;
+      const latest = await loadKey(key, []);
+      setter(latest);
+    };
+    const handleConflict = (event) => {
+      const { key, value } = event.detail || {};
+      const setter = setterByKey[key];
+      if (setter && Array.isArray(value)) setter(value);
+      setStorageNotice("偵測到其他人同時修改資料，已保留資料庫最新版本；請確認後再操作一次。");
+    };
+    const handleSaveError = () => {
+      setStorageNotice("資料暫時無法儲存，請檢查網路後再試一次。");
+    };
+    const legacyChannel = supabase
       .channel("app_storage_live")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "app_storage" }, (payload) => applyChange(payload.new))
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "app_storage" }, (payload) => applyChange(payload.new))
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    const collectionChannel = supabase
+      .channel("app_collection_versions_live")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "app_collection_versions" }, (payload) => reloadCollection(payload.new))
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "app_collection_versions" }, (payload) => reloadCollection(payload.new))
+      .subscribe();
+    window.addEventListener("app-storage-conflict", handleConflict);
+    window.addEventListener("app-storage-save-error", handleSaveError);
+    return () => {
+      supabase.removeChannel(legacyChannel);
+      supabase.removeChannel(collectionChannel);
+      window.removeEventListener("app-storage-conflict", handleConflict);
+      window.removeEventListener("app-storage-save-error", handleSaveError);
+    };
   }, []);
+
+  useEffect(() => {
+    if (!storageNotice) return undefined;
+    const timer = setTimeout(() => setStorageNotice(""), 8000);
+    return () => clearTimeout(timer);
+  }, [storageNotice]);
 
   // persist helpers — update state + storage together
   const persist = {
@@ -1236,7 +1272,11 @@ export default function CompanyManagementSystem({ session }) {
     rolePerms: (v) => { setRolePerms(v); saveKey(STORAGE_KEYS.rolePerms, v); },
     quoteTemplates: (v) => { setQuoteTemplates(v); saveKey(STORAGE_KEYS.quoteTemplates, v); },
     currentUserId: (v) => { setCurrentUserId(v); saveKey(STORAGE_KEYS.currentUser, v); },
-    vehicles: (v) => { setVehicles(v); saveKey(STORAGE_KEYS.vehicles, v); },
+    vehicles: (v) => {
+      if (typeof v === "function") {
+        setVehicles((prev) => { const next = v(prev); saveKey(STORAGE_KEYS.vehicles, next); return next; });
+      } else { setVehicles(v); saveKey(STORAGE_KEYS.vehicles, v); }
+    },
     companyLocation: (v) => { setCompanyLocation(v); saveKey(STORAGE_KEYS.companyLocation, v); },
     contractBilling: (v) => { setContractBilling(v); saveKey(STORAGE_KEYS.contractBilling, v); },
     leaveRequests: (v) => { setLeaveRequests(v); saveKey(STORAGE_KEYS.leaveRequests, v); },
@@ -1393,6 +1433,17 @@ export default function CompanyManagementSystem({ session }) {
       `}</style>
 
       <div className={"mobile-nav-backdrop" + (mobileNavOpen ? " nav-open" : "")} onClick={() => setMobileNavOpen(false)} />
+
+      {storageNotice && (
+        <div className="no-print" style={{
+          position: "fixed", top: 14, left: "50%", transform: "translateX(-50%)", zIndex: 90,
+          maxWidth: "calc(100vw - 28px)", padding: "10px 16px", borderRadius: 9,
+          background: THEME.danger, color: "#fff", fontSize: 13, fontWeight: 700,
+          boxShadow: "0 8px 24px rgba(0,0,0,.2)",
+        }}>
+          {storageNotice}
+        </div>
+      )}
 
       <div className={"app-sidebar" + (mobileNavOpen ? " nav-open" : "")}>
         <Sidebar tab={tab} setTab={(k) => { setTab(k); setMobileNavOpen(false); }} nav={allowedNav} employees={employees} sysUsers={sysUsers} currentUserId={currentUserId} setCurrentUserId={persist.currentUserId} realIsAdmin={realIsAdmin} matchedUser={matchedUser} session={session} />
@@ -1597,11 +1648,13 @@ function Dashboard({ ctx }) {
             recipients.map((u) => supabase.from("chat_messages").insert({ sender_id: senderId, recipient_id: u.id, content }))
           )
         );
-        const next = vehicles.map((v) => {
+        // 用 setState 的函式寫法，讓合併永遠是對「寫入當下最新的」vehicles 做，
+        // 不是對 effect 觸發當時（可能已經過時）的 vehicles 做，避免蓋掉這段等待期間
+        // 別人（或自己切到別分頁）新增／編輯的車輛資料。
+        persist.vehicles((prevVehicles) => prevVehicles.map((v) => {
           const p = patches.find((x) => x.vehicleId === v.id);
           return p ? { ...v, ...p.patch } : v;
-        });
-        persist.vehicles(next);
+        }));
       } catch (err) {
         console.error("保險／驗車逾期通知傳送失敗", err);
         patches.forEach((p) => {
