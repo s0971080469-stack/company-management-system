@@ -3273,7 +3273,7 @@ function InvoicesView({ ctx }) {
                         `確定要取消發票 ${inv.no} 的入帳日嗎？對應的銀行入帳與帳務紀錄也會一併移除。`,
                         () => cancelDueDate(inv),
                         "確認取消"
-                      )}>取消</Btn>
+                      )}>取消選擇日期</Btn>
                     )}
                   </div>
                 </td>
