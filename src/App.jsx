@@ -2014,7 +2014,7 @@ const emptyEmployee = {
 };
 
 function EmployeesView({ ctx }) {
-  const { employees, contracts, persist, askDelete } = ctx;
+  const { employees, payroll, contracts, persist, askDelete } = ctx;
   const siteOptions = [...SITE_FIXED_OPTIONS, ...Array.from(new Set(contracts.map((c) => c.title).filter(Boolean)))];
   const [modal, setModal] = useState(null); // {mode, data}
   const [query, setQuery] = useState("");
@@ -2062,6 +2062,34 @@ function EmployeesView({ ctx }) {
       insuranceStatus: data.company ? (data.insuranceStatus || "加保") : "無加保",
     };
     if (data.id) {
+      const previousData = employees.find((e) => e.id === data.id);
+      const salarySnapshot = (e = {}) => JSON.stringify({
+        baseSalary: Number(e.baseSalary) || 0,
+        additions: (e.additions || []).map((it) => ({ name: it.name || "", amount: Number(it.amount) || 0 })),
+        deductions: (e.deductions || []).map((it) => ({ name: it.name || "", amount: Number(it.amount) || 0 })),
+        laborInsurance: Number(e.laborInsurance) || 0,
+        healthInsurance: Number(e.healthInsurance) || 0,
+        pensionSelf: Number(e.pensionSelf) || 0,
+        advances: (e.advances || []).map((it) => ({ amount: Number(it.amount) || 0, date: it.date || "" })),
+        insuranceStatus: e.insuranceStatus || "無加保",
+        company: e.company || "",
+      });
+      if (previousData && salarySnapshot(previousData) !== salarySnapshot(normalizedData)) {
+        const changedAt = new Date().toISOString();
+        persist.payroll(payroll.map((r) => r.employeeId === data.id && r.status === "待發放" ? {
+          ...r,
+          company: normalizedData.company || "",
+          baseSalary: Number(normalizedData.baseSalary) || 0,
+          additions: (normalizedData.additions || []).map((it) => ({ ...it, id: uid() })),
+          deductions: (normalizedData.deductions || []).map((it) => ({ ...it, id: uid() })),
+          laborInsurance: Number(normalizedData.laborInsurance) || 0,
+          healthInsurance: Number(normalizedData.healthInsurance) || 0,
+          pensionSelf: Number(normalizedData.pensionSelf) || 0,
+          advances: (normalizedData.advances || []).map((it) => ({ ...it, id: uid() })),
+          insuranceStatus: normalizedData.insuranceStatus || "無加保",
+          updatedAt: changedAt,
+        } : r));
+      }
       persist.employees(employees.map((e) => (e.id === data.id ? normalizedData : e)));
     } else {
       persist.employees([{ ...normalizedData, id: uid() }, ...employees]);
@@ -2251,8 +2279,8 @@ const emptyPayrollRow = (e, month) => ({
   additions: (e.additions || []).map((it) => ({ ...it, id: uid() })),
   deductions: (e.deductions || []).map((it) => ({ ...it, id: uid() })),
   laborInsurance: Number(e.laborInsurance) || 0, healthInsurance: Number(e.healthInsurance) || 0,
-  pensionSelf: Number(e.pensionSelf) || 0, advances: Number(e.advance) ? [{ id: uid(), amount: Number(e.advance), date: "" }] : [],
-  insuranceStatus: e.insuranceStatus || "加保", paymentDate: "", note: "",
+  pensionSelf: Number(e.pensionSelf) || 0, advances: (e.advances || []).map((it) => ({ ...it, id: uid() })),
+  insuranceStatus: e.insuranceStatus || "無加保", paymentDate: "", note: "",
   status: "待發放", posted: false,
 });
 
@@ -2430,8 +2458,33 @@ function PayrollView({ ctx }) {
                 <td style={td}>{deptOf(r) || "—"}</td>
                 <td style={{ ...td, width: 320, maxWidth: 320, whiteSpace: "normal", lineHeight: 1.55 }}>{siteOf(r) || "—"}</td>
                 <td style={{ ...td, fontFamily: FONT_NUM }}>{fmtMoney(r.baseSalary)}</td>
-                <td style={{ ...td, fontFamily: FONT_NUM, color: THEME.success }}>{sumAmounts(r.additions) ? "+" + fmtMoney(sumAmounts(r.additions)) : "—"}</td>
-                <td style={{ ...td, fontFamily: FONT_NUM, color: THEME.danger }}>{deductTotal ? "−" + fmtMoney(deductTotal) : "—"}</td>
+                <td style={{ ...td, fontFamily: FONT_NUM, color: THEME.success }}>
+                  {sumAmounts(r.additions) ? (
+                    <>
+                      <div style={{ fontWeight: 700 }}>+{fmtMoney(sumAmounts(r.additions))}</div>
+                      {(r.additions || []).filter((it) => Number(it.amount)).map((it, i) => (
+                        <div key={it.id || i} style={{ fontFamily: FONT_BODY, fontSize: 11.5, lineHeight: 1.55, color: THEME.muted }}>
+                          {it.name || "未命名加項"}：<span style={{ fontFamily: FONT_NUM }}>+{fmtMoney(it.amount)}</span>
+                        </div>
+                      ))}
+                    </>
+                  ) : "—"}
+                </td>
+                <td style={{ ...td, fontFamily: FONT_NUM, color: THEME.danger }}>
+                  {deductTotal ? (
+                    <>
+                      <div style={{ fontWeight: 700 }}>−{fmtMoney(deductTotal)}</div>
+                      {(r.deductions || []).filter((it) => Number(it.amount)).map((it, i) => (
+                        <div key={it.id || i} style={{ fontFamily: FONT_BODY, fontSize: 11.5, lineHeight: 1.55, color: THEME.muted }}>
+                          {it.name || "未命名減項"}：<span style={{ fontFamily: FONT_NUM }}>−{fmtMoney(it.amount)}</span>
+                        </div>
+                      ))}
+                      {Number(r.laborInsurance) > 0 && <div style={{ fontFamily: FONT_BODY, fontSize: 11.5, lineHeight: 1.55, color: THEME.muted }}>勞保：<span style={{ fontFamily: FONT_NUM }}>−{fmtMoney(r.laborInsurance)}</span></div>}
+                      {Number(r.healthInsurance) > 0 && <div style={{ fontFamily: FONT_BODY, fontSize: 11.5, lineHeight: 1.55, color: THEME.muted }}>健保：<span style={{ fontFamily: FONT_NUM }}>−{fmtMoney(r.healthInsurance)}</span></div>}
+                      {Number(r.pensionSelf) > 0 && <div style={{ fontFamily: FONT_BODY, fontSize: 11.5, lineHeight: 1.55, color: THEME.muted }}>勞退：<span style={{ fontFamily: FONT_NUM }}>−{fmtMoney(r.pensionSelf)}</span></div>}
+                    </>
+                  ) : "—"}
+                </td>
                 <td style={td}>
                   {sumAdvances(r.advances) ? (
                     <>
