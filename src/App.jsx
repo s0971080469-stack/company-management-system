@@ -7,16 +7,13 @@ import {
   ChevronRight, ChevronLeft, RotateCcw, ArrowRight, AlertCircle, FileSignature, Truck, ShieldCheck, UserCog, Download, Car,
   Paperclip, Eye, Upload, Image as ImageIcon, Loader2, MapPin, Printer, Menu, Stamp, MessageCircle, Send
 } from "lucide-react";
-import {
-  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis,
-  CartesianGrid, Tooltip, ResponsiveContainer, Legend
-} from "recharts";
 import { loadKey, saveKey } from "./storage.js";
 import { supabase, createAuthActionClient } from "./supabaseClient.js";
 import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import { renderAsync as renderDocxAsync } from "docx-preview";
 import DashboardOverview from "./DashboardOverview.jsx";
+import ReportsOverview from "./ReportsOverview.jsx";
 import { payrollAuditStamp, payrollActivityActor } from "./payrollActivity.js";
 
 /* ---------------------------------------------------------
@@ -4409,8 +4406,6 @@ function AccountingForm({ data, onSave, onCancel }) {
 /* =========================================================
    REPORTS
 ========================================================= */
-const PIE_COLORS = [THEME.brass, THEME.ink, "#7A8CA3", THEME.danger, THEME.success, THEME.warn, "#B4A98A"];
-
 function ReportsView({ ctx }) {
   const { employees, payroll, accounting } = ctx;
   const [year, setYear] = useState(String(new Date().getFullYear()));
@@ -4454,94 +4449,17 @@ function ReportsView({ ctx }) {
   const yearPayrollTotal = payrollTrend.reduce((s, m) => s + m.薪資成本, 0);
 
   return (
-    <div>
-      <SectionHeader eyebrow="REPORTS · 14" title="公司報表" />
-
-      <div style={{ display: "flex", gap: 6, marginBottom: 18, flexWrap: "wrap", alignItems: "center" }}>
-        <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600, marginRight: 4 }}>年度</span>
-        {years.map((y) => (
-          <button key={y} onClick={() => setYear(y)}
-            style={{
-              padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-              border: `1px solid ${year === y ? THEME.brass : THEME.line}`,
-              background: year === y ? THEME.brass : "#fff",
-              color: year === y ? "#fff" : THEME.text,
-            }}>{toROCYear(y)} 年</button>
-        ))}
-      </div>
-
-      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
-        <StatCard label={`${toROCYear(year)} 年營收總額`} value={fmtMoney(yearRevenueTotal)} icon={TrendingUp} tone="success" />
-        <StatCard label={`${toROCYear(year)} 年支出總額`} value={fmtMoney(yearExpenseTotal)} icon={TrendingDown} tone="danger" />
-        <StatCard label={`${toROCYear(year)} 年薪資成本`} value={fmtMoney(yearPayrollTotal)} icon={Wallet} tone="brass" />
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-        <ChartCard title={`營收趨勢（${toROCYear(year)} 年，依月份）`}>
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={revenueTrend}>
-              <CartesianGrid strokeDasharray="3 3" stroke={THEME.line} vertical={false} />
-              <XAxis dataKey="month" tick={{ fontSize: 12, fill: THEME.muted }} axisLine={{ stroke: THEME.line }} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: THEME.muted }} axisLine={false} tickLine={false} width={50} tickFormatter={(v) => (v >= 1000 ? `${v / 1000}k` : v)} />
-              <Tooltip formatter={(v) => fmtMoney(v)} contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${THEME.line}` }} />
-              <Line type="monotone" dataKey="營收" stroke={THEME.brass} strokeWidth={2.5} dot={{ r: 3 }} />
-            </LineChart>
-          </ResponsiveContainer>
-        </ChartCard>
-
-        <ChartCard title={`薪資成本趨勢（${toROCYear(year)} 年，依月份）`}>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={payrollTrend}>
-              <CartesianGrid strokeDasharray="3 3" stroke={THEME.line} vertical={false} />
-              <XAxis dataKey="month" tick={{ fontSize: 12, fill: THEME.muted }} axisLine={{ stroke: THEME.line }} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: THEME.muted }} axisLine={false} tickLine={false} width={50} tickFormatter={(v) => (v >= 1000 ? `${v / 1000}k` : v)} />
-              <Tooltip formatter={(v) => fmtMoney(v)} contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${THEME.line}` }} />
-              <Bar dataKey="薪資成本" fill={THEME.ink} radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartCard>
-
-        <ChartCard title={`支出類別分布（${toROCYear(year)} 年）`}>
-          {expenseByCategory.length === 0 ? (
-            <div style={{ height: 220, display: "flex", alignItems: "center", justifyContent: "center", color: THEME.muted, fontSize: 13 }}>這個年度尚無支出資料</div>
-          ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie data={expenseByCategory} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={(e) => e.name}>
-                  {expenseByCategory.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                </Pie>
-                <Tooltip formatter={(v) => fmtMoney(v)} contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${THEME.line}` }} />
-              </PieChart>
-            </ResponsiveContainer>
-          )}
-        </ChartCard>
-
-        <ChartCard title="各部門在職人數（目前）">
-          {headcountByDept.length === 0 ? (
-            <div style={{ height: 220, display: "flex", alignItems: "center", justifyContent: "center", color: THEME.muted, fontSize: 13 }}>尚無員工資料</div>
-          ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={headcountByDept} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke={THEME.line} horizontal={false} />
-                <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: THEME.muted }} axisLine={false} tickLine={false} />
-                <YAxis type="category" dataKey="dept" tick={{ fontSize: 12, fill: THEME.text }} axisLine={false} tickLine={false} width={80} />
-                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${THEME.line}` }} />
-                <Bar dataKey="count" fill={THEME.brass} radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </ChartCard>
-      </div>
-    </div>
-  );
-}
-
-function ChartCard({ title, children }) {
-  return (
-    <div style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 12, padding: "18px 20px" }}>
-      <h3 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700, color: THEME.text }}>{title}</h3>
-      {children}
-    </div>
+    <ReportsOverview
+      year={year}
+      years={years}
+      onYearChange={setYear}
+      revenueTrend={revenueTrend}
+      payrollTrend={payrollTrend}
+      expenseByCategory={expenseByCategory}
+      headcountByDept={headcountByDept}
+      totals={{ revenue: yearRevenueTotal, expense: yearExpenseTotal, payroll: yearPayrollTotal }}
+      formats={{ money: fmtMoney, rocYear: toROCYear }}
+    />
   );
 }
 
