@@ -1972,6 +1972,17 @@ function quotesActivity(ctx) {
    EMPLOYEES
 ========================================================= */
 const SITE_FIXED_OPTIONS = ["公司總部", "機動組"];
+const siteRowColor = (siteName, siteNames) => {
+  if (!siteName) return THEME.surface;
+  let index = siteNames.indexOf(siteName);
+  if (index < 0) {
+    index = 0;
+    for (const char of siteName) index = ((index * 31) + char.charCodeAt(0)) >>> 0;
+  }
+  // 使用黃金角度錯開色相，不循環使用固定色盤，讓不同案場各自有專屬淡色。
+  const hue = (index * 137.508) % 360;
+  return `hsl(${hue.toFixed(1)} 48% 94%)`;
+};
 const BANK_OPTIONS = [
   { code: "004", name: "臺灣銀行" },
   { code: "005", name: "臺灣土地銀行" },
@@ -2056,6 +2067,12 @@ function EmployeesView({ ctx }) {
     if (siteFilter !== "全部" && (e.siteName || "") !== siteFilter) return false;
     return true;
   });
+  const siteOrder = new Map(siteOptions.map((site, index) => [site, index]));
+  const sortedFiltered = [...filtered].sort((a, b) => {
+    const aOrder = siteOrder.has(a.siteName) ? siteOrder.get(a.siteName) : Number.MAX_SAFE_INTEGER;
+    const bOrder = siteOrder.has(b.siteName) ? siteOrder.get(b.siteName) : Number.MAX_SAFE_INTEGER;
+    return aOrder - bOrder;
+  });
 
   const save = (data) => {
     const normalizedData = {
@@ -2138,8 +2155,8 @@ function EmployeesView({ ctx }) {
         <EmptyState icon={Users} text="尚未建立任何員工資料。" action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptyEmployee })}>新增第一位員工</Btn>} />
       ) : (
         <Table columns={["姓名", "部門", "職位", "投保公司", "到職日", "底薪", "聯絡方式", "銀行帳號", "投保級距", "狀態", "所屬案場", ""]}>
-          {filtered.map((e) => (
-            <tr key={e.id}>
+          {sortedFiltered.map((e) => (
+            <tr key={e.id} style={{ background: siteRowColor(e.siteName, siteOptions) }}>
               <td style={td}><strong>{e.name}</strong></td>
               <td style={td}>{e.dept || "—"}</td>
               <td style={td}>{e.title || "—"}</td>
@@ -2405,7 +2422,7 @@ function PayrollView({ ctx }) {
           </div>
         } />
 
-      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
+      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 18 }}>
         <StatCard label="本月人數" value={rows.length} icon={Users} tone="ink" />
         <StatCard label="本月薪資總額" value={fmtMoney(totalNet)} icon={Wallet} tone="brass"
           subNode={
@@ -2415,6 +2432,7 @@ function PayrollView({ ctx }) {
             </div>
           } />
         <StatCard label="已發放" value={rows.filter((r) => r.status === "已發放").length + " / " + rows.length} icon={Check} tone="success" />
+        <StatCard label="暫時不發" value={rows.filter((r) => r.status === "暫時不發").length + " / " + rows.length} icon={AlertCircle} tone="danger" />
       </div>
 
       {allRows.length > 0 && (
