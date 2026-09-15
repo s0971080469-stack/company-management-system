@@ -1811,7 +1811,7 @@ const BANK_OPTIONS = [
 ];
 const emptyEmployee = {
   name: "", company: "", dept: "", title: "", phone: "", email: "", hireDate: todayStr(), baseSalary: "", status: "在職", siteName: "",
-  additions: [], deductions: [], laborInsurance: 0, healthInsurance: 0, pensionSelf: 0, advances: [], insuranceStatus: "加保", insuranceGrade: "",
+  additions: [], deductions: [], laborInsurance: 0, healthInsurance: 0, pensionSelf: 0, advances: [], insuranceStatus: "無加保", insuranceGrade: "",
   bankCode: "", bankName: "", bankAccount: "",
 };
 
@@ -1823,22 +1823,28 @@ function EmployeesView({ ctx }) {
   const [companyFilter, setCompanyFilter] = useState("全部");
   const [siteFilter, setSiteFilter] = useState("全部");
 
-  // 數據遷移：將舊格式的 advance 轉換為新格式 advances
+  // 數據遷移：轉換舊借支格式，並將未指定投保公司的員工統一設為無加保
   useEffect(() => {
-    const needsMigration = employees.some((e) => e.advance !== undefined && !e.advances);
+    const needsMigration = employees.some((e) =>
+      (e.advance !== undefined && !e.advances) || (!e.company && e.insuranceStatus !== "無加保")
+    );
     if (needsMigration) {
       const migratedEmployees = employees.map((e) => {
+        let migrated = e;
         if (e.advance !== undefined && !e.advances) {
-          return {
+          migrated = {
             ...e,
             advances: Number(e.advance) ? [{ id: uid(), amount: Number(e.advance), date: "" }] : [],
           };
         }
-        return e;
+        if (!migrated.company && migrated.insuranceStatus !== "無加保") {
+          migrated = { ...migrated, insuranceStatus: "無加保" };
+        }
+        return migrated;
       });
       persist.employees(migratedEmployees);
     }
-  }, [employees.length]);
+  }, [employees]);
 
   const KNOWN_COMPANIES = BILLING_COMPANY_OPTIONS.filter((o) => o !== "其他");
   const companyTabs = ["全部", ...KNOWN_COMPANIES, "其他"];
@@ -1853,10 +1859,14 @@ function EmployeesView({ ctx }) {
   });
 
   const save = (data) => {
+    const normalizedData = {
+      ...data,
+      insuranceStatus: data.company ? (data.insuranceStatus || "加保") : "無加保",
+    };
     if (data.id) {
-      persist.employees(employees.map((e) => (e.id === data.id ? data : e)));
+      persist.employees(employees.map((e) => (e.id === data.id ? normalizedData : e)));
     } else {
-      persist.employees([{ ...data, id: uid() }, ...employees]);
+      persist.employees([{ ...normalizedData, id: uid() }, ...employees]);
     }
     setModal(null);
   };
@@ -1945,7 +1955,7 @@ function EmployeesView({ ctx }) {
 }
 
 function EmployeeForm({ data, siteOptions, onSave, onCancel }) {
-  const [f, setF] = useState({ additions: [], deductions: [], laborInsurance: 0, healthInsurance: 0, pensionSelf: 0, advances: [], insuranceStatus: "加保", insuranceGrade: "", bankCode: "", bankName: "", bankAccount: "", ...data });
+  const [f, setF] = useState({ additions: [], deductions: [], laborInsurance: 0, healthInsurance: 0, pensionSelf: 0, advances: [], insuranceStatus: "無加保", insuranceGrade: "", bankCode: "", bankName: "", bankAccount: "", ...data });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   return (
     <div>
@@ -1954,7 +1964,11 @@ function EmployeeForm({ data, siteOptions, onSave, onCancel }) {
         <Field label="部門"><TextInput value={f.dept} onChange={set("dept")} placeholder="業務部" /></Field>
         <Field label="職位"><TextInput value={f.title} onChange={set("title")} placeholder="專案經理" /></Field>
         <Field label="投保公司">
-          <Select value={f.company || ""} onChange={set("company")}>
+          <Select value={f.company || ""} onChange={(e) => setF({
+            ...f,
+            company: e.target.value,
+            insuranceStatus: e.target.value ? (f.insuranceStatus === "無加保" ? "加保" : f.insuranceStatus) : "無加保",
+          })}>
             <option value="">未指定</option>
             {BILLING_COMPANY_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
           </Select>
@@ -2004,6 +2018,7 @@ function EmployeeForm({ data, siteOptions, onSave, onCancel }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 18 }}>
         <Field label="保險狀態">
           <Select value={f.insuranceStatus} onChange={set("insuranceStatus")}>
+            <option value="無加保">無加保</option>
             <option value="加保">加保</option>
             <option value="在保">在保</option>
             <option value="退保">退保</option>
