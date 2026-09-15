@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
   LayoutDashboard, Users, Wallet, FileText, Receipt, Clock, HandCoins,
@@ -690,7 +690,7 @@ function Modal({ title, onClose, children, width = 560 }) {
   );
 }
 
-function ConfirmDialog({ message, onConfirm, onCancel }) {
+function ConfirmDialog({ message, onConfirm, onCancel, confirmLabel = "確認刪除" }) {
   return (
     <div className="confirm-overlay" style={{ position: "fixed", inset: 0, background: "rgba(27,35,51,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }} onClick={onCancel}>
       <div className="confirm-dialog" style={{ background: "#fff", borderRadius: 14, padding: 24, width: 340, maxWidth: "90%", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
@@ -700,7 +700,7 @@ function ConfirmDialog({ message, onConfirm, onCancel }) {
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
           <Btn onClick={onCancel}>取消</Btn>
-          <Btn variant="danger" onClick={onConfirm}>確認刪除</Btn>
+          <Btn variant="danger" onClick={onConfirm}>{confirmLabel}</Btn>
         </div>
       </div>
     </div>
@@ -1112,6 +1112,7 @@ export default function CompanyManagementSystem({ session }) {
   const [leaveRequests, setLeaveRequests] = useState([]);
 
   const [confirmState, setConfirmState] = useState(null);
+  const [storageNotice, setStorageNotice] = useState("");
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
@@ -1179,9 +1180,10 @@ export default function CompanyManagementSystem({ session }) {
     })();
   }, []);
 
-  // 即時同步：訂閱 app_storage 資料表的異動，別人（或自己其他分頁）新增／修改任何模組的資料時，
-  // 畫面會自動更新成最新內容，不用手動重新整理。currentUserId（側邊欄「目前身分」）刻意不列入
-  // 同步範圍，因為那是每個瀏覽器自己選用哪個身分操作，不該被別人的選擇即時蓋掉。
+  // 即時同步：設定型資料仍監聽 app_storage；清單型資料改監聽
+  // app_collection_versions，版本變動後重新讀取該清單的逐筆資料。
+  // currentUserId（側邊欄「目前身分」）刻意不列入同步範圍，因為那是每個瀏覽器
+  // 自己選用哪個身分操作，不該被別人的選擇即時蓋掉。
   useEffect(() => {
     const setterByKey = {
       [STORAGE_KEYS.employees]: setEmployees,
@@ -1207,13 +1209,47 @@ export default function CompanyManagementSystem({ session }) {
       const setter = setterByKey[row?.storage_key];
       if (setter) setter(row.value);
     };
-    const channel = supabase
+    const reloadCollection = async (row) => {
+      const key = row?.collection_key;
+      const setter = setterByKey[key];
+      if (!setter) return;
+      const latest = await loadKey(key, []);
+      setter(latest);
+    };
+    const handleConflict = (event) => {
+      const { key, value } = event.detail || {};
+      const setter = setterByKey[key];
+      if (setter && Array.isArray(value)) setter(value);
+      setStorageNotice("偵測到其他人同時修改資料，已保留資料庫最新版本；請確認後再操作一次。");
+    };
+    const handleSaveError = () => {
+      setStorageNotice("資料暫時無法儲存，請檢查網路後再試一次。");
+    };
+    const legacyChannel = supabase
       .channel("app_storage_live")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "app_storage" }, (payload) => applyChange(payload.new))
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "app_storage" }, (payload) => applyChange(payload.new))
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    const collectionChannel = supabase
+      .channel("app_collection_versions_live")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "app_collection_versions" }, (payload) => reloadCollection(payload.new))
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "app_collection_versions" }, (payload) => reloadCollection(payload.new))
+      .subscribe();
+    window.addEventListener("app-storage-conflict", handleConflict);
+    window.addEventListener("app-storage-save-error", handleSaveError);
+    return () => {
+      supabase.removeChannel(legacyChannel);
+      supabase.removeChannel(collectionChannel);
+      window.removeEventListener("app-storage-conflict", handleConflict);
+      window.removeEventListener("app-storage-save-error", handleSaveError);
+    };
   }, []);
+
+  useEffect(() => {
+    if (!storageNotice) return undefined;
+    const timer = setTimeout(() => setStorageNotice(""), 8000);
+    return () => clearTimeout(timer);
+  }, [storageNotice]);
 
   // persist helpers — update state + storage together
   const persist = {
@@ -1222,7 +1258,11 @@ export default function CompanyManagementSystem({ session }) {
     payroll: (v) => { setPayroll(v); saveKey(STORAGE_KEYS.payroll, v); },
     quotes: (v) => { setQuotes(v); saveKey(STORAGE_KEYS.quotes, v); },
     invoices: (v) => { setInvoices(v); saveKey(STORAGE_KEYS.invoices, v); },
-    billing: (v) => { setBilling(v); saveKey(STORAGE_KEYS.billing, v); },
+    billing: (v) => {
+      if (typeof v === "function") {
+        setBilling((prev) => { const next = v(prev); saveKey(STORAGE_KEYS.billing, next); return next; });
+      } else { setBilling(v); saveKey(STORAGE_KEYS.billing, v); }
+    },
     accounting: (v) => { setAccounting(v); saveKey(STORAGE_KEYS.accounting, v); },
     vendors: (v) => { setVendors(v); saveKey(STORAGE_KEYS.vendors, v); },
     documents: (v) => { setDocuments(v); saveKey(STORAGE_KEYS.documents, v); },
@@ -1232,7 +1272,11 @@ export default function CompanyManagementSystem({ session }) {
     rolePerms: (v) => { setRolePerms(v); saveKey(STORAGE_KEYS.rolePerms, v); },
     quoteTemplates: (v) => { setQuoteTemplates(v); saveKey(STORAGE_KEYS.quoteTemplates, v); },
     currentUserId: (v) => { setCurrentUserId(v); saveKey(STORAGE_KEYS.currentUser, v); },
-    vehicles: (v) => { setVehicles(v); saveKey(STORAGE_KEYS.vehicles, v); },
+    vehicles: (v) => {
+      if (typeof v === "function") {
+        setVehicles((prev) => { const next = v(prev); saveKey(STORAGE_KEYS.vehicles, next); return next; });
+      } else { setVehicles(v); saveKey(STORAGE_KEYS.vehicles, v); }
+    },
     companyLocation: (v) => { setCompanyLocation(v); saveKey(STORAGE_KEYS.companyLocation, v); },
     contractBilling: (v) => { setContractBilling(v); saveKey(STORAGE_KEYS.contractBilling, v); },
     leaveRequests: (v) => { setLeaveRequests(v); saveKey(STORAGE_KEYS.leaveRequests, v); },
@@ -1255,7 +1299,7 @@ export default function CompanyManagementSystem({ session }) {
     });
   }, []);
 
-  const askDelete = (message, onConfirm) => setConfirmState({ message, onConfirm });
+  const askDelete = (message, onConfirm, confirmLabel = "確認刪除") => setConfirmState({ message, onConfirm, confirmLabel });
 
   // 「真實身分」以登入帳號的 Email 對應到系統帳號清單為準，不是側邊欄下拉選單
   // 可以自己亂選的——不然任何人都能把自己切成「夏碩亞」。找不到對應的系統帳號時
@@ -1390,6 +1434,17 @@ export default function CompanyManagementSystem({ session }) {
 
       <div className={"mobile-nav-backdrop" + (mobileNavOpen ? " nav-open" : "")} onClick={() => setMobileNavOpen(false)} />
 
+      {storageNotice && (
+        <div className="no-print" style={{
+          position: "fixed", top: 14, left: "50%", transform: "translateX(-50%)", zIndex: 90,
+          maxWidth: "calc(100vw - 28px)", padding: "10px 16px", borderRadius: 9,
+          background: THEME.danger, color: "#fff", fontSize: 13, fontWeight: 700,
+          boxShadow: "0 8px 24px rgba(0,0,0,.2)",
+        }}>
+          {storageNotice}
+        </div>
+      )}
+
       <div className={"app-sidebar" + (mobileNavOpen ? " nav-open" : "")}>
         <Sidebar tab={tab} setTab={(k) => { setTab(k); setMobileNavOpen(false); }} nav={allowedNav} employees={employees} sysUsers={sysUsers} currentUserId={currentUserId} setCurrentUserId={persist.currentUserId} realIsAdmin={realIsAdmin} matchedUser={matchedUser} session={session} />
       </div>
@@ -1418,6 +1473,7 @@ export default function CompanyManagementSystem({ session }) {
       {confirmState && (
         <ConfirmDialog
           message={confirmState.message}
+          confirmLabel={confirmState.confirmLabel}
           onCancel={() => setConfirmState(null)}
           onConfirm={() => { confirmState.onConfirm(); setConfirmState(null); }}
         />
@@ -1534,7 +1590,7 @@ function TopBar({ tab, now, onMenuClick }) {
    DASHBOARD
 ========================================================= */
 function Dashboard({ ctx }) {
-  const { employees, invoices, billing, attendance, accounting, contracts, vendors, vehicles, payroll, quotes, contractBilling, setTab } = ctx;
+  const { employees, invoices, billing, attendance, accounting, contracts, vendors, vehicles, payroll, quotes, contractBilling, setTab, isAdmin, sysUsers, currentUser, persist } = ctx;
   const dateOnly = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
   const today = dateOnly(new Date());
   const isToday = (d) => d && dateOnly(d).getTime() === today.getTime();
@@ -1544,10 +1600,133 @@ function Dashboard({ ctx }) {
     const target = dateOnly(d);
     return target <= limit && target >= today;
   };
+  const isOverdue = (d) => d && dateOnly(d) < today;
+  const daysOverdue = (d) => Math.round((today - dateOnly(d)) / (1000 * 60 * 60 * 24));
   const expiringContracts = (contracts || []).filter((c) => c.status === "生效中" && isExpiringSoon(c.endDate, 30));
   const expiringVehicles = (vehicles || []).filter((v) => isExpiringSoon(v.insuranceExpiry, 30) || isExpiringSoon(v.inspectionExpiry, 30));
+  const overdueVehicles = (vehicles || []).filter((v) => isOverdue(v.insuranceExpiry) || isOverdue(v.inspectionExpiry));
+
+  // 保險／驗車到期日超過 1 天還沒處理，自動傳「系統通知」給行政跟夏碩亞角色，不用等他們自己發現。
+  // 用 xxxOverdueNotifiedFor 記錄「已經針對哪一個到期日通知過」，避免同一輛車同一個到期日每次開儀表板都重複發送；
+  // 如果之後換了新的到期日（表示續保/驗車過了），欄位對不上就會再重新通知一次。
+  // notifiedInFlightRef 是額外的同步保險：因為 persist.vehicles 是非同步的，
+  // StrictMode 或其他 state 變動可能讓這個 effect 在 patch 還沒寫回之前又跑一次，
+  // 光靠 vehicles 裡的 NotifiedFor 欄位會擋不住，所以先用 ref 記一份「這次 mount 已經處理過」的清單。
+  const notifiedInFlightRef = useRef(new Set());
+  useEffect(() => {
+    const notifyRoles = ["行政", "夏碩亞"];
+    const targets = (sysUsers || []).filter((u) => notifyRoles.includes(u.role) && u.status !== "停用");
+    if (!targets.length || !(vehicles || []).length) return;
+    const senderId = currentUser?.id || ADMIN_CHAT_ID;
+    const recipients = targets.filter((u) => u.id !== senderId);
+    if (!recipients.length) return;
+
+    const pending = [];
+    vehicles.forEach((v) => {
+      const patch = {};
+      const insKey = `${v.id}:insurance:${v.insuranceExpiry}`;
+      if (v.insuranceExpiry && isOverdue(v.insuranceExpiry) && v.insuranceOverdueNotifiedFor !== v.insuranceExpiry && !notifiedInFlightRef.current.has(insKey)) {
+        notifiedInFlightRef.current.add(insKey);
+        pending.push({ content: `系統通知：車輛 ${v.plate || "（未填車牌）"} 保險已逾期 ${daysOverdue(v.insuranceExpiry)} 天（到期日 ${fmtDate(v.insuranceExpiry)}），請盡快處理。` });
+        patch.insuranceOverdueNotifiedFor = v.insuranceExpiry;
+      }
+      const inspKey = `${v.id}:inspection:${v.inspectionExpiry}`;
+      if (v.inspectionExpiry && isOverdue(v.inspectionExpiry) && v.inspectionOverdueNotifiedFor !== v.inspectionExpiry && !notifiedInFlightRef.current.has(inspKey)) {
+        notifiedInFlightRef.current.add(inspKey);
+        pending.push({ content: `系統通知：車輛 ${v.plate || "（未填車牌）"} 驗車已逾期 ${daysOverdue(v.inspectionExpiry)} 天（到期日 ${fmtDate(v.inspectionExpiry)}），請盡快處理。` });
+        patch.inspectionOverdueNotifiedFor = v.inspectionExpiry;
+      }
+      if (Object.keys(patch).length) pending.push({ vehicleId: v.id, patch });
+    });
+    const messages = pending.filter((p) => p.content);
+    const patches = pending.filter((p) => p.vehicleId);
+    if (!messages.length) return;
+
+    (async () => {
+      try {
+        await Promise.all(
+          messages.flatMap(({ content }) =>
+            recipients.map((u) => supabase.from("chat_messages").insert({ sender_id: senderId, recipient_id: u.id, content }))
+          )
+        );
+        // 用 setState 的函式寫法，讓合併永遠是對「寫入當下最新的」vehicles 做，
+        // 不是對 effect 觸發當時（可能已經過時）的 vehicles 做，避免蓋掉這段等待期間
+        // 別人（或自己切到別分頁）新增／編輯的車輛資料。
+        persist.vehicles((prevVehicles) => prevVehicles.map((v) => {
+          const p = patches.find((x) => x.vehicleId === v.id);
+          return p ? { ...v, ...p.patch } : v;
+        }));
+      } catch (err) {
+        console.error("保險／驗車逾期通知傳送失敗", err);
+        patches.forEach((p) => {
+          if (p.patch.insuranceOverdueNotifiedFor) notifiedInFlightRef.current.delete(`${p.vehicleId}:insurance:${p.patch.insuranceOverdueNotifiedFor}`);
+          if (p.patch.inspectionOverdueNotifiedFor) notifiedInFlightRef.current.delete(`${p.vehicleId}:inspection:${p.patch.inspectionOverdueNotifiedFor}`);
+        });
+      }
+    })();
+  }, [vehicles, sysUsers]);
   const billingKind = (b) => b.expenseType === "零用金" ? "零用金" : b.expenseType === "銀行入帳" ? "銀行入帳" : b.expenseType === "公司付款" ? "公司付款" : (b.vendor !== undefined ? "公司付款" : "零用金");
   const duePayments = (billing || []).filter((b) => billingKind(b) === "公司付款" && b.status !== "已付款" && isExpiringSoon(b.plannedPaymentDate, 5));
+  const overduePayments = (billing || []).filter((b) => billingKind(b) === "公司付款" && b.approved && b.status !== "已付款" && isOverdue(b.plannedPaymentDate));
+
+  // 已核准的公司應付款項，若預訂付款日已過還沒標記「已付款」，自動傳「系統通知」給財務角色，不用等他們自己發現。
+  // 用 approvedOverdueNotifiedFor 記錄「已經針對哪一個預訂付款日通知過」，避免每次開儀表板都重複發送；
+  // 如果之後改了預訂付款日，欄位對不上就會再重新通知一次。做法跟上面車輛保險／驗車逾期通知一致。
+  const billingNotifiedInFlightRef = useRef(new Set());
+  useEffect(() => {
+    const targets = (sysUsers || []).filter((u) => u.role === "財務" && u.status !== "停用");
+    if (!targets.length || !(billing || []).length) return;
+    const senderId = currentUser?.id || ADMIN_CHAT_ID;
+    const recipients = targets.filter((u) => u.id !== senderId);
+    if (!recipients.length) return;
+
+    const pending = [];
+    billing.forEach((b) => {
+      if (billingKind(b) !== "公司付款" || !b.approved || b.status === "已付款" || !isOverdue(b.plannedPaymentDate)) return;
+      const key = `${b.id}:${b.plannedPaymentDate}`;
+      if (b.approvedOverdueNotifiedFor === b.plannedPaymentDate || billingNotifiedInFlightRef.current.has(key)) return;
+      billingNotifiedInFlightRef.current.add(key);
+      pending.push({
+        content: `系統通知：公司應付款項已逾期未付款：${b.vendor || "（未填廠商／申請人）"}，金額 ${fmtMoney(b.amount)}，預訂付款日 ${fmtDate(b.plannedPaymentDate)}，已逾期 ${daysOverdue(b.plannedPaymentDate)} 天，請盡快處理。`,
+        billingId: b.id,
+        patch: { approvedOverdueNotifiedFor: b.plannedPaymentDate },
+      });
+    });
+    if (!pending.length) return;
+
+    (async () => {
+      try {
+        await Promise.all(
+          pending.flatMap(({ content }) =>
+            recipients.map((u) => supabase.from("chat_messages").insert({ sender_id: senderId, recipient_id: u.id, content }))
+          )
+        );
+        // 用 setState 的函式寫法，讓合併永遠是對「寫入當下最新的」billing 做，
+        // 不是對 effect 觸發當時（可能已經過時）的 billing 做，避免蓋掉這段等待期間
+        // 別人（或自己切到別分頁）新增／編輯的收支資料（例如廠商欄位）。
+        persist.billing((prevBilling) => prevBilling.map((b) => {
+          const p = pending.find((x) => x.billingId === b.id);
+          return p ? { ...b, ...p.patch } : b;
+        }));
+      } catch (err) {
+        console.error("公司應付款項逾期通知傳送失敗", err);
+        pending.forEach((p) => billingNotifiedInFlightRef.current.delete(`${p.billingId}:${p.patch.approvedOverdueNotifiedFor}`));
+      }
+    })();
+  }, [billing, sysUsers]);
+  // 只有夏碩亞（管理員）看得到「待核准」件數，因為只有夏碩亞能核准公司應付款項，
+  // 一般員工看到這個數字也沒辦法處理，秀出來只會造成困惑。統計範圍是預訂付款日落在本月或下個月的。
+  // 這裡刻意不用 new Date(y, m, 1) 再轉字串的寫法——在 UTC+8 時區，日期 1 號的本地午夜轉成 UTC
+  // 會退回上個月最後一天，monthStr()（走 toISOString）算出來的月份會整個錯一個月，改用純數字運算避開這個陷阱。
+  let nmY = new Date().getFullYear();
+  let nmM = new Date().getMonth() + 1; // 0-indexed 當月 + 1 = 下個月（0-indexed）
+  if (nmM > 11) { nmM = 0; nmY += 1; }
+  const nextMonthStr = `${nmY}-${String(nmM + 1).padStart(2, "0")}`;
+  const pendingApprovalCount = (billing || []).filter((b) => {
+    if (billingKind(b) !== "公司付款" || b.approved) return false;
+    const pd = (b.plannedPaymentDate || "").slice(0, 7);
+    return pd === monthStr() || pd === nextMonthStr;
+  }).length;
   const activeEmp = employees.filter((e) => e.status === "在職").length;
   const thisMonth = monthStr();
   // 發票／請款相關卡片跟每月請款追蹤一樣是「作業週期」概念，通常要等到隔月才會全部處理完，
@@ -1558,6 +1737,10 @@ function Dashboard({ ctx }) {
     .filter((i) => (i.date || "").startsWith(billingMonth))
     .reduce((s, i) => s + (i.total || sumItems(i.items) * (1 + (i.taxRate || 0) / 100)), 0);
   const pendingBilling = billing.filter((b) => b.status === "未付款").reduce((s, b) => s + Number(b.amount || 0), 0);
+  // 發票待入帳金額：所有發票裡還沒填入帳日（dueDate）的，不分月份全部加總
+  const pendingDepositAmount = invoices
+    .filter((i) => !i.dueDate)
+    .reduce((s, i) => s + (i.total || sumItems(i.items) * (1 + (i.taxRate || 0) / 100)), 0);
   const todayAtt = attendance.filter((a) => a.date === todayStr());
   const clockedInCount = todayAtt.filter((a) => a.clockIn).length;
 
@@ -1625,8 +1808,18 @@ function Dashboard({ ctx }) {
     <div>
       <SectionHeader eyebrow="OVERVIEW · 01" title="總覽儀表板" />
 
-      {(expiringContracts.length > 0 || expiringVehicles.length > 0 || duePayments.length > 0) && (
+      {(expiringContracts.length > 0 || expiringVehicles.length > 0 || duePayments.length > 0 || overdueVehicles.length > 0 || overduePayments.length > 0) && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 18 }}>
+          {overdueVehicles.length > 0 && (
+            <button onClick={() => setTab("vehicles")} style={{ display: "flex", alignItems: "center", gap: 6, background: THEME.dangerSoft, border: "1px solid #F0C2BC", borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: THEME.danger, cursor: "pointer" }}>
+              <AlertCircle size={13} />{overdueVehicles.length} 輛車保險／驗車已逾期
+            </button>
+          )}
+          {overduePayments.length > 0 && (
+            <button onClick={() => setTab("billing")} style={{ display: "flex", alignItems: "center", gap: 6, background: THEME.dangerSoft, border: "1px solid #F0C2BC", borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: THEME.danger, cursor: "pointer" }}>
+              <AlertCircle size={13} />{overduePayments.length} 筆已核准款項逾期未付款
+            </button>
+          )}
           {expiringContracts.length > 0 && (() => {
             const todayCount = expiringContracts.filter((c) => isToday(c.endDate)).length;
             const label = todayCount === expiringContracts.length
@@ -1669,7 +1862,7 @@ function Dashboard({ ctx }) {
         </div>
       )}
 
-      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 22 }}>
+      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 22 }}>
         <StatCard label="在職員工人數" value={activeEmp} sub={`共登錄 ${employees.length} 位`} icon={Users} tone="ink" />
         <StatCard label={`${billingMonthNum}月份發票金額`} value={fmtMoney(monthInvoiceTotal)} sub={billingMonth} icon={Receipt} tone="brass" />
         <StatCard label="待付款金額" value={fmtMoney(pendingBilling)} sub="未付款（公司付款）" icon={HandCoins} tone="warn" />
@@ -1678,6 +1871,10 @@ function Dashboard({ ctx }) {
         <StatCard label="生效中契約" value={(contracts || []).filter((c) => c.status === "生效中").length} sub={`共 ${(contracts || []).length} 份`} icon={FileSignature} tone="brass" />
         <StatCard label={`${billingMonthNum}月份已請款`} value={billedCount} sub={`共 ${contractsThisMonth.length} 份契約`} icon={Check} tone="success" />
         <StatCard label={`${billingMonthNum}月份未請款`} value={unbilledCount} sub={`共 ${contractsThisMonth.length} 份契約`} icon={AlertCircle} tone="warn" />
+        {isAdmin && (
+          <StatCard label="公司應付款項待核准" value={pendingApprovalCount} sub="本月＋下月" icon={AlertCircle} tone="danger" />
+        )}
+        <StatCard label="發票待入帳金額" value={fmtMoney(pendingDepositAmount)} sub="未填入帳日" icon={Receipt} tone="warn" />
       </div>
 
       <div className="dashboard-split" style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 16 }}>
@@ -1812,7 +2009,7 @@ const BANK_OPTIONS = [
 const emptyEmployee = {
   name: "", company: "", dept: "", title: "", phone: "", email: "", hireDate: todayStr(), baseSalary: "", status: "在職", siteName: "",
   additions: [], deductions: [], laborInsurance: 0, healthInsurance: 0, pensionSelf: 0, advances: [], insuranceStatus: "無加保", insuranceGrade: "",
-  bankCode: "", bankName: "", bankAccount: "",
+  bankCode: "", bankName: "", bankAccount: "", bankAccountNote: "",
 };
 
 function EmployeesView({ ctx }) {
@@ -1928,6 +2125,7 @@ function EmployeesView({ ctx }) {
                   <>
                     <div style={{ fontSize: 12.5 }}>{e.bankCode ? `${e.bankCode} ` : ""}{e.bankName}</div>
                     <div style={{ fontSize: 14.5, fontWeight: 400, color: THEME.text, fontFamily: FONT_NUM }}>{e.bankAccount || "—"}</div>
+                    {e.bankAccountNote && <div style={{ fontSize: 11, color: THEME.warn }}>備註：{e.bankAccountNote}</div>}
                   </>
                 ) : "—"}
               </td>
@@ -1955,7 +2153,7 @@ function EmployeesView({ ctx }) {
 }
 
 function EmployeeForm({ data, siteOptions, onSave, onCancel }) {
-  const [f, setF] = useState({ additions: [], deductions: [], laborInsurance: 0, healthInsurance: 0, pensionSelf: 0, advances: [], insuranceStatus: "無加保", insuranceGrade: "", bankCode: "", bankName: "", bankAccount: "", ...data });
+  const [f, setF] = useState({ additions: [], deductions: [], laborInsurance: 0, healthInsurance: 0, pensionSelf: 0, advances: [], insuranceStatus: "無加保", insuranceGrade: "", bankCode: "", bankName: "", bankAccount: "", bankAccountNote: "", ...data });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   return (
     <div>
@@ -1999,6 +2197,7 @@ function EmployeeForm({ data, siteOptions, onSave, onCancel }) {
           </Select>
         </Field>
         <Field label="銀行帳號"><TextInput value={f.bankAccount} onChange={set("bankAccount")} placeholder="請輸入帳號" /></Field>
+        <Field label="備註（戶名與本人不同填列）"><TextInput value={f.bankAccountNote} onChange={set("bankAccountNote")} placeholder="選填" /></Field>
       </div>
 
       <div style={{ fontSize: 12, color: THEME.muted, fontWeight: 700, margin: "18px 0 8px" }}>薪資表預設項目（產生薪資時自動套入，仍可在薪資表內個別調整）</div>
@@ -2190,6 +2389,7 @@ function PayrollView({ ctx }) {
                     <>
                       <div style={{ fontSize: 12.5 }}>{emp.bankCode ? `${emp.bankCode} ` : ""}{emp.bankName}</div>
                       <div style={{ fontSize: 14.5, fontWeight: 400, color: THEME.text, fontFamily: FONT_NUM }}>{emp.bankAccount || "—"}</div>
+                      {emp.bankAccountNote && <div style={{ fontSize: 11, color: THEME.warn }}>備註：{emp.bankAccountNote}</div>}
                     </>
                   ) : "—"}
                 </td>
@@ -2962,7 +3162,6 @@ function InvoicesView({ ctx }) {
   const [modal, setModal] = useState(null);
   const [companyFilter, setCompanyFilter] = useState("全部");
   const [month, setMonth] = useState(monthStr());
-  const [checkedIds, setCheckedIds] = useState(new Set());
 
   const KNOWN_COMPANIES = BILLING_COMPANY_OPTIONS.filter((o) => o !== "其他");
   const companyTabs = ["全部", ...KNOWN_COMPANIES, "其他"];
@@ -2983,56 +3182,69 @@ function InvoicesView({ ctx }) {
     setModal(null);
   };
 
-  // 發票本身不再自動登記到帳務入口，避免和「新增至銀行入帳紀錄」的收入重複計算；
-  // 實際收款請透過「新增至銀行入帳紀錄」登記，帳務入口才會有對應的收入。
+  // 發票本身不直接登記到帳務入口；選擇入帳日時，會建立一筆銀行入帳紀錄，
+  // 再由該銀行紀錄建立帳務收入，避免同一張發票重複計算。
   const setStatus = (inv, status) => {
     persist.invoices(invoices.map((x) => x.id === inv.id ? { ...x, status, posted: status === "已付款", updatedAt: new Date().toISOString() } : x));
   };
 
   const setDueDate = (inv, dueDate) => {
-    persist.invoices(invoices.map((x) => x.id === inv.id ? { ...x, dueDate, status: "已付款", posted: true, updatedAt: new Date().toISOString() } : x));
-  };
+    if (!dueDate) return;
+    const total = inv.total ?? sumItems(inv.items) * (1 + Number(inv.taxRate) / 100);
+    const source = `發票 ${inv.no} — ${inv.client}`;
+    const existingDeposit = billing.find((b) => b.expenseType === "銀行入帳" && b.sourceInvoiceId === inv.id);
+    let deposit;
 
-  const toggleChecked = (id) => {
-    setCheckedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
-
-  const addSelectedToBankDeposits = () => {
-    const selected = invoices.filter((inv) => checkedIds.has(inv.id));
-    if (!selected.length) return;
-    const year = toROCYear(new Date().getFullYear());
-    const existingCount = billing.filter((b) => (b.no || "").startsWith(`BD-${year}`)).length;
-    const entries = selected.map((inv, i) => {
-      const total = inv.total ?? sumItems(inv.items) * (1 + Number(inv.taxRate) / 100);
-      const no = `BD-${year}-${String(existingCount + i + 1).padStart(3, "0")}`;
-      return {
-        id: uid(), no, expenseType: "銀行入帳", date: todayStr(), source: `發票 ${inv.no} — ${inv.client}`,
+    if (existingDeposit) {
+      deposit = {
+        ...existingDeposit,
+        date: dueDate,
+        source,
+        amount: total,
+        companyName: inv.companyName || "",
+        updatedAt: new Date().toISOString(),
+      };
+      persist.billing(billing.map((b) => b.id === existingDeposit.id ? deposit : b));
+      removeAccountingBySource("billing", existingDeposit.id);
+    } else {
+      const bankDeposits = billing.filter((b) => b.expenseType === "銀行入帳");
+      deposit = {
+        id: uid(), no: nextNo("BD", bankDeposits), expenseType: "銀行入帳", date: dueDate, source,
         amount: total, note: "", companyName: inv.companyName || "", posted: true,
         sourceInvoiceId: inv.id,
         createdBy: actorName(ctx), createdAt: new Date().toISOString(),
       };
+      persist.billing([deposit, ...billing]);
+    }
+
+    addAccountingEntry({
+      type: "收入", category: "銀行入帳", amount: deposit.amount,
+      desc: `銀行入帳 — ${deposit.source}`, date: deposit.date,
+      sourceType: "billing", sourceId: deposit.id,
     });
-    persist.billing([...entries, ...billing]);
-    entries.forEach((entry) => {
-      addAccountingEntry({ type: "收入", category: "銀行入帳", amount: entry.amount, desc: `銀行入帳 — ${entry.source}`, date: entry.date, sourceType: "billing", sourceId: entry.id });
-    });
-    persist.invoices(invoices.map((inv) => checkedIds.has(inv.id) ? { ...inv, addedToBankDeposit: true, updatedAt: new Date().toISOString() } : inv));
-    setCheckedIds(new Set());
+    persist.invoices(invoices.map((x) => x.id === inv.id ? {
+      ...x, dueDate, status: "已付款", posted: true, addedToBankDeposit: true,
+      updatedAt: new Date().toISOString(),
+    } : x));
+  };
+
+  const cancelDueDate = (inv) => {
+    const linkedDeposits = billing.filter((b) => b.expenseType === "銀行入帳" && b.sourceInvoiceId === inv.id);
+    persist.invoices(invoices.map((x) => x.id === inv.id ? {
+      ...x, dueDate: "", status: "未付款", posted: false, addedToBankDeposit: false,
+      updatedAt: new Date().toISOString(),
+    } : x));
+    if (linkedDeposits.length) {
+      persist.billing(billing.filter((b) => !(b.expenseType === "銀行入帳" && b.sourceInvoiceId === inv.id)));
+      linkedDeposits.forEach((b) => removeAccountingBySource("billing", b.id));
+    }
+    removeAccountingBySource("invoice", inv.id);
   };
 
   return (
     <div>
       <SectionHeader eyebrow="INVOICE · 07" title="發票"
-        action={
-          <div style={{ display: "flex", gap: 8 }}>
-            <Btn icon={Landmark} disabled={checkedIds.size === 0} onClick={addSelectedToBankDeposits}>新增至銀行入帳紀錄{checkedIds.size ? `（${checkedIds.size}）` : ""}</Btn>
-            <Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: { ...emptyInvoice(), no: nextNo("INV", invoices) } })}>開立發票</Btn>
-          </div>
-        } />
+        action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: { ...emptyInvoice(), no: nextNo("INV", invoices) } })}>開立發票</Btn>} />
 
       {invoices.length > 0 && (
         <>
@@ -3056,7 +3268,7 @@ function InvoicesView({ ctx }) {
       ) : filtered.length === 0 ? (
         <EmptyState icon={Receipt} text="這個篩選條件下沒有發票。" />
       ) : (
-        <Table columns={["發票號碼", "開票公司", "估價單號碼", "客戶", "含稅金額", "開立日", "入帳日", "等待天數", "狀態", "選取", ""]}>
+        <Table columns={["發票號碼", "開票公司", "估價單號碼", "客戶", "含稅金額", "開立日", "入帳日", "等待天數", "狀態", ""]}>
           {filtered.map((inv) => {
             const total = inv.total ?? sumItems(inv.items) * (1 + Number(inv.taxRate) / 100);
             const waitDays = inv.date && inv.dueDate ? Math.round((new Date(inv.dueDate) - new Date(inv.date)) / (1000 * 60 * 60 * 24)) : null;
@@ -3069,7 +3281,16 @@ function InvoicesView({ ctx }) {
                 <td style={{ ...td, fontFamily: FONT_NUM, fontWeight: 700 }}>{fmtMoney(total)}</td>
                 <td style={td}>{fmtDate(inv.date)}</td>
                 <td style={td}>
-                  <DatePickerButton value={inv.dueDate} onChange={(v) => setDueDate(inv, v)} />
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <DatePickerButton value={inv.dueDate} onChange={(v) => setDueDate(inv, v)} />
+                    {inv.dueDate && (
+                      <Btn size="sm" variant="danger" icon={X} onClick={() => askDelete(
+                        `確定要取消發票 ${inv.no} 的入帳日嗎？對應的銀行入帳與帳務紀錄也會一併移除。`,
+                        () => cancelDueDate(inv),
+                        "確認取消"
+                      )}>取消選擇日期</Btn>
+                    )}
+                  </div>
                 </td>
                 <td style={{ ...td, fontFamily: FONT_NUM }}>{waitDays !== null ? `${waitDays} 天` : "—"}</td>
                 <td style={td}>
@@ -3079,11 +3300,6 @@ function InvoicesView({ ctx }) {
                     <option value="逾期">逾期</option>
                     <option value="已作廢">已作廢</option>
                   </Select>
-                </td>
-                <td style={{ ...td, textAlign: "center" }}>
-                  <input type="checkbox" checked={inv.addedToBankDeposit || checkedIds.has(inv.id)} disabled={inv.addedToBankDeposit} onChange={() => toggleChecked(inv.id)}
-                    style={{ width: 16, height: 16, cursor: inv.addedToBankDeposit ? "not-allowed" : "pointer" }}
-                    title={inv.addedToBankDeposit ? "已新增至銀行入帳紀錄" : undefined} />
                 </td>
                 <td style={{ ...td, textAlign: "right" }}>
                   <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
@@ -3594,7 +3810,7 @@ const emptyCompanyPayment = () => ({ expenseType: "公司付款", vendor: "", ca
 const emptyBankDeposit = () => ({ expenseType: "銀行入帳", date: todayStr(), source: "", amount: "", note: "", companyName: "" });
 
 function BillingView({ ctx }) {
-  const { billing, persist, addAccountingEntry, removeAccountingBySource, askDelete, isAdmin } = ctx;
+  const { billing, persist, addAccountingEntry, removeAccountingBySource, askDelete, isAdmin, sysUsers, currentUser } = ctx;
   const [expenseTab, setExpenseTab] = useState("銀行入帳");
   const [modal, setModal] = useState(null);
   const [month, setMonth] = useState(monthStr());
@@ -3671,8 +3887,19 @@ function BillingView({ ctx }) {
     }
   };
 
-  const setApproved = (b) => {
+  const setApproved = async (b) => {
     persist.billing(billing.map((x) => x.id === b.id ? { ...x, approved: true, updatedAt: new Date().toISOString() } : x));
+    // 核准後自動傳訊息通知內部對話裡所有「財務」角色的人，不用等他們自己點進來看才發現
+    try {
+      const senderId = currentUser?.id || ADMIN_CHAT_ID;
+      const financeUsers = (sysUsers || []).filter((u) => u.role === "財務" && u.status !== "停用" && u.id !== senderId);
+      const content = `系統通知：公司應付款項已核准：${b.vendor || "（未填廠商／申請人）"}，金額 ${fmtMoney(b.amount)}，預訂付款日 ${b.plannedPaymentDate ? fmtDate(b.plannedPaymentDate) : "未填"}`;
+      await Promise.all(financeUsers.map((u) =>
+        supabase.from("chat_messages").insert({ sender_id: senderId, recipient_id: u.id, content })
+      ));
+    } catch (err) {
+      console.error("核准通知傳送失敗", err);
+    }
   };
 
   const setPaymentDate = (b, paymentDate) => {
@@ -3708,11 +3935,26 @@ function BillingView({ ctx }) {
   const isDueSoon = (d) => d && dateOnly(d) <= soon && dateOnly(d) >= today;
   const daysUntil = (d) => Math.round((dateOnly(d) - today) / (1000 * 60 * 60 * 24));
   const duePayments = companyPayments.filter((b) => b.status !== "已付款" && isDueSoon(b.plannedPaymentDate));
+  const isOverdue = (d) => d && dateOnly(d) < today;
+  const daysOverdue = (d) => Math.round((today - dateOnly(d)) / (1000 * 60 * 60 * 24));
+  const overdueApproved = companyPayments.filter((b) => b.approved && b.status !== "已付款" && isOverdue(b.plannedPaymentDate));
 
   return (
     <div>
       <SectionHeader eyebrow="EXPENSE MANAGEMENT · 08" title="收支管理"
         action={<Btn variant="brass" icon={Plus} onClick={openNew}>{newLabel}</Btn>} />
+
+      {overdueApproved.length > 0 && (
+        <div style={{ background: THEME.dangerSoft, border: "1px solid #F0C2BC", borderRadius: 10, padding: "12px 16px", marginBottom: 18, display: "flex", gap: 8, alignItems: "flex-start" }}>
+          <AlertCircle size={14} color={THEME.danger} style={{ marginTop: 2, flexShrink: 0 }} />
+          <div style={{ fontSize: 12.5, color: THEME.danger, lineHeight: 1.8 }}>
+            <strong>{overdueApproved.length} 筆已核准公司應付款項逾期未付款：</strong>
+            {overdueApproved.map((b) => (
+              <div key={b.id}>{b.vendor}（{fmtMoney(b.amount)}）— 已逾期 {daysOverdue(b.plannedPaymentDate)} 天（預訂付款日 {fmtDate(b.plannedPaymentDate)}）</div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {duePayments.length > 0 && (
         <div style={{ background: THEME.warnSoft, border: `1px solid #E9D8AE`, borderRadius: 10, padding: "12px 16px", marginBottom: 18, display: "flex", gap: 8, alignItems: "flex-start" }}>
@@ -3754,11 +3996,12 @@ function BillingView({ ctx }) {
           <StatCard label="紀錄筆數" value={bankDeposits.length} icon={Check} tone="ink" />
         </div>
       ) : (
-        <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 18 }}>
+        <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 14, marginBottom: 18 }}>
           <StatCard label="公司應付款項總數" value={companyPayments.length} icon={HandCoins} tone="ink" />
           <StatCard label="未付款金額" value={fmtMoney(pendingTotal)} icon={AlertCircle} tone="warn" />
           <StatCard label="已付款件數" value={companyPayments.filter((b) => b.status === "已付款").length} icon={Check} tone="success" />
           <StatCard label="核准金額" value={fmtMoney(approvedTotal)} icon={Check} tone="ink" />
+          <StatCard label="已核准逾期未付" value={overdueApproved.length} icon={AlertCircle} tone="danger" />
         </div>
       )}
 
@@ -5625,18 +5868,36 @@ function VehiclesView({ ctx }) {
   // 用「只看日期、不看時分秒」比較，避免當天已過中午就被誤判成「已經過期」而不再提醒
   const isExpiringSoon = (d) => d && dateOnly(d) <= soon && dateOnly(d) >= today;
   const daysUntil = (d) => Math.round((dateOnly(d) - today) / (1000 * 60 * 60 * 24));
+  const isOverdue = (d) => d && dateOnly(d) < today;
   const expiringVehicles = vehicles.filter((v) => isExpiringSoon(v.insuranceExpiry) || isExpiringSoon(v.inspectionExpiry));
+  const overdueVehicles = vehicles.filter((v) => isOverdue(v.insuranceExpiry) || isOverdue(v.inspectionExpiry));
 
   return (
     <div>
       <SectionHeader eyebrow="VEHICLE · 11" title="車輛管理"
         action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptyVehicle })}>新增車輛</Btn>} />
 
-      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
+      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 18 }}>
         <StatCard label="車輛總數" value={vehicles.length} icon={Car} tone="ink" />
         <StatCard label="使用中" value={vehicles.filter((v) => v.status === "使用中").length} icon={Check} tone="success" />
         <StatCard label="保險／驗車 30 天內到期" value={expiringVehicles.length} icon={AlertCircle} tone="warn" />
+        <StatCard label="保險／驗車已逾期" value={overdueVehicles.length} icon={AlertCircle} tone="danger" />
       </div>
+
+      {overdueVehicles.length > 0 && (
+        <div style={{ background: THEME.dangerSoft, border: "1px solid #F0C2BC", borderRadius: 10, padding: "12px 16px", marginBottom: 18, display: "flex", gap: 8, alignItems: "flex-start" }}>
+          <AlertCircle size={14} color={THEME.danger} style={{ marginTop: 2, flexShrink: 0 }} />
+          <div style={{ fontSize: 12.5, color: THEME.danger, lineHeight: 1.8 }}>
+            <strong>{overdueVehicles.length} 輛車保險或驗車已經逾期，請盡快處理：</strong>
+            {overdueVehicles.map((v) => {
+              const parts = [];
+              if (isOverdue(v.insuranceExpiry)) parts.push(`保險已逾期 ${-daysUntil(v.insuranceExpiry)} 天`);
+              if (isOverdue(v.inspectionExpiry)) parts.push(`驗車已逾期 ${-daysUntil(v.inspectionExpiry)} 天`);
+              return <div key={v.id}>{v.plate}（{v.model || "未填車型"}）— {parts.join("、")}</div>;
+            })}
+          </div>
+        </div>
+      )}
 
       {expiringVehicles.length > 0 && (
         <div style={{ background: THEME.warnSoft, border: `1px solid #E9D8AE`, borderRadius: 10, padding: "12px 16px", marginBottom: 18, display: "flex", gap: 8, alignItems: "flex-start" }}>

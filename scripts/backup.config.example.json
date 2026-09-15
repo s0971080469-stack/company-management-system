@@ -1,0 +1,6 @@
+{
+  "supabaseUrl": "https://udcasyazdrwytnntptev.supabase.co",
+  "serviceRoleKey": "貼上 Supabase 後台 Project Settings → API → service_role secret 的值",
+  "nasBackupPath": "\\\\192.168.1.100\\backup\\company-system",
+  "keepDays": 30
+}
