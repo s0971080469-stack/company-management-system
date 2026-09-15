@@ -947,7 +947,7 @@ function Table({ columns, children, maxHeight = "70vh", sortKey, sortDir, onSort
                 const sortable = isObj && c.sortable;
                 const active = sortable && sortKey === c.key;
                 return (
-                  <th key={isObj ? c.key : c} style={{ ...th, cursor: sortable ? "pointer" : undefined, userSelect: sortable ? "none" : undefined }}
+                  <th key={isObj ? c.key : c} style={{ ...th, ...(isObj ? c.style : {}), cursor: sortable ? "pointer" : undefined, userSelect: sortable ? "none" : undefined }}
                     onClick={sortable ? () => onSort(c.key) : undefined}>
                     {label}{active ? (sortDir === "desc" ? " ▼" : " ▲") : ""}
                   </th>
@@ -1354,6 +1354,7 @@ export default function CompanyManagementSystem({ session }) {
           .app-sidebar, .app-topbar, .no-print { display: none !important; }
           .app-shell { border: none !important; border-radius: 0 !important; overflow: visible !important; min-height: 0 !important; }
           .app-content { overflow: visible !important; padding: 0 !important; }
+          .app-table-card, .app-table-scroll { overflow: visible !important; max-height: none !important; }
         }
         .mobile-nav-toggle { display: none; }
         .mobile-nav-backdrop { display: none; }
@@ -2256,10 +2257,17 @@ const emptyPayrollRow = (e, month) => ({
 });
 
 function PayrollView({ ctx }) {
-  const { employees, payroll, persist, addAccountingEntry, removeAccountingBySource, askDelete, isAdmin } = ctx;
+  const { employees, payroll, contracts, persist, addAccountingEntry, removeAccountingBySource, askDelete, isAdmin } = ctx;
   const [month, setMonth] = useState(periodDefaultMonth(17));
   const [modal, setModal] = useState(null);
+  const [bossFilter, setBossFilter] = useState("全部");
   const [siteFilter, setSiteFilter] = useState("全部");
+  const [sortKey, setSortKey] = useState(null);
+  const [sortDir, setSortDir] = useState("asc");
+  const onSort = (key) => {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir("asc"); }
+  };
 
   // 數據遷移：將舊格式的 advance/advanceDate 轉換為新格式 advances
   useEffect(() => {
@@ -2279,13 +2287,46 @@ function PayrollView({ ctx }) {
   }, [payroll.length]);
 
   const deptOf = (r) => r.department || employees.find((e) => e.id === r.employeeId)?.dept || "";
-  const siteOf = (r) => r.siteName || employees.find((e) => e.id === r.employeeId)?.siteName || "";
+  // 所屬案場以人員管理的最新資料為準；薪資紀錄內的舊快照只在找不到員工時備援。
+  const siteOf = (r) => employees.find((e) => e.id === r.employeeId)?.siteName || r.siteName || "";
   const companyOf = (r) => r.company || employees.find((e) => e.id === r.employeeId)?.company || "";
   const bankOf = (r) => employees.find((e) => e.id === r.employeeId) || {};
+  const bossOf = (r) => contracts.find((c) => c.title === siteOf(r))?.owner === "夏壽松" ? "夏壽松" : "夏碩亞";
   const allRows = payroll.filter((p) => p.month === month);
-  const sites = ["全部", ...Array.from(new Set(allRows.map(siteOf).filter(Boolean)))];
-  const rows = allRows.filter((r) => siteFilter === "全部" || siteOf(r) === siteFilter);
+  const bossRows = allRows.filter((r) => bossFilter === "全部" || bossOf(r) === bossFilter);
+  const sites = ["全部", ...Array.from(new Set(bossRows.map(siteOf).filter(Boolean)))];
+  const rows = bossRows.filter((r) => siteFilter === "全部" || siteOf(r) === siteFilter);
   const activeEmployees = employees.filter((e) => e.status === "在職");
+
+  const sortedRows = useMemo(() => {
+    if (!sortKey) return rows;
+    const dir = sortDir === "desc" ? -1 : 1;
+    const valueOf = (r) => {
+      const emp = bankOf(r);
+      const deductTotal = sumAmounts(r.deductions) + Number(r.laborInsurance || 0) + Number(r.healthInsurance || 0) + Number(r.pensionSelf || 0);
+      switch (sortKey) {
+        case "employeeName": return r.employeeName || "";
+        case "department": return deptOf(r);
+        case "siteName": return siteOf(r);
+        case "baseSalary": return Number(r.baseSalary) || 0;
+        case "additions": return sumAmounts(r.additions);
+        case "deductions": return deductTotal;
+        case "advances": return sumAdvances(r.advances);
+        case "net": return payrollNet(r);
+        case "insuranceStatus": return r.insuranceStatus || "";
+        case "company": return companyOf(r);
+        case "bankAccount": return `${emp.bankCode || ""} ${emp.bankName || ""} ${emp.bankAccount || ""}`;
+        case "paymentDate": return r.paymentDate || "";
+        case "status": return r.status || "";
+        default: return "";
+      }
+    };
+    return [...rows].sort((a, b) => {
+      const va = valueOf(a), vb = valueOf(b);
+      if (typeof va === "number" && typeof vb === "number") return (va - vb) * dir;
+      return String(va).localeCompare(String(vb), "zh-Hant", { numeric: true }) * dir;
+    });
+  }, [rows, sortKey, sortDir, employees]);
 
   // 非管理員在本月薪資表已經產生過之後，「產生本月薪資表」鎖定不能再點——
   // 避免重複點擊時系統又跑一次產生邏輯，把畫面/狀態弄亂，讓已經編輯過的加項、減項等資料看起來像不見了。
@@ -2342,8 +2383,14 @@ function PayrollView({ ctx }) {
         <StatCard label="已發放" value={rows.filter((r) => r.status === "已發放").length + " / " + rows.length} icon={Check} tone="success" />
       </div>
 
-      {allRows.length > 0 && sites.length > 2 && (
-        <div style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "center" }}>
+      {allRows.length > 0 && (
+        <div style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600 }}>負責老闆</span>
+          <Select value={bossFilter} onChange={(e) => { setBossFilter(e.target.value); setSiteFilter("全部"); }} style={{ width: 130 }}>
+            <option value="全部">全部</option>
+            <option value="夏碩亞">夏碩亞</option>
+            <option value="夏壽松">夏壽松</option>
+          </Select>
           <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600 }}>所屬案場</span>
           <Select value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} style={{ width: 200 }}>
             {sites.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -2354,8 +2401,26 @@ function PayrollView({ ctx }) {
       {allRows.length === 0 ? (
         <EmptyState icon={Wallet} text={`尚未建立 ${month} 的薪資表。`} action={<Btn variant="brass" icon={Plus} onClick={generate}>依在職員工產生薪資表</Btn>} />
       ) : (
-        <Table columns={["員工", "部門", "所屬案場", "底薪", "加項", "減項／保費", "借支", "實發淨額", "保險狀態", "加保公司", "銀行帳號", "付款日", "狀態", ""]}>
-          {rows.map((r) => {
+        <Table
+          sortKey={sortKey} sortDir={sortDir} onSort={onSort}
+          columns={[
+            { key: "employeeName", label: "員工", sortable: true },
+            { key: "department", label: "部門", sortable: true },
+            { key: "siteName", label: "所屬案場", sortable: true, style: { width: 320, maxWidth: 320 } },
+            { key: "baseSalary", label: "底薪", sortable: true },
+            { key: "additions", label: "加項", sortable: true },
+            { key: "deductions", label: "減項／保費", sortable: true },
+            { key: "advances", label: "借支", sortable: true },
+            { key: "net", label: "實發淨額", sortable: true },
+            { key: "insuranceStatus", label: "保險狀態", sortable: true },
+            { key: "company", label: "加保公司", sortable: true },
+            { key: "bankAccount", label: "銀行帳號", sortable: true },
+            { key: "paymentDate", label: "付款日", sortable: true },
+            { key: "status", label: "狀態", sortable: true },
+            "",
+          ]}
+        >
+          {sortedRows.map((r) => {
             const net = payrollNet(r);
             const deductTotal = sumAmounts(r.deductions) + Number(r.laborInsurance || 0) + Number(r.healthInsurance || 0) + Number(r.pensionSelf || 0);
             const emp = bankOf(r);
@@ -2363,7 +2428,7 @@ function PayrollView({ ctx }) {
               <tr key={r.id}>
                 <td style={td}><strong>{r.employeeName}</strong></td>
                 <td style={td}>{deptOf(r) || "—"}</td>
-                <td style={td}>{siteOf(r) || "—"}</td>
+                <td style={{ ...td, width: 320, maxWidth: 320, whiteSpace: "normal", lineHeight: 1.55 }}>{siteOf(r) || "—"}</td>
                 <td style={{ ...td, fontFamily: FONT_NUM }}>{fmtMoney(r.baseSalary)}</td>
                 <td style={{ ...td, fontFamily: FONT_NUM, color: THEME.success }}>{sumAmounts(r.additions) ? "+" + fmtMoney(sumAmounts(r.additions)) : "—"}</td>
                 <td style={{ ...td, fontFamily: FONT_NUM, color: THEME.danger }}>{deductTotal ? "−" + fmtMoney(deductTotal) : "—"}</td>
