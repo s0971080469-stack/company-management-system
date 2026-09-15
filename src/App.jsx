@@ -621,7 +621,7 @@ function StatusBadge({ status }) {
   };
   const t = map[status] || { bg: "#EEEEEE", fg: THEME.muted };
   return (
-    <span style={{ background: t.bg, color: t.fg, fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap" }}>
+    <span style={{ background: t.bg, color: t.fg, border: status === "供應商" || status === "業主" ? `1px solid ${t.fg}` : undefined, fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap" }}>
       {status}
     </span>
   );
@@ -1972,16 +1972,16 @@ function quotesActivity(ctx) {
    EMPLOYEES
 ========================================================= */
 const SITE_FIXED_OPTIONS = ["公司總部", "機動組"];
-const siteRowColor = (siteName, siteNames) => {
-  if (!siteName) return THEME.surface;
-  let index = siteNames.indexOf(siteName);
+const groupRowColor = (groupName, groupNames, lightness = 94) => {
+  if (!groupName) return THEME.surface;
+  let index = groupNames.indexOf(groupName);
   if (index < 0) {
     index = 0;
-    for (const char of siteName) index = ((index * 31) + char.charCodeAt(0)) >>> 0;
+    for (const char of groupName) index = ((index * 31) + char.charCodeAt(0)) >>> 0;
   }
   // 使用黃金角度錯開色相，不循環使用固定色盤，讓不同案場各自有專屬淡色。
   const hue = (index * 137.508) % 360;
-  return `hsl(${hue.toFixed(1)} 48% 94%)`;
+  return `hsl(${hue.toFixed(1)} 48% ${lightness}%)`;
 };
 const BANK_OPTIONS = [
   { code: "004", name: "臺灣銀行" },
@@ -2156,7 +2156,7 @@ function EmployeesView({ ctx }) {
       ) : (
         <Table columns={["姓名", "部門", "職位", "投保公司", "到職日", "底薪", "聯絡方式", "銀行帳號", "投保級距", "狀態", "所屬案場", ""]}>
           {sortedFiltered.map((e) => (
-            <tr key={e.id} style={{ background: siteRowColor(e.siteName, siteOptions) }}>
+            <tr key={e.id} style={{ background: groupRowColor(e.siteName, siteOptions) }}>
               <td style={td}><strong>{e.name}</strong></td>
               <td style={td}>{e.dept || "—"}</td>
               <td style={td}>{e.title || "—"}</td>
@@ -2741,6 +2741,17 @@ const emptyQuoteTemplate = () => ({
   note: "", ...emptyLetterhead(), docTitle: "估　　價　　單",
 });
 
+const companyRowColor = (companyName) => {
+  const name = (companyName || "").trim();
+  if (!name) return THEME.surface;
+  if (name.startsWith("綠石")) return "#EAF5F1";
+  if (name.startsWith("歐克")) return "#ECF2FB";
+  if (name.startsWith("上藝")) return "#F5EFF9";
+  if (name.startsWith("維娜")) return "#FBF1E9";
+  if (name.startsWith("禾豐")) return "#F1F5E9";
+  return "#F0F1F5";
+};
+
 function QuotesView({ ctx, setTab }) {
   const { quotes, persist, invoices, quoteTemplates, vendors, askDelete } = ctx;
   const [modal, setModal] = useState(null);
@@ -2756,6 +2767,11 @@ function QuotesView({ ctx, setTab }) {
   // 所以標籤要直接從實際填過的公司名稱產生，而不是比對固定選項，
   // 否則使用者打的名稱跟固定清單對不起來，篩選永遠是空的。
   const quoteCompanies = Array.from(new Set(quotes.map((q) => q.companyName).filter(Boolean)));
+  const quoteRowColor = (companyName) => {
+    const name = (companyName || "").trim();
+    if (["綠石", "歐克", "上藝", "維娜", "禾豐"].some((prefix) => name.startsWith(prefix))) return companyRowColor(name);
+    return groupRowColor(companyName, quoteCompanies, 95.5);
+  };
   const hasUnset = quotes.some((q) => !q.companyName);
   const companyTabs = ["全部", ...quoteCompanies, ...(hasUnset ? ["未填公司"] : [])];
   const filteredQuotes = quotes.filter((q) => {
@@ -2867,10 +2883,11 @@ function QuotesView({ ctx, setTab }) {
               <button key={c} onClick={() => setCompanyFilter(c)}
                 style={{
                   padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-                  border: `1px solid ${companyFilter === c ? THEME.brass : THEME.line}`,
-                  background: companyFilter === c ? THEME.brass : "#fff",
-                  color: companyFilter === c ? "#fff" : THEME.text,
-                }}>{c === "全部" || c === "未填公司" ? c : c.slice(0, 4)}</button>
+                  border: `1px solid ${companyFilter === c ? THEME.brassDeep : "#B8B6AA"}`,
+                  background: c === "全部" ? THEME.canvas : c === "未填公司" ? THEME.surface : quoteRowColor(c),
+                  color: THEME.text,
+                  boxShadow: companyFilter === c ? `inset 0 0 0 1px ${THEME.brassDeep}` : "none",
+                }} aria-pressed={companyFilter === c}>{c === "全部" || c === "未填公司" ? c : c.slice(0, 4)}</button>
             ))}
           </div>
           <div style={{ position: "relative", maxWidth: 260 }}>
@@ -2902,7 +2919,7 @@ function QuotesView({ ctx, setTab }) {
               const hasAttachment = attachments.length > 0;
               const latestAttachment = hasAttachment ? attachments[attachments.length - 1] : null;
               return (
-              <tr key={q.id}>
+              <tr key={q.id} style={{ background: quoteRowColor(q.companyName) }}>
                 <td style={{ ...td, fontFamily: FONT_NUM }}>{q.no}</td>
                 <td style={td}><strong>{q.client}</strong></td>
                 <td style={td}>{(q.createdBy && q.createdBy !== "—") ? q.createdBy : "夏碩亞"}</td>
@@ -3401,10 +3418,11 @@ function InvoicesView({ ctx }) {
               <button key={c} onClick={() => setCompanyFilter(c)}
                 style={{
                   padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-                  border: `1px solid ${companyFilter === c ? THEME.brass : THEME.line}`,
-                  background: companyFilter === c ? THEME.brass : "#fff",
-                  color: companyFilter === c ? "#fff" : THEME.text,
-                }}>{c}</button>
+                  border: `1px solid ${companyFilter === c ? THEME.brassDeep : "#B8B6AA"}`,
+                  background: c === "全部" ? THEME.canvas : companyRowColor(c),
+                  color: THEME.text,
+                  boxShadow: companyFilter === c ? `inset 0 0 0 1px ${THEME.brassDeep}` : "none",
+                }} aria-pressed={companyFilter === c}>{c}</button>
             ))}
           </div>
         </>
@@ -3420,7 +3438,7 @@ function InvoicesView({ ctx }) {
             const total = inv.total ?? sumItems(inv.items) * (1 + Number(inv.taxRate) / 100);
             const waitDays = inv.date && inv.dueDate ? Math.round((new Date(inv.dueDate) - new Date(inv.date)) / (1000 * 60 * 60 * 24)) : null;
             return (
-              <tr key={inv.id}>
+              <tr key={inv.id} style={{ background: companyRowColor(inv.companyName) }}>
                 <td style={{ ...td, fontFamily: FONT_NUM }}>{inv.no}</td>
                 <td style={td}>{inv.companyName ? <StatusBadge status={KNOWN_COMPANIES.includes(inv.companyName) ? inv.companyName : "其他"} /> : "—"}</td>
                 <td style={{ ...td, fontFamily: FONT_NUM, color: THEME.muted }}>{inv.quoteNo || "—"}</td>
@@ -4163,10 +4181,11 @@ function BillingView({ ctx }) {
                 <button key={c} onClick={() => setCompanyFilter(c)}
                   style={{
                     padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-                    border: `1px solid ${companyFilter === c ? THEME.brass : THEME.line}`,
-                    background: companyFilter === c ? THEME.brass : "#fff",
-                    color: companyFilter === c ? "#fff" : THEME.text,
-                  }}>{c}</button>
+                    border: `1px solid ${companyFilter === c ? THEME.brassDeep : "#B8B6AA"}`,
+                    background: c === "全部" ? THEME.canvas : companyRowColor(c),
+                    color: THEME.text,
+                    boxShadow: companyFilter === c ? `inset 0 0 0 1px ${THEME.brassDeep}` : "none",
+                  }} aria-pressed={companyFilter === c}>{c}</button>
               ))}
             </div>
           )}
@@ -4175,7 +4194,7 @@ function BillingView({ ctx }) {
           ) : expenseTab === "零用金" ? (
             <Table columns={["單號", "日期", "項目／用途", "收支類型", "金額", "經手人", "備註", ""]}>
               {filtered.map((b) => (
-                <tr key={b.id}>
+                <tr key={b.id} style={{ background: (b.flowType || "支出") === "收入" ? "#EAF5F1" : "#FBEFF0" }}>
                   <td style={{ ...td, fontFamily: FONT_NUM }}>{b.no}</td>
                   <td style={td}>{fmtDate(b.date)}</td>
                   <td style={td}><strong>{b.item}</strong></td>
@@ -4197,7 +4216,7 @@ function BillingView({ ctx }) {
           ) : expenseTab === "銀行入帳" ? (
             <Table columns={["單號", "日期", "來源／說明", "金額", "入帳公司", "備註", ""]}>
               {filtered.map((b) => (
-                <tr key={b.id}>
+                <tr key={b.id} style={{ background: companyRowColor(b.companyName) }}>
                   <td style={{ ...td, fontFamily: FONT_NUM }}>{b.no}</td>
                   <td style={td}>{fmtDate(b.date)}</td>
                   <td style={td}><strong>{b.source}</strong></td>
@@ -4216,7 +4235,7 @@ function BillingView({ ctx }) {
           ) : (
             <Table columns={["單號", "廠商／申請人", "項目類別", "申請日期", "預訂付款日", "金額", "付款公司", "核准", "付款日", "狀態", ""]}>
               {filtered.map((b) => (
-                <tr key={b.id}>
+                <tr key={b.id} style={{ background: companyRowColor(b.companyName) }}>
                   <td style={{ ...td, fontFamily: FONT_NUM }}>{b.no}</td>
                   <td style={td}><strong>{b.vendor}</strong></td>
                   <td style={td}>{b.category || "—"}</td>
@@ -4433,10 +4452,11 @@ function AccountingView({ ctx }) {
               <button key={t} onClick={() => setTypeFilter(t)}
                 style={{
                   padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-                  border: `1px solid ${typeFilter === t ? THEME.brass : THEME.line}`,
-                  background: typeFilter === t ? THEME.brass : "#fff",
-                  color: typeFilter === t ? "#fff" : THEME.text,
-                }}>{t}</button>
+                  border: `1px solid ${typeFilter === t ? THEME.brassDeep : "#B8B6AA"}`,
+                  background: t === "收入" ? "#EAF5F1" : t === "支出" ? "#FBEFF0" : THEME.canvas,
+                  color: THEME.text,
+                  boxShadow: typeFilter === t ? `inset 0 0 0 1px ${THEME.brassDeep}` : "none",
+                }} aria-pressed={typeFilter === t}>{t}</button>
             ))}
           </div>
         </>
@@ -4449,7 +4469,7 @@ function AccountingView({ ctx }) {
       ) : (
         <Table columns={["日期", "類型", "類別", "說明", "金額", ""]}>
           {sorted.map((a) => (
-            <tr key={a.id}>
+            <tr key={a.id} style={{ background: a.type === "收入" ? "#EAF5F1" : "#FBEFF0" }}>
               <td style={td}>{fmtDate(a.date)}</td>
               <td style={td}><StatusBadge status={a.type === "收入" ? "收入" : "支出"} /></td>
               <td style={td}>{a.category || "—"}</td>
@@ -4689,10 +4709,11 @@ function VendorsView({ ctx }) {
             <button key={t} onClick={() => setTypeFilter(t)}
               style={{
                 padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-                border: `1px solid ${typeFilter === t ? THEME.brass : THEME.line}`,
-                background: typeFilter === t ? THEME.brass : "#fff",
-                color: typeFilter === t ? "#fff" : THEME.text,
-              }}>{t}</button>
+                border: `1px solid ${typeFilter === t ? THEME.brassDeep : "#B8B6AA"}`,
+                background: t === "供應商" ? "#E4E9F0" : t === "業主" ? "#F5E9EE" : THEME.canvas,
+                color: THEME.text,
+                boxShadow: typeFilter === t ? `inset 0 0 0 1px ${THEME.brassDeep}` : "none",
+              }} aria-pressed={typeFilter === t}>{t}</button>
           ))}
         </div>
         <div style={{ position: "relative", maxWidth: 260 }}>
@@ -4706,7 +4727,7 @@ function VendorsView({ ctx }) {
       ) : (
         <Table columns={["名稱", "類型", "業務類別", "聯絡人", "聯絡方式", "統一編號", "付款方式", "往來公司", "聯絡地址", "發票類別", ""]}>
           {filtered.map((v) => (
-            <tr key={v.id}>
+            <tr key={v.id} style={{ background: v.vendorType === "供應商" ? "#E4E9F0" : v.vendorType === "業主" ? "#F5E9EE" : THEME.surface }}>
               <td style={td}><strong>{v.name}</strong></td>
               <td style={td}><StatusBadge status={v.vendorType} /></td>
               <td style={td}>{v.category || "—"}</td>
@@ -6069,11 +6090,22 @@ function VehiclesView({ ctx }) {
       {filtered.length === 0 ? (
         <EmptyState icon={Car} text="尚未建立任何車輛資料。" action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptyVehicle })}>新增第一輛車</Btn>} />
       ) : (
+        <>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12, fontSize: 12, color: THEME.text }}>
+          {[["已逾期", "#FBEFF0"], ["30天內到期（含今日）", "#FFF7E5"], ["使用中", "#EAF5F1"], ["保養中", "#ECF2FB"], ["停用", "#F0F1F5"]].map(([label, color]) => (
+            <span key={label} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+              <span style={{ width: 14, height: 14, background: color, border: "1px solid #B8B6AA", borderRadius: 3 }} />{label}
+            </span>
+          ))}
+          <span style={{ color: THEME.muted }}>到期提醒優先顯示</span>
+        </div>
         <Table columns={["車牌號碼", "廠牌型號", "使用人", "部門", "保險到期日", "驗車到期日", "狀態", ""]}>
           {filtered.map((v) => {
             const flagged = isExpiringSoon(v.insuranceExpiry) || isExpiringSoon(v.inspectionExpiry);
+            const overdue = isOverdue(v.insuranceExpiry) || isOverdue(v.inspectionExpiry);
+            const rowColor = overdue ? "#FBEFF0" : flagged ? "#FFF7E5" : v.status === "使用中" ? "#EAF5F1" : v.status === "保養中" ? "#ECF2FB" : v.status === "停用" ? "#F0F1F5" : THEME.surface;
             return (
-              <tr key={v.id} style={flagged ? { background: THEME.warnSoft } : undefined}>
+              <tr key={v.id} style={{ background: rowColor }}>
                 <td style={{ ...td, fontFamily: FONT_NUM }}><strong>{v.plate}</strong></td>
                 <td style={td}>{v.model || "—"}</td>
                 <td style={td}>{empName(v.driverId) || "—"}</td>
@@ -6097,6 +6129,7 @@ function VehiclesView({ ctx }) {
             );
           })}
         </Table>
+        </>
       )}
 
       {modal && (
