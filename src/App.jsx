@@ -8,7 +8,7 @@ import {
   Paperclip, Eye, Upload, Image as ImageIcon, Loader2, MapPin, Printer, Menu, Stamp, MessageCircle, Send
 } from "lucide-react";
 import {
-  BarChart, Bar, LineChart, Line, ComposedChart, PieChart, Pie, Cell, XAxis, YAxis,
+  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis,
   CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from "recharts";
 import { loadKey, saveKey } from "./storage.js";
@@ -16,6 +16,8 @@ import { supabase, createAuthActionClient } from "./supabaseClient.js";
 import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import { renderAsync as renderDocxAsync } from "docx-preview";
+import DashboardOverview from "./DashboardOverview.jsx";
+import { payrollAuditStamp, payrollActivityActor } from "./payrollActivity.js";
 
 /* ---------------------------------------------------------
    企業帳冊 Corporate Ledger — 主題設計
@@ -1734,7 +1736,6 @@ function Dashboard({ ctx }) {
   // 發票／請款相關卡片跟每月請款追蹤一樣是「作業週期」概念，通常要等到隔月才會全部處理完，
   // 所以這裡用比較晚的 cutoffDay（20），在隔月 20 號前都先顯示上個月的資料。
   const billingMonth = periodDefaultMonth(20);
-  const billingMonthNum = Number(billingMonth.slice(5, 7));
   const monthInvoiceTotal = invoices
     .filter((i) => (i.date || "").startsWith(billingMonth))
     .reduce((s, i) => s + (i.total || sumItems(i.items) * (1 + (i.taxRate || 0) / 100)), 0);
@@ -1796,7 +1797,7 @@ function Dashboard({ ctx }) {
       if (kind === "銀行入帳") return { t: b.date, dt, text: `銀行入帳 ${b.no} — ${b.source}`, tag: "已入帳", by: b.createdBy };
       return { t: b.date, dt, text: `公司付款 ${b.no} — ${b.vendor}`, tag: b.status, by: b.createdBy };
     }),
-    ...(payroll || []).filter((p) => p.status === "已發放").map((p) => ({ t: p.paymentDate || `${p.month}-01`, dt: p.updatedAt || p.createdAt, text: `薪資發放 — ${p.employeeName}（${p.month}）`, tag: p.status, by: p.createdBy })),
+    ...(payroll || []).filter((p) => p.status === "已發放").map((p) => ({ t: p.paymentDate || `${p.month}-01`, dt: p.updatedAt || p.paidAt || p.createdAt, text: `薪資發放 — ${p.employeeName}（${p.month}）`, tag: p.status, by: payrollActivityActor(p), byLabel: "操作人" })),
     ...quotesActivity(ctx),
   ].filter((x) => x.t).sort((a, b) => {
     // 優先用建立時間排序，沒有的話才退回交易日期——避免補登過去日期的紀錄
@@ -1804,164 +1805,48 @@ function Dashboard({ ctx }) {
     const ak = a.dt || a.t;
     const bk = b.dt || b.t;
     return ak < bk ? 1 : ak > bk ? -1 : 0;
-  }).slice(0, 30);
+  }).slice(0, 50);
+
+  const alerts = [];
+  if (overdueVehicles.length) alerts.push({ key: "overdue-vehicles", target: "vehicles", tone: "danger", label: `${overdueVehicles.length} 輛車保險／驗車已逾期` });
+  if (overduePayments.length) alerts.push({ key: "overdue-payments", target: "billing", tone: "danger", label: `${overduePayments.length} 筆已核准款項逾期未付款` });
+  [
+    { key: "contracts", target: "contracts", rows: expiringContracts, label: "份契約", unit: "份", days: 30, dueToday: (c) => isToday(c.endDate) },
+    { key: "vehicles", target: "vehicles", rows: expiringVehicles, label: "輛車保險／驗車", unit: "輛", days: 30, dueToday: (v) => isToday(v.insuranceExpiry) || isToday(v.inspectionExpiry) },
+    { key: "payments", target: "billing", rows: duePayments, label: "筆應付款項", unit: "筆", days: 5, dueToday: (b) => isToday(b.plannedPaymentDate) },
+  ].forEach(({ key, target, rows, label, unit, days, dueToday }) => {
+    if (!rows.length) return;
+    const todayCount = rows.filter(dueToday).length;
+    alerts.push({
+      key, target, tone: "warn",
+      label: todayCount === rows.length
+        ? `${rows.length} ${label}今日到期`
+        : `${rows.length} ${label} ${days} 天內到期${todayCount ? `（${todayCount} ${unit}今日到期）` : ""}`,
+    });
+  });
 
   return (
-    <div>
-      <SectionHeader eyebrow="OVERVIEW · 01" title="總覽儀表板" />
-
-      {(expiringContracts.length > 0 || expiringVehicles.length > 0 || duePayments.length > 0 || overdueVehicles.length > 0 || overduePayments.length > 0) && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 18 }}>
-          {overdueVehicles.length > 0 && (
-            <button onClick={() => setTab("vehicles")} style={{ display: "flex", alignItems: "center", gap: 6, background: THEME.dangerSoft, border: "1px solid #F0C2BC", borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: THEME.danger, cursor: "pointer" }}>
-              <AlertCircle size={13} />{overdueVehicles.length} 輛車保險／驗車已逾期
-            </button>
-          )}
-          {overduePayments.length > 0 && (
-            <button onClick={() => setTab("billing")} style={{ display: "flex", alignItems: "center", gap: 6, background: THEME.dangerSoft, border: "1px solid #F0C2BC", borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: THEME.danger, cursor: "pointer" }}>
-              <AlertCircle size={13} />{overduePayments.length} 筆已核准款項逾期未付款
-            </button>
-          )}
-          {expiringContracts.length > 0 && (() => {
-            const todayCount = expiringContracts.filter((c) => isToday(c.endDate)).length;
-            const label = todayCount === expiringContracts.length
-              ? `${expiringContracts.length} 份契約今日到期`
-              : todayCount > 0
-              ? `${expiringContracts.length} 份契約 30 天內到期（${todayCount} 份今日到期）`
-              : `${expiringContracts.length} 份契約 30 天內到期`;
-            return (
-              <button onClick={() => setTab("contracts")} style={{ display: "flex", alignItems: "center", gap: 6, background: THEME.warnSoft, border: `1px solid #E9D8AE`, borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: THEME.warn, cursor: "pointer" }}>
-                <AlertCircle size={13} />{label}
-              </button>
-            );
-          })()}
-          {expiringVehicles.length > 0 && (() => {
-            const todayCount = expiringVehicles.filter((v) => isToday(v.insuranceExpiry) || isToday(v.inspectionExpiry)).length;
-            const label = todayCount === expiringVehicles.length
-              ? `${expiringVehicles.length} 輛車保險／驗車今日到期`
-              : todayCount > 0
-              ? `${expiringVehicles.length} 輛車保險／驗車 30 天內到期（${todayCount} 輛今日到期）`
-              : `${expiringVehicles.length} 輛車保險／驗車 30 天內到期`;
-            return (
-              <button onClick={() => setTab("vehicles")} style={{ display: "flex", alignItems: "center", gap: 6, background: THEME.warnSoft, border: `1px solid #E9D8AE`, borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: THEME.warn, cursor: "pointer" }}>
-                <AlertCircle size={13} />{label}
-              </button>
-            );
-          })()}
-          {duePayments.length > 0 && (() => {
-            const todayCount = duePayments.filter((b) => isToday(b.plannedPaymentDate)).length;
-            const label = todayCount === duePayments.length
-              ? `${duePayments.length} 筆應付款項今日到期`
-              : todayCount > 0
-              ? `${duePayments.length} 筆應付款項 5 天內到期（${todayCount} 筆今日到期）`
-              : `${duePayments.length} 筆應付款項 5 天內到期`;
-            return (
-              <button onClick={() => setTab("billing")} style={{ display: "flex", alignItems: "center", gap: 6, background: THEME.warnSoft, border: `1px solid #E9D8AE`, borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: THEME.warn, cursor: "pointer" }}>
-                <AlertCircle size={13} />{label}
-              </button>
-            );
-          })()}
-        </div>
-      )}
-
-      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 22 }}>
-        <StatCard label="在職員工人數" value={activeEmp} sub={`共登錄 ${employees.length} 位`} icon={Users} tone="ink" />
-        <StatCard label={`${billingMonthNum}月份發票金額`} value={fmtMoney(monthInvoiceTotal)} sub={billingMonth} icon={Receipt} tone="brass" />
-        <StatCard label="待付款金額" value={fmtMoney(pendingBilling)} sub="未付款（公司付款）" icon={HandCoins} tone="warn" />
-        <StatCard label="今日已打卡" value={`${clockedInCount} / ${activeEmp}`} sub={todayStr()} icon={Clock} tone="success" />
-        <StatCard label="供應商家數" value={(vendors || []).filter((v) => v.vendorType === "供應商").length} sub={`共 ${(vendors || []).length} 家`} icon={Truck} tone="ink" />
-        <StatCard label="生效中契約" value={(contracts || []).filter((c) => c.status === "生效中").length} sub={`共 ${(contracts || []).length} 份`} icon={FileSignature} tone="brass" />
-        <StatCard label={`${billingMonthNum}月份已請款`} value={billedCount} sub={`共 ${contractsThisMonth.length} 份契約`} icon={Check} tone="success" />
-        <StatCard label={`${billingMonthNum}月份未請款`} value={unbilledCount} sub={`共 ${contractsThisMonth.length} 份契約`} icon={AlertCircle} tone="warn" />
-        {isAdmin && (
-          <StatCard label="公司應付款項待核准" value={pendingApprovalCount} sub="本月＋下月" icon={AlertCircle} tone="danger" />
-        )}
-        <StatCard label="發票待入帳金額" value={fmtMoney(pendingDepositAmount)} sub="未填入帳日" icon={Receipt} tone="warn" />
-      </div>
-
-      <div className="dashboard-split" style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 16 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <div style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 12, padding: "20px 22px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-              <h3 style={{ margin: 0, fontSize: 14.5, fontWeight: 700, color: THEME.text }}>近 6 個月收支趨勢</h3>
-              <div style={{ display: "flex", gap: 14, fontSize: 12, color: THEME.muted }}>
-                <span style={{ color: THEME.success }}>● 收入</span><span style={{ color: THEME.danger }}>● 支出</span><span style={{ color: THEME.brassDeep }}>● 淨額走勢</span>
-              </div>
-            </div>
-            <ResponsiveContainer width="100%" height={230}>
-              <ComposedChart data={trend} barGap={4}>
-                <CartesianGrid strokeDasharray="3 3" stroke={THEME.line} vertical={false} />
-                <XAxis dataKey="month" tick={{ fontSize: 12, fill: THEME.muted }} axisLine={{ stroke: THEME.line }} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: THEME.muted }} axisLine={false} tickLine={false} width={50} tickFormatter={(v) => (v >= 1000 ? `${v / 1000}k` : v)} />
-                <Tooltip formatter={(v) => fmtMoney(v)} contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${THEME.line}` }} />
-                <Bar dataKey="收入" fill={THEME.success} radius={[4, 4, 0, 0]} />
-                <Bar dataKey="支出" fill={THEME.danger} radius={[4, 4, 0, 0]} />
-                <Line type="monotone" dataKey="淨額" stroke={THEME.brassDeep} strokeWidth={2} dot={{ r: 3, fill: THEME.brassDeep }} />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="two-col-split" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-            <div style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 12, padding: "20px 22px" }}>
-              <h3 style={{ margin: "0 0 14px", fontSize: 14.5, fontWeight: 700, color: THEME.text }}>本月支出分類</h3>
-              {monthExpenseByCategory.length === 0 ? (
-                <p style={{ fontSize: 13, color: THEME.muted }}>本月尚無支出紀錄。</p>
-              ) : (
-                <ResponsiveContainer width="100%" height={190}>
-                  <PieChart>
-                    <Pie data={monthExpenseByCategory} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={65} label={(e) => e.name}>
-                      {monthExpenseByCategory.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                    </Pie>
-                    <Tooltip formatter={(v) => fmtMoney(v)} contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${THEME.line}` }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-
-            <div style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 12, padding: "20px 22px" }}>
-              <h3 style={{ margin: "0 0 14px", fontSize: 14.5, fontWeight: 700, color: THEME.text }}>待辦事項</h3>
-              {todoItems.length === 0 ? (
-                <p style={{ fontSize: 13, color: THEME.muted }}>目前沒有待處理事項。</p>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  {todoItems.map((t, i) => (
-                    <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ fontSize: 13, color: THEME.text }}>{t.label}</span>
-                      <span style={{ fontFamily: FONT_NUM, fontSize: 13, fontWeight: 700, color: THEME.warn }}>{t.count}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 12, padding: "20px 22px", display: "flex", flexDirection: "column", height: 588 }}>
-          <h3 style={{ margin: "0 0 14px", fontSize: 14.5, fontWeight: 700, color: THEME.text }}>最近動態</h3>
-          {recentActivity.length === 0 ? (
-            <p style={{ fontSize: 13, color: THEME.muted }}>目前尚無資料，建立估價單、發票或支出紀錄後會顯示於此。</p>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12, flex: 1, minHeight: 0, overflowY: "auto", paddingRight: 4 }}>
-              {recentActivity.map((a, i) => (
-                <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 13, color: THEME.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.text}</div>
-                    <div style={{ fontSize: 11, color: THEME.muted }}>{a.dt ? fmtDateTime(a.dt) : fmtDate(a.t)}{a.by ? ` · ${a.by === "—" ? "夏碩亞" : a.by}` : ""}</div>
-                  </div>
-                  <StatusBadge status={a.tag} />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, marginTop: 16 }}>
-        <StatCard label="總累計收入" value={fmtMoney(income)} icon={TrendingUp} tone="success" />
-        <StatCard label="總累計支出" value={fmtMoney(expense)} icon={TrendingDown} tone="danger" />
-        <StatCard label="淨額" value={fmtMoney(income - expense)} icon={Landmark} tone="brass" />
-      </div>
-    </div>
+    <DashboardOverview
+      summary={{
+        today: todayStr(), billingMonth, thisMonth,
+        monthInvoiceTotal, pendingDepositAmount, pendingBilling,
+        activeEmp, employeeCount: employees.length, clockedInCount,
+        activeContracts: (contracts || []).filter((c) => c.status === "生效中").length,
+        totalContracts: (contracts || []).length,
+        supplierCount: (vendors || []).filter((v) => v.vendorType === "供應商").length,
+        vendorCount: (vendors || []).length,
+        billedCount, unbilledCount, contractCount: contractsThisMonth.length,
+        isAdmin, pendingApprovalCount, income, expense,
+      }}
+      alerts={alerts}
+      trend={trend}
+      categories={monthExpenseByCategory}
+      todoItems={todoItems}
+      recentActivity={recentActivity}
+      navigate={setTab}
+      formats={{ money: fmtMoney, date: fmtDate, dateTime: fmtDateTime, month: fmtMonthLabel }}
+      StatusBadge={StatusBadge}
+    />
   );
 }
 function quotesActivity(ctx) {
@@ -2387,14 +2272,17 @@ function PayrollView({ ctx }) {
   };
 
   const saveRow = (data) => {
-    persist.payroll(payroll.map((r) => (r.id === data.id ? { ...data, updatedAt: new Date().toISOString() } : r)));
+    const audit = payrollAuditStamp(actorName(ctx));
+    persist.payroll(payroll.map((r) => (r.id === data.id ? { ...data, ...audit } : r)));
     setModal(null);
   };
 
   const markPaid = (r) => {
+    if (r.status === "已發放") return;
     const net = payrollNet(r);
     const paymentDate = r.paymentDate || todayStr();
-    persist.payroll(payroll.map((x) => (x.id === r.id ? { ...x, status: "已發放", posted: true, paymentDate, updatedAt: new Date().toISOString() } : x)));
+    const audit = payrollAuditStamp(actorName(ctx), { paid: true });
+    persist.payroll(payroll.map((x) => (x.id === r.id ? { ...x, status: "已發放", posted: true, paymentDate, ...audit } : x)));
     if (!r.posted) {
       addAccountingEntry({ type: "支出", category: "薪資", amount: net, desc: `${r.month} 薪資 — ${r.employeeName}`, date: paymentDate, sourceType: "payroll", sourceId: r.id });
     }
@@ -2402,7 +2290,8 @@ function PayrollView({ ctx }) {
 
   const toggleHold = (r) => {
     const nextStatus = r.status === "暫時不發" ? "待發放" : "暫時不發";
-    persist.payroll(payroll.map((x) => (x.id === r.id ? { ...x, status: nextStatus, updatedAt: new Date().toISOString() } : x)));
+    const audit = payrollAuditStamp(actorName(ctx));
+    persist.payroll(payroll.map((x) => (x.id === r.id ? { ...x, status: nextStatus, ...audit } : x)));
   };
 
   const totalNet = rows.reduce((s, r) => s + payrollNet(r), 0);
