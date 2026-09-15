@@ -577,6 +577,7 @@ function StatusBadge({ status }) {
     "離職": { bg: "#EEEEEE", fg: THEME.muted },
     "待發放": { bg: THEME.warnSoft, fg: THEME.warn },
     "已發放": { bg: THEME.successSoft, fg: THEME.success },
+    "暫時不發": { bg: THEME.dangerSoft, fg: THEME.danger },
     "草擬": { bg: "#EEEEEE", fg: THEME.muted },
     "已送出": { bg: THEME.warnSoft, fg: THEME.warn },
     "已核准": { bg: THEME.successSoft, fg: THEME.success },
@@ -2382,6 +2383,11 @@ function PayrollView({ ctx }) {
     }
   };
 
+  const toggleHold = (r) => {
+    const nextStatus = r.status === "暫時不發" ? "待發放" : "暫時不發";
+    persist.payroll(payroll.map((x) => (x.id === r.id ? { ...x, status: nextStatus, updatedAt: new Date().toISOString() } : x)));
+  };
+
   const totalNet = rows.reduce((s, r) => s + payrollNet(r), 0);
   const paidNet = rows.filter((r) => r.status === "已發放").reduce((s, r) => s + payrollNet(r), 0);
   const unpaidNet = totalNet - paidNet;
@@ -2453,7 +2459,7 @@ function PayrollView({ ctx }) {
             const deductTotal = sumAmounts(r.deductions) + Number(r.laborInsurance || 0) + Number(r.healthInsurance || 0) + Number(r.pensionSelf || 0);
             const emp = bankOf(r);
             return (
-              <tr key={r.id}>
+              <tr key={r.id} style={{ background: r.status === "已發放" ? "#EEF7F2" : r.status === "暫時不發" ? "#FCEEEF" : "#FFF8E5" }}>
                 <td style={td}><strong>{r.employeeName}</strong></td>
                 <td style={td}>{deptOf(r) || "—"}</td>
                 <td style={{ ...td, width: 320, maxWidth: 320, whiteSpace: "normal", lineHeight: 1.55 }}>{siteOf(r) || "—"}</td>
@@ -2516,6 +2522,11 @@ function PayrollView({ ctx }) {
                 <td style={{ ...td, textAlign: "right" }}>
                   <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                     {r.status !== "已發放" && <Btn size="sm" variant="success" icon={Check} onClick={() => markPaid(r)}>已發放請打勾</Btn>}
+                    {r.status !== "已發放" && (
+                      <Btn size="sm" variant={r.status === "暫時不發" ? "default" : "danger"} icon={r.status === "暫時不發" ? RotateCcw : undefined} onClick={() => toggleHold(r)}>
+                        {r.status === "暫時不發" ? "恢復待發放" : "暫時不發"}
+                      </Btn>
+                    )}
                     <Btn size="sm" icon={Pencil} onClick={() => setModal(r)}>編輯</Btn>
                     <Btn size="sm" variant="danger" icon={Trash2} onClick={() => askDelete(`確定要刪除 ${r.employeeName} 的薪資紀錄嗎？`, () => { persist.payroll(payroll.filter((x) => x.id !== r.id)); removeAccountingBySource("payroll", r.id); })} />
                   </div>
