@@ -8,6 +8,7 @@ import {
   Paperclip, Eye, Upload, Image as ImageIcon, Loader2, MapPin, Printer, Menu, Stamp, MessageCircle, Send
 } from "lucide-react";
 import { loadKey, saveKey, generateLatestPayroll } from "./storage.js";
+import { savePaymentDecision } from "./paymentDecision.js";
 import { supabase, createAuthActionClient } from "./supabaseClient.js";
 import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
@@ -640,6 +641,7 @@ function Btn({ children, onClick, variant = "default", icon: Icon, size = "md", 
     ghost: { background: "transparent", color: THEME.muted },
     danger: { background: THEME.dangerSoft, color: THEME.danger },
     success: { background: THEME.successSoft, color: THEME.success },
+    approval: { background: "#F7E7B5", color: "#704B0B", border: "1px solid #C69A38" },
   };
   return (
     <button className={`app-btn ${className}`} type={type} disabled={disabled} onClick={onClick} style={{ ...base, ...variants[variant] }}
@@ -1260,6 +1262,11 @@ export default function CompanyManagementSystem({ session }) {
 
   // persist helpers — update state + storage together
   const persist = {
+    billingConfirmed: async (v) => {
+      const saved = await saveKey(STORAGE_KEYS.billing, v);
+      if (saved) setBilling(v);
+      return saved;
+    },
     employees: (v) => { setEmployees(v); saveKey(STORAGE_KEYS.employees, v); },
     attendance: (v) => { setAttendance(v); saveKey(STORAGE_KEYS.attendance, v); },
     payroll: (v) => { setPayroll(v); saveKey(STORAGE_KEYS.payroll, v); },
@@ -3859,6 +3866,9 @@ const emptyBankDeposit = () => ({ expenseType: "銀行入帳", date: todayStr(),
 function BillingView({ ctx }) {
   const { billing, persist, addAccountingEntry, removeAccountingBySource, askDelete, isAdmin, sysUsers, currentUser } = ctx;
   const [expenseTab, setExpenseTab] = useState("銀行入帳");
+  const [decisionBusy, setDecisionBusy] = useState(false);
+  const decisionInFlight = useRef(false);
+  const [decisionNotice, setDecisionNotice] = useState("");
   const [modal, setModal] = useState(null);
   const [month, setMonth] = useState(monthStr());
   const [companyFilter, setCompanyFilter] = useState("全部");
@@ -3906,6 +3916,10 @@ function BillingView({ ctx }) {
   };
 
   const saveCompanyPayment = (data) => {
+    if (billing.find((b) => b.id === data.id)?.paymentOnHold && data.status === "已付款") {
+      setDecisionNotice("此款項暫時不發，請由夏碩亞重新核准後再付款。");
+      return;
+    }
     if (data.id) {
       persist.billing(billing.map((b) => (b.id === data.id ? { ...data, updatedAt: new Date().toISOString() } : b)));
     } else {
@@ -3928,28 +3942,36 @@ function BillingView({ ctx }) {
   };
 
   const setStatus = (b, status) => {
+    if (b.paymentOnHold || decisionInFlight.current) return;
     persist.billing(billing.map((x) => x.id === b.id ? { ...x, status, posted: status === "已付款", updatedAt: new Date().toISOString() } : x));
     if (status === "已付款" && !b.posted) {
       addAccountingEntry({ type: "支出", category: b.category || "公司付款", amount: b.amount, desc: `公司付款 ${b.no} — ${b.vendor}`, sourceType: "billing", sourceId: b.id });
     }
   };
 
-  const setApproved = async (b) => {
-    persist.billing(billing.map((x) => x.id === b.id ? { ...x, approved: true, updatedAt: new Date().toISOString() } : x));
-    // 核准後自動傳訊息通知內部對話裡所有「財務」角色的人，不用等他們自己點進來看才發現
+  const setDecision = async (b, onHold) => {
+    if (decisionInFlight.current) return;
+    decisionInFlight.current = true;
+    setDecisionBusy(true);
+    setDecisionNotice("");
     try {
-      const senderId = currentUser?.id || ADMIN_CHAT_ID;
-      const financeUsers = (sysUsers || []).filter((u) => u.role === "財務" && u.status !== "停用" && u.id !== senderId);
-      const content = `系統通知：公司應付款項已核准：${b.vendor || "（未填廠商／申請人）"}，金額 ${fmtMoney(b.amount)}，預訂付款日 ${b.plannedPaymentDate ? fmtDate(b.plannedPaymentDate) : "未填"}`;
-      await Promise.all(financeUsers.map((u) =>
-        supabase.from("chat_messages").insert({ sender_id: senderId, recipient_id: u.id, content })
-      ));
+      setDecisionNotice(await savePaymentDecision({
+        payment: b, billing, onHold, isAdmin, actor: actorName(ctx),
+        senderId: currentUser?.id || ADMIN_CHAT_ID, users: sysUsers || [],
+        save: persist.billingConfirmed,
+        send: (messages) => supabase.from("chat_messages").insert(messages),
+        formatMoney: fmtMoney, formatDate: fmtDate,
+      }));
     } catch (err) {
-      console.error("核准通知傳送失敗", err);
+      setDecisionNotice(err.message);
+    } finally {
+      decisionInFlight.current = false;
+      setDecisionBusy(false);
     }
   };
 
   const setPaymentDate = (b, paymentDate) => {
+    if (b.paymentOnHold || decisionInFlight.current) return;
     persist.billing(billing.map((x) => x.id === b.id ? { ...x, paymentDate, status: "已付款", posted: true, updatedAt: new Date().toISOString() } : x));
     if (!b.posted) {
       addAccountingEntry({ type: "支出", category: b.category || "公司付款", amount: b.amount, desc: `公司付款 ${b.no} — ${b.vendor}`, sourceType: "billing", sourceId: b.id });
@@ -3989,7 +4011,13 @@ function BillingView({ ctx }) {
   return (
     <div>
       <SectionHeader eyebrow="EXPENSE MANAGEMENT · 08" title="收支管理"
-        action={<Btn variant="brass" icon={Plus} onClick={openNew}>{newLabel}</Btn>} />
+        action={<Btn variant="brass" icon={Plus} disabled={decisionBusy} onClick={openNew}>{newLabel}</Btn>} />
+
+      {decisionNotice && (
+        <div role="status" style={{ background: THEME.warnSoft, color: THEME.text, padding: "12px 16px", borderRadius: 10, marginBottom: 18 }}>
+          {decisionNotice}
+        </div>
+      )}
 
       {overdueApproved.length > 0 && (
         <div style={{ background: THEME.dangerSoft, border: "1px solid #F0C2BC", borderRadius: 10, padding: "12px 16px", marginBottom: 18, display: "flex", gap: 8, alignItems: "flex-start" }}>
@@ -4017,7 +4045,7 @@ function BillingView({ ctx }) {
 
       <div style={{ display: "flex", gap: 6, marginBottom: 18, flexWrap: "wrap" }}>
         {[{ key: "銀行入帳", label: "銀行入帳紀錄", icon: Landmark }, { key: "公司付款", label: "公司應付款項", icon: HandCoins }, { key: "零用金", label: "零用金紀錄", icon: Wallet }].map((t) => (
-          <button key={t.key} onClick={() => setExpenseTab(t.key)}
+          <button key={t.key} disabled={decisionBusy} onClick={() => setExpenseTab(t.key)}
             style={{
               display: "flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 999, fontSize: 13, fontWeight: 700, cursor: "pointer",
               border: `1px solid ${expenseTab === t.key ? THEME.brass : THEME.line}`,
@@ -4126,23 +4154,29 @@ function BillingView({ ctx }) {
                   <td style={{ ...td, fontFamily: FONT_NUM, fontWeight: 700 }}>{fmtMoney(b.amount)}</td>
                   <td style={td}>{b.companyName ? <StatusBadge status={KNOWN_COMPANIES.includes(b.companyName) ? b.companyName : "其他"} /> : "—"}</td>
                   <td style={td}>
-                    {b.approved ? <StatusBadge status="已核准" /> : isAdmin ? (
-                      <Btn size="sm" variant="primary" onClick={() => setApproved(b)}>核准</Btn>
-                    ) : <StatusBadge status="待核准" />}
+                    <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                      {b.paymentOnHold && <StatusBadge status="暫時不發" />}
+                      {b.approved && !b.paymentOnHold ? <StatusBadge status="已核准" /> : isAdmin ? (
+                        <Btn size="sm" className="payment-decision-btn" variant="approval" disabled={decisionBusy || b.status === "已付款" || !!b.paymentDate} onClick={() => setDecision(b, false)}>核准</Btn>
+                      ) : !b.paymentOnHold && <StatusBadge status="待核准" />}
+                      {isAdmin && !b.approved && !b.paymentOnHold && b.status !== "已付款" && !b.paymentDate && (
+                        <Btn size="sm" className="payment-decision-btn" variant="danger" disabled={decisionBusy} onClick={() => setDecision(b, true)}>暫時不發</Btn>
+                      )}
+                    </div>
                   </td>
                   <td style={td}>
-                    <DatePickerButton value={b.paymentDate} onChange={(v) => setPaymentDate(b, v)} disabled={!b.approved} />
+                    <DatePickerButton value={b.paymentDate} onChange={(v) => setPaymentDate(b, v)} disabled={!b.approved || b.paymentOnHold || decisionBusy} />
                   </td>
                   <td style={td}>
-                    <Select value={b.status} onChange={(e) => setStatus(b, e.target.value)} style={{ padding: "4px 8px", fontSize: 12 }}>
+                    <Select value={b.status} disabled={b.paymentOnHold || decisionBusy} onChange={(e) => setStatus(b, e.target.value)} style={{ padding: "4px 8px", fontSize: 12 }}>
                       <option value="未付款">未付款</option>
                       <option value="已付款">已付款</option>
                     </Select>
                   </td>
                   <td style={{ ...td, textAlign: "right" }}>
                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                      <Btn size="sm" icon={Pencil} onClick={() => setModal({ mode: "edit", data: b })} />
-                      <Btn size="sm" variant="danger" icon={Trash2} onClick={() => askDelete(`確定要刪除公司應付款項 ${b.no} 嗎？`, () => { persist.billing(billing.filter((x) => x.id !== b.id)); removeAccountingBySource("billing", b.id); })} />
+                      <Btn size="sm" icon={Pencil} disabled={decisionBusy} onClick={() => setModal({ mode: "edit", data: b })} />
+                      <Btn size="sm" variant="danger" icon={Trash2} disabled={decisionBusy} onClick={() => askDelete(`確定要刪除公司應付款項 ${b.no} 嗎？`, () => { persist.billing(billing.filter((x) => x.id !== b.id)); removeAccountingBySource("billing", b.id); })} />
                     </div>
                   </td>
                 </tr>
@@ -4239,7 +4273,7 @@ function CompanyPaymentForm({ data, onSave, onCancel }) {
       <Field label="申請日期"><TextInput type="date" value={f.date} onChange={set("date")} /></Field>
       <Field label="預訂付款日"><TextInput type="date" value={f.plannedPaymentDate} onChange={set("plannedPaymentDate")} /></Field>
       <Field label="狀態" span={2}>
-        <Select value={f.status} onChange={set("status")}>
+        <Select value={f.status} disabled={f.paymentOnHold} onChange={set("status")}>
           <option value="未付款">未付款</option>
           <option value="已付款">已付款</option>
         </Select>
