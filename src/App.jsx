@@ -7,7 +7,7 @@ import {
   ChevronRight, ChevronLeft, RotateCcw, ArrowRight, AlertCircle, FileSignature, Truck, ShieldCheck, UserCog, Download, Car,
   Paperclip, Eye, Upload, Image as ImageIcon, Loader2, MapPin, Printer, Menu, Stamp, MessageCircle, Send
 } from "lucide-react";
-import { loadKey, saveKey } from "./storage.js";
+import { loadKey, saveKey, generateLatestPayroll } from "./storage.js";
 import { supabase, createAuthActionClient } from "./supabaseClient.js";
 import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
@@ -15,7 +15,7 @@ import { renderAsync as renderDocxAsync } from "docx-preview";
 import DashboardOverview from "./DashboardOverview.jsx";
 import ReportsOverview from "./ReportsOverview.jsx";
 import { payrollAuditStamp, payrollActivityActor } from "./payrollActivity.js";
-import { nextPayrollMonth, payrollGenerationLocked, generatePayrollForMonth } from "./payrollGeneration.js";
+import { nextPayrollMonth, payrollGenerationLocked } from "./payrollGeneration.js";
 
 /* ---------------------------------------------------------
    企業帳冊 Corporate Ledger — 主題設計
@@ -1236,11 +1236,17 @@ export default function CompanyManagementSystem({ session }) {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "app_collection_versions" }, (payload) => reloadCollection(payload.new))
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "app_collection_versions" }, (payload) => reloadCollection(payload.new))
       .subscribe();
+    const handleRefreshed = (event) => {
+      const { key, value } = event.detail || {};
+      if (Array.isArray(value)) setterByKey[key]?.(value);
+    };
+    window.addEventListener("app-storage-refreshed", handleRefreshed);
     window.addEventListener("app-storage-conflict", handleConflict);
     window.addEventListener("app-storage-save-error", handleSaveError);
     return () => {
       supabase.removeChannel(legacyChannel);
       supabase.removeChannel(collectionChannel);
+      window.removeEventListener("app-storage-refreshed", handleRefreshed);
       window.removeEventListener("app-storage-conflict", handleConflict);
       window.removeEventListener("app-storage-save-error", handleSaveError);
     };
@@ -1909,7 +1915,7 @@ const emptyEmployee = {
 };
 
 function EmployeesView({ ctx }) {
-  const { employees, payroll, contracts, persist, askDelete } = ctx;
+  const { employees, contracts, persist, askDelete } = ctx;
   const siteOptions = [...SITE_FIXED_OPTIONS, ...Array.from(new Set(contracts.map((c) => c.title).filter(Boolean)))];
   const [modal, setModal] = useState(null); // {mode, data}
   const [query, setQuery] = useState("");
@@ -1963,34 +1969,7 @@ function EmployeesView({ ctx }) {
       insuranceStatus: data.company ? (data.insuranceStatus || "加保") : "無加保",
     };
     if (data.id) {
-      const previousData = employees.find((e) => e.id === data.id);
-      const salarySnapshot = (e = {}) => JSON.stringify({
-        baseSalary: Number(e.baseSalary) || 0,
-        additions: (e.additions || []).map((it) => ({ name: it.name || "", amount: Number(it.amount) || 0 })),
-        deductions: (e.deductions || []).map((it) => ({ name: it.name || "", amount: Number(it.amount) || 0 })),
-        laborInsurance: Number(e.laborInsurance) || 0,
-        healthInsurance: Number(e.healthInsurance) || 0,
-        pensionSelf: Number(e.pensionSelf) || 0,
-        advances: (e.advances || []).map((it) => ({ amount: Number(it.amount) || 0, date: it.date || "" })),
-        insuranceStatus: e.insuranceStatus || "無加保",
-        company: e.company || "",
-      });
-      if (previousData && salarySnapshot(previousData) !== salarySnapshot(normalizedData)) {
-        const changedAt = new Date().toISOString();
-        persist.payroll(payroll.map((r) => r.employeeId === data.id && r.status === "待發放" ? {
-          ...r,
-          company: normalizedData.company || "",
-          baseSalary: Number(normalizedData.baseSalary) || 0,
-          additions: (normalizedData.additions || []).map((it) => ({ ...it, id: uid() })),
-          deductions: (normalizedData.deductions || []).map((it) => ({ ...it, id: uid() })),
-          laborInsurance: Number(normalizedData.laborInsurance) || 0,
-          healthInsurance: Number(normalizedData.healthInsurance) || 0,
-          pensionSelf: Number(normalizedData.pensionSelf) || 0,
-          advances: (normalizedData.advances || []).map((it) => ({ ...it, id: uid() })),
-          insuranceStatus: normalizedData.insuranceStatus || "無加保",
-          updatedAt: changedAt,
-        } : r));
-      }
+      // 人員薪資僅作為下一次新增薪資表的預設值；不連動任何既有月份。
       persist.employees(employees.map((e) => (e.id === data.id ? normalizedData : e)));
     } else {
       persist.employees([{ ...normalizedData, id: uid() }, ...employees]);
@@ -2174,20 +2153,12 @@ const payrollNet = (r) =>
   Number(r.baseSalary || 0) + sumAmounts(r.additions) - sumAmounts(r.deductions)
   - Number(r.laborInsurance || 0) - Number(r.healthInsurance || 0) - Number(r.pensionSelf || 0) - sumAdvances(r.advances);
 
-const emptyPayrollRow = (e, month) => ({
-  id: uid(), month, employeeId: e.id, employeeName: e.name, department: e.dept || "", siteName: e.siteName || "", company: e.company || "",
-  baseSalary: Number(e.baseSalary) || 0,
-  additions: (e.additions || []).map((it) => ({ ...it, id: uid() })),
-  deductions: (e.deductions || []).map((it) => ({ ...it, id: uid() })),
-  laborInsurance: Number(e.laborInsurance) || 0, healthInsurance: Number(e.healthInsurance) || 0,
-  pensionSelf: Number(e.pensionSelf) || 0, advances: (e.advances || []).map((it) => ({ ...it, id: uid() })),
-  insuranceStatus: e.insuranceStatus || "無加保", paymentDate: "", note: "",
-  status: "待發放", posted: false,
-});
-
 function PayrollView({ ctx }) {
   const { employees, payroll, contracts, persist, addAccountingEntry, removeAccountingBySource, askDelete, isAdmin } = ctx;
   const [month, setMonth] = useState(periodDefaultMonth(17));
+  const [generating, setGenerating] = useState(false);
+  const generatingRef = useRef(false);
+  const [generationNotice, setGenerationNotice] = useState("");
   const [modal, setModal] = useState(null);
   const [bossFilter, setBossFilter] = useState("全部");
   const [siteFilter, setSiteFilter] = useState("全部");
@@ -2260,14 +2231,26 @@ function PayrollView({ ctx }) {
   const nextMonth = nextPayrollMonth(month);
   const generateLocked = payrollGenerationLocked(payroll, month, isAdmin);
   const nextGenerateLocked = payrollGenerationLocked(payroll, nextMonth, isAdmin);
-  const generate = (targetMonth) => {
-    const result = generatePayrollForMonth({ payroll, employees, month: targetMonth, isAdmin, createRow: emptyPayrollRow });
-    if (result.locked) return;
-    if (result.addedCount) persist.payroll(result.rows);
-    if (targetMonth !== month) {
-      setMonth(targetMonth);
-      setBossFilter("全部");
-      setSiteFilter("全部");
+  const generate = async (targetMonth) => {
+    if (generatingRef.current) return;
+    generatingRef.current = true;
+    setGenerating(true);
+    setGenerationNotice("");
+    try {
+      const result = await generateLatestPayroll({ month: targetMonth, isAdmin, makeId: uid });
+      setGenerationNotice(result.addedCount
+        ? `已依最新人員資料完整套用並儲存 ${result.addedCount} 筆薪資表。`
+        : "該月份沒有需要新增的薪資表；既有薪資表保持不變。");
+      if (!result.locked && targetMonth !== month) {
+        setMonth(targetMonth);
+        setBossFilter("全部");
+        setSiteFilter("全部");
+      }
+    } catch (error) {
+      setGenerationNotice(error.message || "產生失敗，請確認網路後重試。");
+    } finally {
+      generatingRef.current = false;
+      setGenerating(false);
     }
   };
 
@@ -2304,11 +2287,11 @@ function PayrollView({ ctx }) {
         action={
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <Btn icon={Printer} onClick={() => window.print()}>列印</Btn>
-            <Btn variant="brass" icon={generateLocked && month ? Check : Plus} onClick={() => generate(month)} disabled={generateLocked}>
+            <Btn variant="brass" icon={generateLocked && month ? Check : Plus} onClick={() => generate(month)} disabled={generating || generateLocked}>
               {generateLocked && month ? "本月薪資表已產生" : "產生本月薪資表"}
             </Btn>
             <div title={nextMonth ? `產生 ${fmtMonthLabel(nextMonth)} 的薪資表；以目前選取月份的下一個月為準。` : "請先選擇月份"}>
-              <Btn variant="primary" icon={nextGenerateLocked && nextMonth ? Check : CalendarDays} onClick={() => generate(nextMonth)} disabled={nextGenerateLocked}>
+              <Btn variant="primary" icon={nextGenerateLocked && nextMonth ? Check : CalendarDays} onClick={() => generate(nextMonth)} disabled={generating || nextGenerateLocked}>
                 {nextGenerateLocked && nextMonth ? "下月薪資表已產生" : "產生下月薪資表"}
               </Btn>
             </div>
@@ -2328,6 +2311,9 @@ function PayrollView({ ctx }) {
         <StatCard label="暫時不發" value={rows.filter((r) => r.status === "暫時不發").length + " / " + rows.length} icon={AlertCircle} tone="danger" />
       </div>
 
+      <div role="status" aria-live="polite" style={{ marginBottom: 12, color: THEME.muted, fontSize: 13 }}>
+        {generating ? "正在讀取最新人員資料、核對金額並儲存…" : generationNotice || "新增薪資表將套用人員管理最新已儲存的完整薪資數字；既有薪資表不會覆蓋。"}
+      </div>
       {/* 即使所選月份還沒有薪資，也要保留月份切換入口。 */}
       <div style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "center", flexWrap: "wrap" }}>
           <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600 }}>負責老闆</span>
@@ -2347,7 +2333,7 @@ function PayrollView({ ctx }) {
       </div>
 
       {allRows.length === 0 ? (
-        <EmptyState icon={Wallet} text={`尚未建立 ${month} 的薪資表。`} action={<Btn variant="brass" icon={Plus} onClick={() => generate(month)} disabled={generateLocked}>依在職員工產生薪資表</Btn>} />
+        <EmptyState icon={Wallet} text={`尚未建立 ${month} 的薪資表。`} action={<Btn variant="brass" icon={Plus} onClick={() => generate(month)} disabled={generating || generateLocked}>依在職員工產生薪資表</Btn>} />
       ) : (
         <Table
           sortKey={sortKey} sortDir={sortDir} onSort={onSort}

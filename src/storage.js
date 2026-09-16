@@ -1,4 +1,5 @@
 import { supabase } from "./supabaseClient";
+import { createPayrollFromLatest } from "./payrollCreation.js";
 
 /**
  * 清單型資料已改成「一筆資料一列」存放於 app_records。
@@ -31,6 +32,30 @@ const collectionStorageModes = new Map();
 const collectionSaveQueues = new Map();
 const collectionGenerations = new Map();
 const PAGE_SIZE = 1000;
+
+export function generateLatestPayroll(options) {
+  const pendingPayroll = collectionSaveQueues.get("payroll");
+  const pendingEmployees = collectionSaveQueues.get("employees");
+  const queued = (async () => {
+    for (const pending of [pendingEmployees, pendingPayroll]) {
+      if (pending && !(await pending)) throw new Error("前一筆資料尚未成功儲存，請確認後再產生。");
+    }
+    const result = await createPayrollFromLatest(supabase, options);
+    if (result.version != null) collectionVersions.set("payroll", result.version);
+    // 取消產生期間從舊畫面排入的薪資寫入，避免新薪資被舊清單移除。
+    collectionGenerations.set("payroll", (collectionGenerations.get("payroll") || 0) + 1);
+    collectionStorageModes.set("payroll", "records");
+    emitStorageEvent("app-storage-refreshed", { key: "employees", value: result.employees });
+    emitStorageEvent("app-storage-refreshed", { key: "payroll", value: result.rows });
+    return result;
+  })();
+  collectionSaveQueues.set("payroll", queued);
+  const cleanup = () => {
+    if (collectionSaveQueues.get("payroll") === queued) collectionSaveQueues.delete("payroll");
+  };
+  queued.then(cleanup, cleanup);
+  return queued;
+}
 
 const isMissingDataLayerError = (error) =>
   ["42P01", "42883", "PGRST202", "PGRST204", "PGRST205"].includes(error?.code);
