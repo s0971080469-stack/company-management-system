@@ -15,6 +15,7 @@ import { renderAsync as renderDocxAsync } from "docx-preview";
 import DashboardOverview from "./DashboardOverview.jsx";
 import ReportsOverview from "./ReportsOverview.jsx";
 import { payrollAuditStamp, payrollActivityActor } from "./payrollActivity.js";
+import { nextPayrollMonth, payrollGenerationLocked, generatePayrollForMonth } from "./payrollGeneration.js";
 
 /* ---------------------------------------------------------
    企業帳冊 Corporate Ledger — 主題設計
@@ -2224,7 +2225,6 @@ function PayrollView({ ctx }) {
   const bossRows = allRows.filter((r) => bossFilter === "全部" || bossOf(r) === bossFilter);
   const sites = ["全部", ...Array.from(new Set(bossRows.map(siteOf).filter(Boolean)))];
   const rows = bossRows.filter((r) => siteFilter === "全部" || siteOf(r) === siteFilter);
-  const activeEmployees = employees.filter((e) => e.status === "在職");
 
   const sortedRows = useMemo(() => {
     if (!sortKey) return rows;
@@ -2256,16 +2256,19 @@ function PayrollView({ ctx }) {
     });
   }, [rows, sortKey, sortDir, employees]);
 
-  // 非管理員在本月薪資表已經產生過之後，「產生本月薪資表」鎖定不能再點——
-  // 避免重複點擊時系統又跑一次產生邏輯，把畫面/狀態弄亂，讓已經編輯過的加項、減項等資料看起來像不見了。
-  // 管理員不受限制，仍可隨時點擊（例如當月中途有新進員工，需要補產生那個人的薪資表）。
-  const alreadyGenerated = allRows.length > 0;
-  const generateLocked = !isAdmin && alreadyGenerated;
-  const generate = () => {
-    if (generateLocked) return;
-    const existingIds = new Set(allRows.map((r) => r.employeeId));
-    const news = activeEmployees.filter((e) => !existingIds.has(e.id)).map((e) => emptyPayrollRow(e, month));
-    if (news.length) persist.payroll([...payroll, ...news]);
+  // 兩個月份分別判斷產生權限；管理員可補新進員工，但不覆寫任何既有薪資。
+  const nextMonth = nextPayrollMonth(month);
+  const generateLocked = payrollGenerationLocked(payroll, month, isAdmin);
+  const nextGenerateLocked = payrollGenerationLocked(payroll, nextMonth, isAdmin);
+  const generate = (targetMonth) => {
+    const result = generatePayrollForMonth({ payroll, employees, month: targetMonth, isAdmin, createRow: emptyPayrollRow });
+    if (result.locked) return;
+    if (result.addedCount) persist.payroll(result.rows);
+    if (targetMonth !== month) {
+      setMonth(targetMonth);
+      setBossFilter("全部");
+      setSiteFilter("全部");
+    }
   };
 
   const saveRow = (data) => {
@@ -2299,12 +2302,16 @@ function PayrollView({ ctx }) {
     <div>
       <SectionHeader eyebrow="PAYROLL · 03" title="薪資表管理"
         action={
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <TextInput type="month" value={month} onChange={(e) => setMonth(e.target.value)} style={{ width: 150 }} />
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <Btn icon={Printer} onClick={() => window.print()}>列印</Btn>
-            <Btn variant="brass" icon={generateLocked ? Check : Plus} onClick={generate} disabled={generateLocked}>
-              {generateLocked ? "本月薪資表已產生" : "產生本月薪資表"}
+            <Btn variant="brass" icon={generateLocked && month ? Check : Plus} onClick={() => generate(month)} disabled={generateLocked}>
+              {generateLocked && month ? "本月薪資表已產生" : "產生本月薪資表"}
             </Btn>
+            <div title={nextMonth ? `產生 ${fmtMonthLabel(nextMonth)} 的薪資表；以目前選取月份的下一個月為準。` : "請先選擇月份"}>
+              <Btn variant="primary" icon={nextGenerateLocked && nextMonth ? Check : CalendarDays} onClick={() => generate(nextMonth)} disabled={nextGenerateLocked}>
+                {nextGenerateLocked && nextMonth ? "下月薪資表已產生" : "產生下月薪資表"}
+              </Btn>
+            </div>
           </div>
         } />
 
@@ -2321,8 +2328,8 @@ function PayrollView({ ctx }) {
         <StatCard label="暫時不發" value={rows.filter((r) => r.status === "暫時不發").length + " / " + rows.length} icon={AlertCircle} tone="danger" />
       </div>
 
-      {allRows.length > 0 && (
-        <div style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "center", flexWrap: "wrap" }}>
+      {/* 即使所選月份還沒有薪資，也要保留月份切換入口。 */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "center", flexWrap: "wrap" }}>
           <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600 }}>負責老闆</span>
           <Select value={bossFilter} onChange={(e) => { setBossFilter(e.target.value); setSiteFilter("全部"); }} style={{ width: 130 }}>
             <option value="全部">全部</option>
@@ -2333,11 +2340,14 @@ function PayrollView({ ctx }) {
           <Select value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} style={{ width: 200 }}>
             {sites.map((s) => <option key={s} value={s}>{s}</option>)}
           </Select>
-        </div>
-      )}
+          <label style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600 }}>月份</span>
+            <TextInput type="month" value={month} onChange={(e) => setMonth(e.target.value)} style={{ width: 150 }} />
+          </label>
+      </div>
 
       {allRows.length === 0 ? (
-        <EmptyState icon={Wallet} text={`尚未建立 ${month} 的薪資表。`} action={<Btn variant="brass" icon={Plus} onClick={generate}>依在職員工產生薪資表</Btn>} />
+        <EmptyState icon={Wallet} text={`尚未建立 ${month} 的薪資表。`} action={<Btn variant="brass" icon={Plus} onClick={() => generate(month)} disabled={generateLocked}>依在職員工產生薪資表</Btn>} />
       ) : (
         <Table
           sortKey={sortKey} sortDir={sortDir} onSort={onSort}
