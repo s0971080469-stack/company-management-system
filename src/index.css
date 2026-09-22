@@ -9,3 +9,10 @@ html, body, #root {
 body {
   font-family: 'PingFang TC', 'Microsoft JhengHei', system-ui, sans-serif;
 }
+.payment-decision-btn {
+  width: 82px;
+  height: 32px;
+  flex-shrink: 0;
+  justify-content: center;
+  white-space: nowrap;
+}
