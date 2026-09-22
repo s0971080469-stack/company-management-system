@@ -3872,6 +3872,12 @@ function BillingView({ ctx }) {
   const [modal, setModal] = useState(null);
   const [month, setMonth] = useState(monthStr());
   const [companyFilter, setCompanyFilter] = useState("全部");
+  const [sortKey, setSortKey] = useState(null);
+  const [sortDir, setSortDir] = useState("asc");
+  const onSort = (key) => {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir("asc"); }
+  };
 
   const KNOWN_COMPANIES = BILLING_COMPANY_OPTIONS.filter((o) => o !== "其他");
   const companyTabs = ["全部", ...KNOWN_COMPANIES, "其他"];
@@ -3900,6 +3906,35 @@ function BillingView({ ctx }) {
     }
     return true;
   });
+  const sortedFiltered = useMemo(() => {
+    if (!sortKey) return filtered;
+    const dir = sortDir === "desc" ? -1 : 1;
+    const valueOf = (b) => {
+      switch (sortKey) {
+        case "no": return b.no || "";
+        case "date": return b.date || "";
+        case "item": return b.item || "";
+        case "flowType": return b.flowType || "支出";
+        case "source": return b.source || "";
+        case "vendor": return b.vendor || "";
+        case "category": return b.category || "";
+        case "plannedPaymentDate": return b.plannedPaymentDate || "";
+        case "amount": return Number(b.amount) || 0;
+        case "handler": return b.handler || "";
+        case "companyName": return b.companyName || "";
+        case "approved": return b.paymentOnHold ? "暫時不發" : b.approved ? "已核准" : "待核准";
+        case "paymentDate": return b.paymentDate || "";
+        case "status": return b.status || "";
+        case "note": return b.note || "";
+        default: return "";
+      }
+    };
+    return [...filtered].sort((a, b) => {
+      const va = valueOf(a), vb = valueOf(b);
+      if (typeof va === "number" && typeof vb === "number") return (va - vb) * dir;
+      return String(va).localeCompare(String(vb), "zh-Hant", { numeric: true }) * dir;
+    });
+  }, [filtered, sortKey, sortDir]);
 
   const savePettyCash = (rawData) => {
     // 金額一律存正數，實際收入／支出由「收支類型」決定，避免手動輸入負數時正負號重複疊加
@@ -3979,7 +4014,16 @@ function BillingView({ ctx }) {
   };
 
   const pendingTotal = filtered.filter((b) => b.status !== "已付款").reduce((s, b) => s + Number(b.amount || 0), 0);
-  const approvedTotal = filtered.filter((b) => b.approved).reduce((s, b) => s + Number(b.amount || 0), 0);
+  // 核准金額明確依目前選取的「預訂付款月份」與付款公司篩選計算。
+  const approvedTotal = companyPayments
+    .filter((b) => {
+      const filterDate = b.plannedPaymentDate || b.date;
+      if (month && !(filterDate || "").startsWith(month)) return false;
+      if (companyFilter === "其他") return !KNOWN_COMPANIES.includes(b.companyName);
+      return companyFilter === "全部" || b.companyName === companyFilter;
+    })
+    .filter((b) => b.approved)
+    .reduce((s, b) => s + Number(b.amount || 0), 0);
   const isPettyCashExpense = (b) => (b.flowType || "支出") === "支出";
   const pettyCashTotal = pettyCash.filter(isPettyCashExpense).reduce((s, b) => s + Math.abs(Number(b.amount) || 0), 0);
   const pettyCashMonthTotal = pettyCash.filter((b) => isPettyCashExpense(b) && (b.date || "").startsWith(monthStr())).reduce((s, b) => s + Math.abs(Number(b.amount) || 0), 0);
@@ -4073,9 +4117,9 @@ function BillingView({ ctx }) {
       ) : (
         <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 14, marginBottom: 18 }}>
           <StatCard label="公司應付款項總數" value={companyPayments.length} icon={HandCoins} tone="ink" />
-          <StatCard label="未付款金額" value={fmtMoney(pendingTotal)} icon={AlertCircle} tone="warn" />
           <StatCard label="已付款件數" value={companyPayments.filter((b) => b.status === "已付款").length} icon={Check} tone="success" />
           <StatCard label="核准金額" value={fmtMoney(approvedTotal)} icon={Check} tone="ink" />
+          <StatCard label="未付款金額" value={fmtMoney(pendingTotal)} icon={AlertCircle} tone="warn" />
           <StatCard label="已核准逾期未付" value={overdueApproved.length} icon={AlertCircle} tone="danger" />
         </div>
       )}
@@ -4102,8 +4146,17 @@ function BillingView({ ctx }) {
           {filtered.length === 0 ? (
             <EmptyState icon={emptyIcon} text="這個月份沒有紀錄。" />
           ) : expenseTab === "零用金" ? (
-            <Table columns={["單號", "日期", "項目／用途", "收支類型", "金額", "經手人", "備註", ""]}>
-              {filtered.map((b) => (
+            <Table sortKey={sortKey} sortDir={sortDir} onSort={onSort} columns={[
+              { key: "no", label: "單號", sortable: true },
+              { key: "date", label: "日期", sortable: true },
+              { key: "item", label: "項目／用途", sortable: true },
+              { key: "flowType", label: "收支類型", sortable: true },
+              { key: "amount", label: "金額", sortable: true },
+              { key: "handler", label: "經手人", sortable: true },
+              { key: "note", label: "備註", sortable: true },
+              "",
+            ]}>
+              {sortedFiltered.map((b) => (
                 <tr key={b.id} style={{ background: (b.flowType || "支出") === "收入" ? "#EAF5F1" : "#FBEFF0" }}>
                   <td style={{ ...td, fontFamily: FONT_NUM }}>{b.no}</td>
                   <td style={td}>{fmtDate(b.date)}</td>
@@ -4124,8 +4177,16 @@ function BillingView({ ctx }) {
               ))}
             </Table>
           ) : expenseTab === "銀行入帳" ? (
-            <Table columns={["單號", "日期", "來源／說明", "金額", "入帳公司", "備註", ""]}>
-              {filtered.map((b) => (
+            <Table sortKey={sortKey} sortDir={sortDir} onSort={onSort} columns={[
+              { key: "no", label: "單號", sortable: true },
+              { key: "date", label: "日期", sortable: true },
+              { key: "source", label: "來源／說明", sortable: true },
+              { key: "amount", label: "金額", sortable: true },
+              { key: "companyName", label: "入帳公司", sortable: true },
+              { key: "note", label: "備註", sortable: true },
+              "",
+            ]}>
+              {sortedFiltered.map((b) => (
                 <tr key={b.id} style={{ background: companyRowColor(b.companyName) }}>
                   <td style={{ ...td, fontFamily: FONT_NUM }}>{b.no}</td>
                   <td style={td}>{fmtDate(b.date)}</td>
@@ -4143,8 +4204,20 @@ function BillingView({ ctx }) {
               ))}
             </Table>
           ) : (
-            <Table columns={["單號", "廠商／申請人", "項目類別", "申請日期", "預訂付款日", "金額", "付款公司", "核准", "付款日", "狀態", ""]}>
-              {filtered.map((b) => (
+            <Table sortKey={sortKey} sortDir={sortDir} onSort={onSort} columns={[
+              { key: "no", label: "單號", sortable: true },
+              { key: "vendor", label: "廠商／申請人", sortable: true },
+              { key: "category", label: "項目類別", sortable: true },
+              { key: "date", label: "申請日期", sortable: true },
+              { key: "plannedPaymentDate", label: "預訂付款日", sortable: true },
+              { key: "amount", label: "金額", sortable: true },
+              { key: "companyName", label: "付款公司", sortable: true },
+              { key: "approved", label: "核准", sortable: true },
+              { key: "paymentDate", label: "付款日", sortable: true },
+              { key: "status", label: "狀態", sortable: true },
+              "",
+            ]}>
+              {sortedFiltered.map((b) => (
                 <tr key={b.id} style={{ background: companyRowColor(b.companyName) }}>
                   <td style={{ ...td, fontFamily: FONT_NUM }}>{b.no}</td>
                   <td style={td}><strong>{b.vendor}</strong></td>
