@@ -16,3 +16,42 @@ body {
   justify-content: center;
   white-space: nowrap;
 }
+
+/* 收支與車輛頁面的到期提醒，與總覽儀表板使用同一套醒目視覺。 */
+.page-alert {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 18px;
+  padding: 13px 16px;
+  border: 1px solid #e2b64f;
+  border-left: 5px solid #cf8b12;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #fff2c9 0%, #fff9e9 100%);
+  box-shadow: 0 4px 13px #9b6b161c;
+  color: #704600;
+}
+.page-alert--danger {
+  border-color: #df9690;
+  border-left-color: #c6534b;
+  background: linear-gradient(135deg, #fbdad6 0%, #fff1ef 100%);
+  box-shadow: 0 4px 13px #9d342f1c;
+  color: #9d342f;
+}
+.page-alert > svg {
+  margin-top: 3px;
+  flex-shrink: 0;
+  color: #c37400;
+  stroke-width: 2.5;
+}
+.page-alert--danger > svg { color: #b4433c; }
+.page-alert__content {
+  font-size: 13px;
+  line-height: 1.85;
+}
+.page-alert__content strong {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 14px;
+  font-weight: 800;
+}

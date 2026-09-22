@@ -4064,9 +4064,9 @@ function BillingView({ ctx }) {
       )}
 
       {overdueApproved.length > 0 && (
-        <div style={{ background: THEME.dangerSoft, border: "1px solid #F0C2BC", borderRadius: 10, padding: "12px 16px", marginBottom: 18, display: "flex", gap: 8, alignItems: "flex-start" }}>
-          <AlertCircle size={14} color={THEME.danger} style={{ marginTop: 2, flexShrink: 0 }} />
-          <div style={{ fontSize: 12.5, color: THEME.danger, lineHeight: 1.8 }}>
+        <div className="page-alert page-alert--danger">
+          <AlertCircle size={16} />
+          <div className="page-alert__content">
             <strong>{overdueApproved.length} 筆已核准公司應付款項逾期未付款：</strong>
             {overdueApproved.map((b) => (
               <div key={b.id}>{b.vendor}（{fmtMoney(b.amount)}）— 已逾期 {daysOverdue(b.plannedPaymentDate)} 天（預訂付款日 {fmtDate(b.plannedPaymentDate)}）</div>
@@ -4076,9 +4076,9 @@ function BillingView({ ctx }) {
       )}
 
       {duePayments.length > 0 && (
-        <div style={{ background: THEME.warnSoft, border: `1px solid #E9D8AE`, borderRadius: 10, padding: "12px 16px", marginBottom: 18, display: "flex", gap: 8, alignItems: "flex-start" }}>
-          <AlertCircle size={14} color={THEME.warn} style={{ marginTop: 2, flexShrink: 0 }} />
-          <div style={{ fontSize: 12.5, color: THEME.warn, lineHeight: 1.8 }}>
+        <div className="page-alert">
+          <AlertCircle size={16} />
+          <div className="page-alert__content">
             <strong>{duePayments.length} 筆公司應付款項將於 5 天內到期：</strong>
             {duePayments.map((b) => (
               <div key={b.id}>{b.vendor}（{fmtMoney(b.amount)}）— {daysUntil(b.plannedPaymentDate) === 0 ? "今日到期" : `剩 ${daysUntil(b.plannedPaymentDate)} 天`}</div>
@@ -5963,9 +5963,9 @@ function VehiclesView({ ctx }) {
       </div>
 
       {overdueVehicles.length > 0 && (
-        <div style={{ background: THEME.dangerSoft, border: "1px solid #F0C2BC", borderRadius: 10, padding: "12px 16px", marginBottom: 18, display: "flex", gap: 8, alignItems: "flex-start" }}>
-          <AlertCircle size={14} color={THEME.danger} style={{ marginTop: 2, flexShrink: 0 }} />
-          <div style={{ fontSize: 12.5, color: THEME.danger, lineHeight: 1.8 }}>
+        <div className="page-alert page-alert--danger">
+          <AlertCircle size={16} />
+          <div className="page-alert__content">
             <strong>{overdueVehicles.length} 輛車保險或驗車已經逾期，請盡快處理：</strong>
             {overdueVehicles.map((v) => {
               const parts = [];
@@ -5978,9 +5978,9 @@ function VehiclesView({ ctx }) {
       )}
 
       {expiringVehicles.length > 0 && (
-        <div style={{ background: THEME.warnSoft, border: `1px solid #E9D8AE`, borderRadius: 10, padding: "12px 16px", marginBottom: 18, display: "flex", gap: 8, alignItems: "flex-start" }}>
-          <AlertCircle size={14} color={THEME.warn} style={{ marginTop: 2, flexShrink: 0 }} />
-          <div style={{ fontSize: 12.5, color: THEME.warn, lineHeight: 1.8 }}>
+        <div className="page-alert">
+          <AlertCircle size={16} />
+          <div className="page-alert__content">
             <strong>{expiringVehicles.length} 輛車保險或驗車將於 30 天內到期：</strong>
             {expiringVehicles.map((v) => {
               const parts = [];
