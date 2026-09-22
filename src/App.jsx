@@ -1804,7 +1804,7 @@ function Dashboard({ ctx }) {
     ...billing.map((b) => {
       const kind = billingKind(b);
       const dt = b.updatedAt || b.createdAt;
-      if (kind === "零用金") return { t: b.date, dt, text: `零用金 ${b.no} — ${b.item}`, tag: "已入帳", by: b.createdBy };
+      if (kind === "零用金") return { t: b.date, dt, text: `零用金 ${b.no} — ${b.item}`, tag: b.flowType || "支出", by: b.createdBy };
       if (kind === "銀行入帳") return { t: b.date, dt, text: `銀行入帳 ${b.no} — ${b.source}`, tag: "已入帳", by: b.createdBy };
       return { t: b.date, dt, text: `公司付款 ${b.no} — ${b.vendor}`, tag: b.status, by: b.createdBy };
     }),
