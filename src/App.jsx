@@ -14,6 +14,8 @@ import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import { renderAsync as renderDocxAsync } from "docx-preview";
 import DashboardOverview from "./DashboardOverview.jsx";
+import InvoiceOverdueReminder from "./InvoiceOverdueReminder.jsx";
+import { getInvoiceReminders } from "./invoiceReminders.js";
 import ReportsOverview from "./ReportsOverview.jsx";
 import { payrollAuditStamp, payrollActivityActor } from "./payrollActivity.js";
 import { nextPayrollMonth, payrollGenerationLocked } from "./payrollGeneration.js";
@@ -1850,6 +1852,7 @@ function Dashboard({ ctx }) {
         isAdmin, pendingApprovalCount, income, expense,
       }}
       alerts={alerts}
+      invoiceReminders={getInvoiceReminders(invoices, ctx.now)}
       trend={trend}
       categories={monthExpenseByCategory}
       todoItems={todoItems}
@@ -3298,6 +3301,8 @@ function InvoicesView({ ctx }) {
     <div>
       <SectionHeader eyebrow="INVOICE · 07" title="發票"
         action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: { ...emptyInvoice(), no: nextNo("INV", invoices) } })}>開立發票</Btn>} />
+
+      <InvoiceOverdueReminder reminders={getInvoiceReminders(invoices, ctx.now)} formatMoney={fmtMoney} formatDate={fmtDate} />
 
       {invoices.length > 0 && (
         <>

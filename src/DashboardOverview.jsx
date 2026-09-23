@@ -2,6 +2,7 @@ import React from "react";
 import { Users, Receipt, HandCoins, Clock, Truck, FileSignature, ArrowUpRight, ChevronRight, AlertCircle, Check, CalendarDays, Activity } from "lucide-react";
 import { ResponsiveContainer, ComposedChart, Bar, Line, CartesianGrid, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, ReferenceLine } from "recharts";
 import "./DashboardOverview.css";
+import InvoiceOverdueReminder from "./InvoiceOverdueReminder.jsx";
 
 const COLORS = { income: "#397E75", expense: "#7A8CA6", net: "#B48C45" };
 const CATEGORY_COLORS = ["#263D59", "#5B887F", "#C3A165", "#8398B0", "#9C817F", "#79846B", "#A79CB3", "#B6BFC9"];
@@ -14,7 +15,7 @@ function PanelHeading({ title, caption, children }) {
   return <div className="overview-panel-heading"><div><h3>{title}</h3>{caption && <p>{caption}</p>}</div>{children}</div>;
 }
 
-export default function DashboardOverview({ summary: s, alerts, trend, categories, todoItems, recentActivity, navigate, formats, StatusBadge }) {
+export default function DashboardOverview({ summary: s, alerts, invoiceReminders = [], trend, categories, todoItems, recentActivity, navigate, formats, StatusBadge }) {
   const { money, date, dateTime, month: monthLabel } = formats;
   const billingRate = s.contractCount ? Math.round(s.billedCount / s.contractCount * 100) : 0;
   const categoryTotal = categories.reduce((total, item) => total + item.value, 0);
@@ -30,6 +31,8 @@ export default function DashboardOverview({ summary: s, alerts, trend, categorie
         <div><div className="overview-eyebrow">COMPANY OS / OVERVIEW</div><h2>總覽儀表板</h2><p>掌握財務重點，安排今日工作。</p></div>
         <div className="overview-date"><CalendarDays size={15} /><span>{date(s.today)}<small>營運總覽</small></span></div>
       </header>
+
+      <InvoiceOverdueReminder reminders={invoiceReminders} formatMoney={money} formatDate={date} />
 
       {alerts.length > 0 && (
         <section className="overview-alerts" aria-label="到期與逾期提醒">
