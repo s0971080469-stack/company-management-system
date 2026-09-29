@@ -3871,6 +3871,36 @@ const emptyBankDeposit = () => ({ expenseType: "銀行入帳", date: todayStr(),
 
 function BillingView({ ctx }) {
   const { billing, persist, addAccountingEntry, removeAccountingBySource, askDelete, isAdmin, sysUsers, currentUser } = ctx;
+  const [attachPaymentId, setAttachPaymentId] = useState(null);
+  const [scanPreview, setScanPreview] = useState(null);
+  const latestBilling = useRef(billing);
+  latestBilling.current = billing;
+  const attachmentPayment = billing.find((b) => b.id === attachPaymentId);
+  const savePaymentAttachments = async (attachments) => {
+    if (!latestBilling.current.some((b) => b.id === attachPaymentId)) throw new Error("款項已不存在");
+    const next = latestBilling.current.map((b) => b.id === attachPaymentId ? { ...b, attachments, updatedAt: new Date().toISOString() } : b);
+    if (!await persist.billingConfirmed(next)) throw new Error("掃描檔資料儲存失敗");
+  };
+  const openPaymentScan = async (attachment) => {
+    setScanPreview({ loading: true, name: attachment.name });
+    try {
+      const url = await getQuoteScanUrl(attachment.path);
+      setScanPreview({ url, name: attachment.name, isPdf: isPdfFile(attachment.name) });
+    } catch {
+      setScanPreview(null);
+      alert("掃描檔預覽失敗，請稍後再試。");
+    }
+  };
+  const downloadPaymentScan = async (attachment) => {
+    try {
+      const url = await getQuoteScanUrl(attachment.path);
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("下載失敗");
+      downloadBlob(await response.blob(), attachment.name);
+    } catch {
+      alert("掃描檔下載失敗，請稍後再試。");
+    }
+  };
   const [expenseTab, setExpenseTab] = useState("銀行入帳");
   const [decisionBusy, setDecisionBusy] = useState(false);
   const decisionInFlight = useRef(false);
@@ -4233,6 +4263,9 @@ function BillingView({ ctx }) {
               { key: "approved", label: "核准", sortable: true },
               { key: "paymentDate", label: "付款日", sortable: true },
               { key: "status", label: "狀態", sortable: true },
+              { key: "scanUpload", label: "掃描檔上傳" },
+              { key: "scanPreview", label: "預覽" },
+              { key: "scanDownload", label: "下載掃描檔" },
               "",
             ]}>
               {sortedFiltered.map((b) => (
@@ -4265,6 +4298,17 @@ function BillingView({ ctx }) {
                       <option value="已付款">已付款</option>
                     </Select> : <StatusBadge status={b.status || "未付款"} />}
                   </td>
+                  <td style={td}>
+                    <Btn size="sm" icon={Upload} disabled={decisionBusy} onClick={() => setAttachPaymentId(b.id)}>
+                      {b.attachments?.length ? `掃描檔（${b.attachments.length}）` : "上傳掃描檔"}
+                    </Btn>
+                  </td>
+                  <td style={td}>
+                    <Btn size="sm" icon={Eye} disabled={!b.attachments?.length} onClick={() => openPaymentScan(b.attachments[b.attachments.length - 1])}>預覽</Btn>
+                  </td>
+                  <td style={td}>
+                    <Btn size="sm" icon={Download} disabled={!b.attachments?.length} onClick={() => downloadPaymentScan(b.attachments[b.attachments.length - 1])}>下載</Btn>
+                  </td>
                   <td style={{ ...td, textAlign: "right" }}>
                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                       <Btn size="sm" icon={Pencil} disabled={decisionBusy} onClick={() => setModal({ mode: "edit", data: b })} />
@@ -4278,6 +4322,18 @@ function BillingView({ ctx }) {
         </>
       )}
 
+      {attachmentPayment && (
+        <Modal title={`公司應付款項 ${attachmentPayment.no} — 掃描檔上傳`} onClose={() => setAttachPaymentId(null)} width={600}>
+          <FileAttachments folderKey={`company-payment-${attachmentPayment.id}`} attachments={attachmentPayment.attachments || []} onChange={savePaymentAttachments} askDelete={askDelete} />
+        </Modal>
+      )}
+      {scanPreview && (
+        <Modal title={scanPreview.name || "掃描檔預覽"} onClose={() => setScanPreview(null)} width={1000}>
+          {scanPreview.loading ? <p>載入中…</p> : scanPreview.isPdf ? (
+            <embed src={scanPreview.url} type="application/pdf" title={scanPreview.name} style={{ width: "100%", height: "65vh" }} />
+          ) : <img src={scanPreview.url} alt={scanPreview.name} style={{ maxWidth: "100%", maxHeight: "65vh", display: "block", margin: "auto" }} />}
+        </Modal>
+      )}
       {modal && (
         <Modal title={
           modal.mode === "new"
@@ -5764,7 +5820,7 @@ function FileAttachments({ folderKey, attachments, onChange, askDelete, emptyTex
       for (const file of files) {
         uploaded.push(await uploadQuoteScan(folderKey, file));
       }
-      onChange([...(attachments || []), ...uploaded]);
+      await onChange([...(attachments || []), ...uploaded]);
     } catch (err) {
       console.error(err);
       alert("檔案上傳失敗，請稍後再試一次。");
@@ -5811,7 +5867,12 @@ function FileAttachments({ folderKey, attachments, onChange, askDelete, emptyTex
       } catch (err) {
         console.error(err);
       }
-      onChange((attachments || []).filter((a) => a.id !== att.id));
+      try {
+        await onChange((attachments || []).filter((a) => a.id !== att.id));
+      } catch (err) {
+        console.error(err);
+        alert("掃描檔清單儲存失敗，請重新整理後確認。");
+      }
     });
   };
 
