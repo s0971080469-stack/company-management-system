@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { loadKey, saveKey, generateLatestPayroll } from "./storage.js";
 import { savePaymentDecision } from "./paymentDecision.js";
+import { normalizeCompanyPaymentStatus } from "./companyPaymentStatus.js";
 import { supabase, createAuthActionClient } from "./supabaseClient.js";
 import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
@@ -1347,7 +1348,7 @@ export default function CompanyManagementSystem({ session }) {
   }
 
   const ctx = {
-    employees, attendance, payroll, quotes, invoices, billing, accounting,
+    employees, attendance, payroll, quotes, invoices, billing: billing.map(normalizeCompanyPaymentStatus), accounting,
     vendors, documents, documentTemplates, contracts, sysUsers, rolePerms, quoteTemplates, vehicles, companyLocation, contractBilling, leaveRequests,
     currentUser, isAdmin, realIsAdmin,
     persist, addAccountingEntry, removeAccountingBySource, askDelete, now, setTab,
@@ -3860,7 +3861,7 @@ function AttendanceView({ ctx }) {
    COMPANY EXPENSES (公司支出) — 零用金紀錄 / 公司付款
 ========================================================= */
 const emptyPettyCash = () => ({ expenseType: "零用金", flowType: "支出", date: todayStr(), item: "", amount: "", handler: "", note: "" });
-const emptyCompanyPayment = () => ({ expenseType: "公司付款", vendor: "", category: "", amount: "", date: todayStr(), plannedPaymentDate: "", status: "未付款", note: "", posted: false, companyName: "", paymentDate: "", approved: false });
+const emptyCompanyPayment = () => ({ expenseType: "公司付款", vendor: "", category: "", invoiceNo: "", amount: "", date: todayStr(), plannedPaymentDate: "", status: "未付款", note: "", posted: false, companyName: "", paymentDate: "", approved: false });
 const emptyBankDeposit = () => ({ expenseType: "銀行入帳", date: todayStr(), source: "", amount: "", note: "", companyName: "" });
 
 function BillingView({ ctx }) {
@@ -3918,6 +3919,7 @@ function BillingView({ ctx }) {
         case "source": return b.source || "";
         case "vendor": return b.vendor || "";
         case "category": return b.category || "";
+        case "invoiceNo": return b.invoiceNo || "";
         case "plannedPaymentDate": return b.plannedPaymentDate || "";
         case "amount": return Number(b.amount) || 0;
         case "handler": return b.handler || "";
@@ -3951,6 +3953,15 @@ function BillingView({ ctx }) {
   };
 
   const saveCompanyPayment = (data) => {
+    data = { ...data, status: data.status || "未付款" };
+    const previous = billing.find((b) => b.id === data.id);
+    if (isAdmin && data.status !== (previous?.status || "未付款")) {
+      data = { ...data, paymentStatusOverride: true };
+    }
+    if (!isAdmin) {
+      const existing = billing.find((b) => b.id === data.id);
+      data = { ...data, status: existing?.status || "未付款", paymentDate: existing?.paymentDate || "", posted: existing?.posted || false };
+    }
     if (billing.find((b) => b.id === data.id)?.paymentOnHold && data.status === "已付款") {
       setDecisionNotice("此款項暫時不發，請由夏碩亞重新核准後再付款。");
       return;
@@ -3977,8 +3988,8 @@ function BillingView({ ctx }) {
   };
 
   const setStatus = (b, status) => {
-    if (b.paymentOnHold || decisionInFlight.current) return;
-    persist.billing(billing.map((x) => x.id === b.id ? { ...x, status, posted: status === "已付款", updatedAt: new Date().toISOString() } : x));
+    if (!isAdmin || b.paymentOnHold || decisionInFlight.current) return;
+    persist.billing(billing.map((x) => x.id === b.id ? { ...x, status, paymentStatusOverride: true, posted: status === "已付款", updatedAt: new Date().toISOString() } : x));
     if (status === "已付款" && !b.posted) {
       addAccountingEntry({ type: "支出", category: b.category || "公司付款", amount: b.amount, desc: `公司付款 ${b.no} — ${b.vendor}`, sourceType: "billing", sourceId: b.id });
     }
@@ -4006,7 +4017,8 @@ function BillingView({ ctx }) {
   };
 
   const setPaymentDate = (b, paymentDate) => {
-    if (b.paymentOnHold || decisionInFlight.current) return;
+    if (!paymentDate || !b.approved || b.paymentOnHold || decisionInFlight.current) return;
+    if (!isAdmin && (b.status === "已付款" || b.paymentDate)) return;
     persist.billing(billing.map((x) => x.id === b.id ? { ...x, paymentDate, status: "已付款", posted: true, updatedAt: new Date().toISOString() } : x));
     if (!b.posted) {
       addAccountingEntry({ type: "支出", category: b.category || "公司付款", amount: b.amount, desc: `公司付款 ${b.no} — ${b.vendor}`, sourceType: "billing", sourceId: b.id });
@@ -4208,6 +4220,7 @@ function BillingView({ ctx }) {
               { key: "no", label: "單號", sortable: true },
               { key: "vendor", label: "廠商／申請人", sortable: true },
               { key: "category", label: "項目類別", sortable: true },
+              { key: "invoiceNo", label: "發票號碼", sortable: true },
               { key: "date", label: "申請日期", sortable: true },
               { key: "plannedPaymentDate", label: "預訂付款日", sortable: true },
               { key: "amount", label: "金額", sortable: true },
@@ -4222,6 +4235,7 @@ function BillingView({ ctx }) {
                   <td style={{ ...td, fontFamily: FONT_NUM }}>{b.no}</td>
                   <td style={td}><strong>{b.vendor}</strong></td>
                   <td style={td}>{b.category || "—"}</td>
+                  <td style={{ ...td, fontFamily: FONT_NUM }}>{b.invoiceNo || "—"}</td>
                   <td style={td}>{fmtDate(b.date)}</td>
                   <td style={td}>{b.plannedPaymentDate ? fmtDate(b.plannedPaymentDate) : "—"}</td>
                   <td style={{ ...td, fontFamily: FONT_NUM, fontWeight: 700 }}>{fmtMoney(b.amount)}</td>
@@ -4238,13 +4252,13 @@ function BillingView({ ctx }) {
                     </div>
                   </td>
                   <td style={td}>
-                    <DatePickerButton value={b.paymentDate} onChange={(v) => setPaymentDate(b, v)} disabled={!b.approved || b.paymentOnHold || decisionBusy} />
+                    <DatePickerButton value={b.paymentDate} onChange={(v) => setPaymentDate(b, v)} disabled={!b.approved || b.paymentOnHold || decisionBusy || (!isAdmin && (b.status === "已付款" || !!b.paymentDate))} />
                   </td>
                   <td style={td}>
-                    <Select value={b.status} disabled={b.paymentOnHold || decisionBusy} onChange={(e) => setStatus(b, e.target.value)} style={{ padding: "4px 8px", fontSize: 12 }}>
+                    {isAdmin ? <Select value={b.status || "未付款"} disabled={b.paymentOnHold || decisionBusy} onChange={(e) => setStatus(b, e.target.value)} style={{ padding: "4px 8px", fontSize: 12 }}>
                       <option value="未付款">未付款</option>
                       <option value="已付款">已付款</option>
-                    </Select>
+                    </Select> : <StatusBadge status={b.status || "未付款"} />}
                   </td>
                   <td style={{ ...td, textAlign: "right" }}>
                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
@@ -4266,7 +4280,7 @@ function BillingView({ ctx }) {
             : (expenseKind(modal.data) === "公司付款" ? `編輯公司應付款項 ${modal.data.no}` : expenseKind(modal.data) === "銀行入帳" ? `編輯銀行入帳紀錄 ${modal.data.no}` : `編輯零用金紀錄 ${modal.data.no}`)
         } onClose={() => setModal(null)}>
           {expenseKind(modal.data) === "公司付款"
-            ? <CompanyPaymentForm data={modal.data} onSave={saveCompanyPayment} onCancel={() => setModal(null)} />
+            ? <CompanyPaymentForm data={modal.data} isAdmin={isAdmin} onSave={saveCompanyPayment} onCancel={() => setModal(null)} />
             : expenseKind(modal.data) === "銀行入帳"
             ? <BankDepositForm data={modal.data} onSave={saveBankDeposit} onCancel={() => setModal(null)} />
             : <PettyCashForm data={modal.data} sysUsers={ctx.sysUsers} onSave={savePettyCash} onCancel={() => setModal(null)} />
@@ -4329,13 +4343,14 @@ function BankDepositForm({ data, onSave, onCancel }) {
   );
 }
 
-function CompanyPaymentForm({ data, onSave, onCancel }) {
-  const [f, setF] = useState({ plannedPaymentDate: "", companyName: "", ...data });
+function CompanyPaymentForm({ data, isAdmin, onSave, onCancel }) {
+  const [f, setF] = useState({ plannedPaymentDate: "", companyName: "", invoiceNo: "", ...data, status: data.status || "未付款" });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
       <Field label="廠商／申請人" span={2}><TextInput value={f.vendor} onChange={set("vendor")} placeholder="廠商名稱或申請人" /></Field>
       <Field label="項目類別"><TextInput value={f.category} onChange={set("category")} placeholder="如：辦公用品、差旅費" /></Field>
+      <Field label="發票號碼"><TextInput value={f.invoiceNo || ""} onChange={set("invoiceNo")} placeholder="請輸入發票號碼（選填）" /></Field>
       <Field label="付款公司">
         <Select value={f.companyName} onChange={set("companyName")}>
           <option value="">請選擇</option>
@@ -4346,10 +4361,10 @@ function CompanyPaymentForm({ data, onSave, onCancel }) {
       <Field label="申請日期"><TextInput type="date" value={f.date} onChange={set("date")} /></Field>
       <Field label="預訂付款日"><TextInput type="date" value={f.plannedPaymentDate} onChange={set("plannedPaymentDate")} /></Field>
       <Field label="狀態" span={2}>
-        <Select value={f.status} disabled={f.paymentOnHold} onChange={set("status")}>
+        {isAdmin ? <Select value={f.status} disabled={f.paymentOnHold} onChange={set("status")}>
           <option value="未付款">未付款</option>
           <option value="已付款">已付款</option>
-        </Select>
+        </Select> : <StatusBadge status={f.status || "未付款"} />}
       </Field>
       <Field label="備註說明" span={2}><TextArea value={f.note} onChange={set("note")} placeholder="說明付款事由" /></Field>
       <div style={{ gridColumn: "span 2", display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 6 }}>
