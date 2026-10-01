@@ -2535,6 +2535,7 @@ function PayrollForm({ data, onSave, onCancel }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 18, marginTop: 18 }}>
         <Field label="保險狀態">
           <Select value={f.insuranceStatus} onChange={set("insuranceStatus")}>
+            <option value="無加保">無加保</option>
             <option value="加保">加保</option>
             <option value="在保">在保</option>
             <option value="退保">退保</option>
