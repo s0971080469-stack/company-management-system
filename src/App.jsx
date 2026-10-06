@@ -17,6 +17,7 @@ import { renderAsync as renderDocxAsync } from "docx-preview";
 import DashboardOverview from "./DashboardOverview.jsx";
 import InvoiceOverdueReminder from "./InvoiceOverdueReminder.jsx";
 import { getInvoiceReminders } from "./invoiceReminders.js";
+import { matchesInvoiceKeyword } from "./invoiceSearch.js";
 import ReportsOverview from "./ReportsOverview.jsx";
 import { payrollAuditStamp, payrollActivityActor } from "./payrollActivity.js";
 import { nextPayrollMonth, payrollGenerationLocked } from "./payrollGeneration.js";
@@ -2646,7 +2647,7 @@ const companyRowColor = (companyName) => {
   return "#F0F1F5";
 };
 
-function QuotesView({ ctx, setTab }) {
+export function QuotesView({ ctx, setTab }) {
   const { quotes, persist, invoices, quoteTemplates, vendors, askDelete } = ctx;
   const [modal, setModal] = useState(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -2771,7 +2772,7 @@ function QuotesView({ ctx, setTab }) {
         } />
 
       {quotes.length > 0 && (
-        <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {companyTabs.map((c) => (
               <button key={c} onClick={() => setCompanyFilter(c)}
@@ -3215,19 +3216,20 @@ const emptyInvoice = () => ({
   taxRate: 5, status: "未付款", note: "", posted: false, addedToBankDeposit: false, ...emptyLetterhead(),
 });
 
-function InvoicesView({ ctx }) {
+export function InvoicesView({ ctx }) {
   const { invoices, quotes, billing, vendors, persist, addAccountingEntry, removeAccountingBySource, askDelete } = ctx;
   const [modal, setModal] = useState(null);
   const [companyFilter, setCompanyFilter] = useState("全部");
   const [month, setMonth] = useState(monthStr());
+  const [query, setQuery] = useState("");
 
   const KNOWN_COMPANIES = BILLING_COMPANY_OPTIONS.filter((o) => o !== "其他");
   const companyTabs = ["全部", ...KNOWN_COMPANIES, "其他"];
   const filtered = invoices.filter((inv) => {
     if (month && !(inv.date || "").startsWith(month)) return false;
-    if (companyFilter === "全部") return true;
-    if (companyFilter === "其他") return !KNOWN_COMPANIES.includes(inv.companyName);
-    return inv.companyName === companyFilter;
+    if (companyFilter === "其他" && KNOWN_COMPANIES.includes(inv.companyName)) return false;
+    if (companyFilter !== "全部" && companyFilter !== "其他" && inv.companyName !== companyFilter) return false;
+    return matchesInvoiceKeyword(inv, query);
   });
 
   const save = (data) => {
@@ -3309,7 +3311,7 @@ function InvoicesView({ ctx }) {
       {invoices.length > 0 && (
         <>
           <MonthFilterBar month={month} setMonth={setMonth} label="開立日期月份" />
-          <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
             {companyTabs.map((c) => (
               <button key={c} onClick={() => setCompanyFilter(c)}
                 style={{
@@ -3320,6 +3322,13 @@ function InvoicesView({ ctx }) {
                   boxShadow: companyFilter === c ? `inset 0 0 0 1px ${THEME.brassDeep}` : "none",
                 }} aria-pressed={companyFilter === c}>{c}</button>
             ))}
+            <div style={{ position: "relative", width: 210, maxWidth: "100%" }}>
+              <Search size={14} aria-hidden="true" style={{ position: "absolute", left: 10, top: 10, color: THEME.muted, pointerEvents: "none" }} />
+              <TextInput type="search" aria-label="搜尋發票關鍵字"
+                placeholder="搜尋關鍵字"
+                title="可搜尋發票號碼、開票公司、估價單號碼、客戶、工程名稱、付款方式、類別、狀態、備註及品項；多個關鍵字以空白分隔"
+                value={query} onChange={(e) => setQuery(e.target.value)} style={{ paddingLeft: 30 }} />
+            </div>
           </div>
         </>
       )}
@@ -4656,7 +4665,7 @@ const INVOICE_TYPES = ["二聯式", "三聯式"];
 
 const emptyVendor = { name: "", vendorType: "供應商", contact: "", phone: "", email: "", category: "", taxId: "", paymentMethod: "匯款", tradingCompany: "", address: "", invoiceType: "", note: "" };
 
-function VendorsView({ ctx }) {
+export function VendorsView({ ctx }) {
   const { vendors, persist, askDelete } = ctx;
   const [modal, setModal] = useState(null);
   const [query, setQuery] = useState("");
@@ -4690,7 +4699,7 @@ function VendorsView({ ctx }) {
         <StatCard label="業主家數" value={ownerCount} icon={Building2} tone="brass" />
       </div>
 
-      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
         <div style={{ display: "flex", gap: 6 }}>
           {["全部", ...VENDOR_TYPES].map((t) => (
             <button key={t} onClick={() => setTypeFilter(t)}
