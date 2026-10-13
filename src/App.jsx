@@ -558,10 +558,14 @@ function StatCard({ label, value, sub, subNode, icon: Icon, tone = "brass" }) {
     danger: { bg: THEME.dangerSoft, fg: THEME.danger },
     warn: { bg: THEME.warnSoft, fg: THEME.warn },
     ink: { bg: "#EEF0F4", fg: THEME.ink },
+    hold: { bg: "#EEE8F4", fg: "#705A85", surface: "#FAF8FC", border: "#DDD3E6" },
+    payrollPeople: { bg: "#E4ECF5", fg: "#526C89", surface: "#F4F7FB", border: "#D3DFEC" },
+    payrollTotal: { bg: "#F3E8CA", fg: "#8F6E1C", surface: "#FCF9F0", border: "#E7DCBC" },
+    payrollPaid: { bg: "#E1EFE7", fg: "#39765A", surface: "#F3F9F5", border: "#CEE2D5" },
   };
-  const t = tones[tone];
+  const t = tones[tone] || tones.brass;
   return (
-    <div style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 10, padding: "13px 15px", display: "flex", flexDirection: "column", gap: 6, minHeight: 78 }}>
+    <div style={{ background: t.surface || THEME.surface, border: `1px solid ${t.border || THEME.line}`, borderRadius: 10, padding: "13px 15px", display: "flex", flexDirection: "column", gap: 6, minHeight: 78 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{ fontSize: 11, color: THEME.muted, letterSpacing: 0.3 }}>{label}</span>
         {Icon && (
@@ -2289,7 +2293,9 @@ function PayrollView({ ctx }) {
     persist.payroll(payroll.map((x) => (x.id === r.id ? { ...x, status: nextStatus, ...audit } : x)));
   };
 
-  const totalNet = rows.reduce((s, r) => s + payrollNet(r), 0);
+  const heldRows = rows.filter((r) => r.status === "暫時不發");
+  const heldNet = heldRows.reduce((s, r) => s + payrollNet(r), 0);
+  const totalNet = rows.filter((r) => r.status !== "暫時不發").reduce((s, r) => s + payrollNet(r), 0);
   const paidNet = rows.filter((r) => r.status === "已發放").reduce((s, r) => s + payrollNet(r), 0);
   const unpaidNet = totalNet - paidNet;
 
@@ -2311,16 +2317,22 @@ function PayrollView({ ctx }) {
         } />
 
       <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 18 }}>
-        <StatCard label="本月人數" value={rows.length} icon={Users} tone="ink" />
-        <StatCard label="本月薪資總額" value={fmtMoney(totalNet)} icon={Wallet} tone="brass"
+        <StatCard label="本月人數" value={rows.length} icon={Users} tone="payrollPeople" />
+        <StatCard label="本月薪資總額" value={fmtMoney(totalNet)} icon={Wallet} tone="payrollTotal"
           subNode={
             <div style={{ display: "flex", gap: 12, fontFamily: FONT_NUM, fontSize: 13.5, fontWeight: 700 }}>
               <span style={{ color: THEME.success }}>已發放 {fmtMoney(paidNet)}</span>
               <span style={{ color: THEME.warn }}>尚未發放 {fmtMoney(unpaidNet)}</span>
             </div>
           } />
-        <StatCard label="已發放" value={rows.filter((r) => r.status === "已發放").length + " / " + rows.length} icon={Check} tone="success" />
-        <StatCard label="暫時不發" value={rows.filter((r) => r.status === "暫時不發").length + " / " + rows.length} icon={AlertCircle} tone="danger" />
+        <StatCard label="已發放" value={rows.filter((r) => r.status === "已發放").length + " / " + rows.length} icon={Check} tone="payrollPaid" />
+        <StatCard label="暫時不發金額" value={fmtMoney(heldNet)} icon={AlertCircle} tone="hold"
+          subNode={
+            <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: FONT_BODY, fontSize: 13.5, fontWeight: 400, color: "#705A85" }}>
+              <span>暫時不發人數</span>
+              <span style={{ fontFamily: FONT_NUM, fontSize: 13.5, fontWeight: 700 }}>{heldRows.length} / {rows.length}</span>
+            </div>
+          } />
       </div>
 
       <div role="status" aria-live="polite" style={{ marginBottom: 12, color: THEME.muted, fontSize: 13 }}>
