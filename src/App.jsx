@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { loadKey, saveKey, generateLatestPayroll } from "./storage.js";
 import { savePaymentDecision } from "./paymentDecision.js";
+import { SYSTEM_CHAT_ID, saveInvoiceWithDepositNotice, sendInvoiceNotice } from "./invoiceDepositNotice.js";
 import { normalizeCompanyPaymentStatus } from "./companyPaymentStatus.js";
 import { supabase, createAuthActionClient } from "./supabaseClient.js";
 import PizZip from "pizzip";
@@ -727,7 +728,10 @@ function ChatWidget({ ctx }) {
   const { sysUsers, currentUser } = ctx;
   const myId = currentUser?.id || ADMIN_CHAT_ID;
   const namedContacts = (sysUsers || []).filter((u) => u.id !== myId && u.status !== "停用");
-  const contacts = currentUser ? [...namedContacts, { id: ADMIN_CHAT_ID, name: "夏碩亞" }] : namedContacts;
+  const contacts = [
+    ...(currentUser ? [...namedContacts, { id: ADMIN_CHAT_ID, name: "夏碩亞" }] : namedContacts),
+    ...(myId === ADMIN_CHAT_ID ? [{ id: SYSTEM_CHAT_ID, name: "系統通知" }] : []),
+  ];
 
   const [open, setOpen] = useState(false);
   const [activeId, setActiveId] = useState(null);
@@ -767,13 +771,13 @@ function ChatWidget({ ctx }) {
 
   // 開啟某個對話串時，把對方傳給我、還沒讀的訊息標記為已讀
   useEffect(() => {
-    if (!myId || !activeId) return;
+    if (!open || !myId || !activeId) return;
     const unreadIds = messages.filter((m) => m.sender_id === activeId && m.recipient_id === myId && !m.read_at).map((m) => m.id);
     if (unreadIds.length === 0) return;
     const readAt = new Date().toISOString();
     setMessages((prev) => prev.map((m) => (unreadIds.includes(m.id) ? { ...m, read_at: readAt } : m)));
     supabase.from("chat_messages").update({ read_at: readAt }).in("id", unreadIds).then(() => {});
-  }, [activeId, messages, myId]);
+  }, [open, activeId, messages, myId]);
 
   useEffect(() => {
     if (open && activeId) listEndRef.current?.scrollIntoView({ block: "end" });
@@ -795,7 +799,7 @@ function ChatWidget({ ctx }) {
 
   const send = async () => {
     const content = draft.trim();
-    if (!content || !activeId) return;
+    if (!content || !activeId || activeId === SYSTEM_CHAT_ID) return;
     setDraft("");
     const { data, error } = await supabase.from("chat_messages").insert({ sender_id: myId, recipient_id: activeId, content }).select().single();
     if (!error && data) setMessages((prev) => (prev.some((m) => m.id === data.id) ? prev : [...prev, data]));
@@ -879,7 +883,7 @@ function ChatWidget({ ctx }) {
                         maxWidth: "78%", padding: "8px 12px", borderRadius: 14,
                         borderBottomRightRadius: mine ? 3 : 14, borderBottomLeftRadius: mine ? 14 : 3,
                         background: mine ? THEME.brass : "#fff", color: mine ? "#fff" : THEME.text,
-                        fontSize: 12.5, lineHeight: 1.5, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", wordBreak: "break-word",
+                        fontSize: 12.5, lineHeight: 1.5, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", wordBreak: "break-word", whiteSpace: "pre-wrap",
                       }}>
                         {m.content}
                       </div>
@@ -892,12 +896,13 @@ function ChatWidget({ ctx }) {
               <div style={{ display: "flex", gap: 8, padding: 10, borderTop: `1px solid ${THEME.line}`, flexShrink: 0 }}>
                 <input
                   value={draft}
+                  disabled={activeId === SYSTEM_CHAT_ID}
                   onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-                  placeholder="輸入訊息…"
+                  placeholder={activeId === SYSTEM_CHAT_ID ? "系統通知不需回覆" : "輸入訊息…"}
                   style={{ flex: 1, border: `1px solid ${THEME.line}`, borderRadius: 8, padding: "8px 10px", fontSize: 12.5, fontFamily: FONT_BODY, outline: "none" }}
                 />
-                <button onClick={send} disabled={!draft.trim()} style={{
+                <button onClick={send} disabled={!draft.trim() || activeId === SYSTEM_CHAT_ID} style={{
                   border: "none", borderRadius: 8, width: 36, height: 36, background: draft.trim() ? THEME.brass : THEME.line,
                   color: "#fff", cursor: draft.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
                 }}>
@@ -1270,6 +1275,11 @@ export default function CompanyManagementSystem({ session }) {
 
   // persist helpers — update state + storage together
   const persist = {
+    invoicesConfirmed: async (v) => {
+      const saved = await saveKey(STORAGE_KEYS.invoices, v);
+      if (saved) setInvoices(v);
+      return saved;
+    },
     billingConfirmed: async (v) => {
       const saved = await saveKey(STORAGE_KEYS.billing, v);
       if (saved) setBilling(v);
@@ -3234,6 +3244,31 @@ export function InvoicesView({ ctx }) {
   const [companyFilter, setCompanyFilter] = useState("全部");
   const [month, setMonth] = useState(monthStr());
   const [query, setQuery] = useState("");
+  const [depositBusy, setDepositBusy] = useState(false);
+  const depositBusyRef = useRef(false);
+  const [depositNotice, setDepositNotice] = useState("");
+  const [pendingNotices, setPendingNotices] = useState([]);
+  const sendNotice = (message) => ctx.sendInvoiceNotice
+    ? ctx.sendInvoiceNotice(message)
+    : supabase.from("chat_messages").insert(message);
+
+  const retryNotices = async () => {
+    if (depositBusyRef.current) return;
+    depositBusyRef.current = true;
+    setDepositBusy(true);
+    const remaining = [];
+    try {
+      for (const message of pendingNotices) {
+        try { await sendInvoiceNotice(message, sendNotice); }
+        catch { remaining.push(message); }
+      }
+      setPendingNotices(remaining);
+      setDepositNotice(remaining.length ? "通知仍未送出，請檢查網路後重試。" : "已通知夏碩亞。");
+    } finally {
+      depositBusyRef.current = false;
+      setDepositBusy(false);
+    }
+  };
 
   const KNOWN_COMPANIES = BILLING_COMPANY_OPTIONS.filter((o) => o !== "其他");
   const companyTabs = ["全部", ...KNOWN_COMPANIES, "其他"];
@@ -3260,8 +3295,12 @@ export function InvoicesView({ ctx }) {
     persist.invoices(invoices.map((x) => x.id === inv.id ? { ...x, status, posted: status === "已付款", updatedAt: new Date().toISOString() } : x));
   };
 
-  const setDueDate = (inv, dueDate) => {
-    if (!dueDate) return;
+  const setDueDate = async (inv, dueDate) => {
+    if (!dueDate || dueDate === inv.dueDate || depositBusyRef.current) return;
+    depositBusyRef.current = true;
+    setDepositBusy(true);
+    setDepositNotice("正在儲存入帳日…");
+    try {
     const total = inv.total ?? sumItems(inv.items) * (1 + Number(inv.taxRate) / 100);
     const source = `發票 ${inv.no} — ${inv.client}`;
     const existingDeposit = billing.find((b) => b.expenseType === "銀行入帳" && b.sourceInvoiceId === inv.id);
@@ -3276,7 +3315,9 @@ export function InvoicesView({ ctx }) {
         companyName: inv.companyName || "",
         updatedAt: new Date().toISOString(),
       };
-      persist.billing(billing.map((b) => b.id === existingDeposit.id ? deposit : b));
+      if (!await persist.billingConfirmed(billing.map((b) => b.id === existingDeposit.id ? deposit : b))) {
+        throw new Error("銀行入帳紀錄儲存失敗，未傳送通知，請重新整理後再試。");
+      }
       removeAccountingBySource("billing", existingDeposit.id);
     } else {
       const bankDeposits = billing.filter((b) => b.expenseType === "銀行入帳");
@@ -3286,7 +3327,9 @@ export function InvoicesView({ ctx }) {
         sourceInvoiceId: inv.id,
         createdBy: actorName(ctx), createdAt: new Date().toISOString(),
       };
-      persist.billing([deposit, ...billing]);
+      if (!await persist.billingConfirmed([deposit, ...billing])) {
+        throw new Error("銀行入帳紀錄儲存失敗，未傳送通知，請重新整理後再試。");
+      }
     }
 
     addAccountingEntry({
@@ -3294,10 +3337,27 @@ export function InvoicesView({ ctx }) {
       desc: `銀行入帳 — ${deposit.source}`, date: deposit.date,
       sourceType: "billing", sourceId: deposit.id,
     });
-    persist.invoices(invoices.map((x) => x.id === inv.id ? {
-      ...x, dueDate, status: "已付款", posted: true, addedToBankDeposit: true,
+    const updated = {
+      ...inv, dueDate, status: "已付款", posted: true, addedToBankDeposit: true,
       updatedAt: new Date().toISOString(),
-    } : x));
+    };
+    const result = await saveInvoiceWithDepositNotice({
+      previous: inv, updated, amount: total, actor: actorName(ctx),
+      save: () => persist.invoicesConfirmed(invoices.map((x) => x.id === inv.id ? updated : x)),
+      send: sendNotice, formatMoney: fmtMoney, formatDate: fmtDate,
+    });
+    if (result.pending) {
+      setPendingNotices((prev) => [...prev.filter((m) => m.id !== result.pending.id), result.pending]);
+      setDepositNotice("入帳日已儲存，但通知傳送失敗。請按「重送通知」，不必重新設定入帳日。");
+    } else {
+      setDepositNotice("入帳日已儲存，已通知夏碩亞。");
+    }
+    } catch (error) {
+      setDepositNotice(error.message || "儲存失敗，請重新整理後再試。");
+    } finally {
+      depositBusyRef.current = false;
+      setDepositBusy(false);
+    }
   };
 
   const cancelDueDate = (inv) => {
@@ -3319,6 +3379,10 @@ export function InvoicesView({ ctx }) {
         action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: { ...emptyInvoice(), no: nextNo("INV", invoices) } })}>開立發票</Btn>} />
 
       <InvoiceOverdueReminder reminders={getInvoiceReminders(invoices, ctx.now)} formatMoney={fmtMoney} formatDate={fmtDate} />
+      {depositNotice && <div role="status" aria-live="polite" style={{ marginBottom: 14, padding: "10px 14px", borderRadius: 8, background: THEME.brassSoft, color: THEME.text, fontSize: 13 }}>
+        {depositNotice}
+        {pendingNotices.length > 0 && <Btn size="sm" disabled={depositBusy} onClick={retryNotices}>重送通知（{pendingNotices.length}）</Btn>}
+      </div>}
 
       {invoices.length > 0 && (
         <>
@@ -3364,9 +3428,9 @@ export function InvoicesView({ ctx }) {
                 <td style={td}>{fmtDate(inv.date)}</td>
                 <td style={td}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    <DatePickerButton value={inv.dueDate} onChange={(v) => setDueDate(inv, v)} />
+                    <DatePickerButton value={inv.dueDate} disabled={depositBusy} onChange={(v) => setDueDate(inv, v)} />
                     {inv.dueDate && (
-                      <Btn size="sm" variant="danger" icon={X} onClick={() => askDelete(
+                      <Btn size="sm" variant="danger" icon={X} disabled={depositBusy} onClick={() => askDelete(
                         `確定要取消發票 ${inv.no} 的入帳日嗎？對應的銀行入帳與帳務紀錄也會一併移除。`,
                         () => cancelDueDate(inv),
                         "確認取消"

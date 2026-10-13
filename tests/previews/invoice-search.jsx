@@ -33,7 +33,9 @@ function Preview() {
   const ctx = {
     invoices, billing, quotes, vendors, quoteTemplates, now,
     currentUser: { name: "測試使用者" },
-    persist: { invoices: setInvoices, billing: setBilling, quotes: setQuotes, vendors: setVendors, quoteTemplates: setQuoteTemplates },
+    persist: { invoices: setInvoices, billing: setBilling, quotes: setQuotes, vendors: setVendors, quoteTemplates: setQuoteTemplates,
+      invoicesConfirmed: async (v) => { setInvoices(v); return true; }, billingConfirmed: async (v) => { setBilling(v); return true; } },
+    sendInvoiceNotice: async () => ({}),
     addAccountingEntry: () => {}, removeAccountingBySource: () => {},
     askDelete: (message, action) => { if (window.confirm(message)) action(); },
   };
