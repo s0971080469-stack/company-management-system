@@ -2380,7 +2380,7 @@ function PayrollView({ ctx }) {
           columns={[
             { key: "employeeName", label: "員工", sortable: true },
             { key: "department", label: "部門", sortable: true },
-            { key: "siteName", label: "所屬案場", sortable: true, style: { width: 320, maxWidth: 320 } },
+            { key: "siteName", label: "所屬案場", sortable: true, style: { width: 230, maxWidth: 230 } },
             { key: "baseSalary", label: "底薪", sortable: true },
             { key: "additions", label: "加項", sortable: true },
             { key: "deductions", label: "減項／保費", sortable: true },
@@ -2402,7 +2402,7 @@ function PayrollView({ ctx }) {
               <tr key={r.id} style={{ background: r.status === "已發放" ? "#EEF7F2" : r.status === "暫時不發" ? "#FCEEEF" : "#FFF8E5" }}>
                 <td style={td}><strong>{r.employeeName}</strong></td>
                 <td style={td}>{deptOf(r) || "—"}</td>
-                <td style={{ ...td, width: 320, maxWidth: 320, whiteSpace: "normal", lineHeight: 1.55 }}>{siteOf(r) || "—"}</td>
+                <td style={{ ...td, width: 230, maxWidth: 230, whiteSpace: "normal", overflowWrap: "anywhere", lineHeight: 1.55 }}>{siteOf(r) || "—"}</td>
                 <td style={{ ...td, fontFamily: FONT_NUM }}>{fmtMoney(r.baseSalary)}</td>
                 <td style={{ ...td, fontFamily: FONT_NUM, color: THEME.success }}>
                   {sumAmounts(r.additions) ? (
