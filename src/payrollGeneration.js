@@ -29,7 +29,7 @@ export function createEmployeePayroll(employee, month, makeId) {
     department: employee.dept || "", siteName: employee.siteName || "", company: employee.company || "",
     ...employeeSalary(employee, makeId),
     insuranceStatus: employee.insuranceStatus || "無加保", paymentDate: "", note: "",
-    status: "待發放", posted: false,
+    status: "待批准", posted: false,
   };
 }
 

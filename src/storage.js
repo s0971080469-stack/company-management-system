@@ -1,5 +1,6 @@
 import { supabase } from "./supabaseClient";
 import { createPayrollFromLatest } from "./payrollCreation.js";
+import { approvePayrollFromLatest } from "./payrollApproval.js";
 
 /**
  * 清單型資料已改成「一筆資料一列」存放於 app_records。
@@ -32,6 +33,29 @@ const collectionStorageModes = new Map();
 const collectionSaveQueues = new Map();
 const collectionGenerations = new Map();
 const PAGE_SIZE = 1000;
+
+export function approveLatestPayrollSite(options) {
+  const pendingPayroll = collectionSaveQueues.get("payroll");
+  const pendingEmployees = collectionSaveQueues.get("employees");
+  const queued = (async () => {
+    if (pendingPayroll) await pendingPayroll;
+    if (pendingEmployees) await pendingEmployees;
+    return approvePayrollFromLatest(supabase, options, (result) => {
+      collectionVersions.set("payroll", result.version);
+      // 取消批准前排入的舊快照，避免稍後又把批准紀錄覆蓋掉。
+      collectionGenerations.set("payroll", (collectionGenerations.get("payroll") || 0) + 1);
+      collectionStorageModes.set("payroll", "records");
+      emitStorageEvent("app-storage-refreshed", { key: "employees", value: result.employees });
+      emitStorageEvent("app-storage-refreshed", { key: "payroll", value: result.rows });
+    });
+  })();
+  collectionSaveQueues.set("payroll", queued);
+  const cleanup = () => {
+    if (collectionSaveQueues.get("payroll") === queued) collectionSaveQueues.delete("payroll");
+  };
+  queued.then(cleanup, cleanup);
+  return queued;
+}
 
 export function generateLatestPayroll(options) {
   const pendingPayroll = collectionSaveQueues.get("payroll");

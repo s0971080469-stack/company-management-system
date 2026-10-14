@@ -7,7 +7,7 @@ import {
   ChevronRight, ChevronLeft, RotateCcw, ArrowRight, AlertCircle, FileSignature, Truck, ShieldCheck, UserCog, Download, Car,
   Paperclip, Eye, Upload, Image as ImageIcon, Loader2, MapPin, Printer, Menu, Stamp, MessageCircle, Send
 } from "lucide-react";
-import { loadKey, saveKey, generateLatestPayroll } from "./storage.js";
+import { loadKey, saveKey, generateLatestPayroll, approveLatestPayrollSite } from "./storage.js";
 import { savePaymentDecision } from "./paymentDecision.js";
 import { supabase, createAuthActionClient } from "./supabaseClient.js";
 import PizZip from "pizzip";
@@ -19,6 +19,8 @@ import { getInvoiceReminders } from "./invoiceReminders.js";
 import ReportsOverview from "./ReportsOverview.jsx";
 import { payrollAuditStamp, payrollActivityActor } from "./payrollActivity.js";
 import { nextPayrollMonth, payrollGenerationLocked } from "./payrollGeneration.js";
+import PayrollApprovalButton from "./PayrollApprovalButton.jsx";
+import { payrollSiteOf, payrollNetAmount, payrollReleaseStatus } from "./payrollApproval.js";
 
 /* ---------------------------------------------------------
    企業帳冊 Corporate Ledger — 主題設計
@@ -579,6 +581,8 @@ function StatusBadge({ status }) {
     "在職": { bg: THEME.successSoft, fg: THEME.success },
     "離職": { bg: "#EEEEEE", fg: THEME.muted },
     "待發放": { bg: THEME.warnSoft, fg: THEME.warn },
+    "待批准": { bg: THEME.warnSoft, fg: THEME.warn },
+    "已批准，待發放": { bg: THEME.brassSoft, fg: THEME.brassDeep },
     "已發放": { bg: THEME.successSoft, fg: THEME.success },
     "暫時不發": { bg: THEME.dangerSoft, fg: THEME.danger },
     "草擬": { bg: "#EEEEEE", fg: THEME.muted },
@@ -2159,9 +2163,7 @@ function EmployeeForm({ data, siteOptions, onSave, onCancel }) {
 ========================================================= */
 const sumAmounts = (items = []) => items.reduce((s, it) => s + (Number(it.amount) || 0), 0);
 const sumAdvances = (advances = []) => advances.reduce((s, adv) => s + (Number(adv.amount) || 0), 0);
-const payrollNet = (r) =>
-  Number(r.baseSalary || 0) + sumAmounts(r.additions) - sumAmounts(r.deductions)
-  - Number(r.laborInsurance || 0) - Number(r.healthInsurance || 0) - Number(r.pensionSelf || 0) - sumAdvances(r.advances);
+const payrollNet = payrollNetAmount;
 
 function PayrollView({ ctx }) {
   const { employees, payroll, contracts, persist, addAccountingEntry, removeAccountingBySource, askDelete, isAdmin } = ctx;
@@ -2198,7 +2200,7 @@ function PayrollView({ ctx }) {
 
   const deptOf = (r) => r.department || employees.find((e) => e.id === r.employeeId)?.dept || "";
   // 所屬案場以人員管理的最新資料為準；薪資紀錄內的舊快照只在找不到員工時備援。
-  const siteOf = (r) => employees.find((e) => e.id === r.employeeId)?.siteName || r.siteName || "";
+  const siteOf = (r) => payrollSiteOf(r, employees);
   const companyOf = (r) => r.company || employees.find((e) => e.id === r.employeeId)?.company || "";
   const bankOf = (r) => employees.find((e) => e.id === r.employeeId) || {};
   const bossOf = (r) => contracts.find((c) => c.title === siteOf(r))?.owner === "夏壽松" ? "夏壽松" : "夏碩亞";
@@ -2226,7 +2228,7 @@ function PayrollView({ ctx }) {
         case "company": return companyOf(r);
         case "bankAccount": return `${emp.bankCode || ""} ${emp.bankName || ""} ${emp.bankAccount || ""}`;
         case "paymentDate": return r.paymentDate || "";
-        case "status": return r.status || "";
+        case "status": return payrollReleaseStatus(r, siteOf(r));
         default: return "";
       }
     };
@@ -2266,7 +2268,8 @@ function PayrollView({ ctx }) {
 
   const saveRow = (data) => {
     const audit = payrollAuditStamp(actorName(ctx));
-    persist.payroll(payroll.map((r) => (r.id === data.id ? { ...data, ...audit } : r)));
+    const status = payrollReleaseStatus(data, siteOf(data));
+    persist.payroll(payroll.map((r) => (r.id === data.id ? { ...data, status, ...audit } : r)));
     setModal(null);
   };
 
@@ -2282,9 +2285,9 @@ function PayrollView({ ctx }) {
   };
 
   const toggleHold = (r) => {
-    const nextStatus = r.status === "暫時不發" ? "待發放" : "暫時不發";
+    const nextStatus = r.status === "暫時不發" ? "待批准" : "暫時不發";
     const audit = payrollAuditStamp(actorName(ctx));
-    persist.payroll(payroll.map((x) => (x.id === r.id ? { ...x, status: nextStatus, ...audit } : x)));
+    persist.payroll(payroll.map((x) => (x.id === r.id ? { ...x, status: nextStatus, releaseApproval: null, ...audit } : x)));
   };
 
   const totalNet = rows.reduce((s, r) => s + payrollNet(r), 0);
@@ -2340,6 +2343,9 @@ function PayrollView({ ctx }) {
             <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600 }}>月份</span>
             <TextInput type="month" value={month} onChange={(e) => setMonth(e.target.value)} style={{ width: 150 }} />
           </label>
+          <PayrollApprovalButton key={`${month}:${bossFilter}:${siteFilter}`} rows={rows} employees={employees} month={month} site={siteFilter}
+            isAdmin={isAdmin} formatMoney={fmtMoney} formatMonth={fmtMonthLabel}
+            onApprove={(selection) => approveLatestPayrollSite({ ...selection, isAdmin, actor: actorName(ctx), senderId: ctx.currentUser?.id || ADMIN_CHAT_ID })} />
       </div>
 
       {allRows.length === 0 ? (
@@ -2428,13 +2434,13 @@ function PayrollView({ ctx }) {
                   ) : "—"}
                 </td>
                 <td style={td}>{r.paymentDate ? fmtDate(r.paymentDate) : "—"}</td>
-                <td style={td}><StatusBadge status={r.status} /></td>
+                <td style={td}><StatusBadge status={payrollReleaseStatus(r, siteOf(r))} /></td>
                 <td style={{ ...td, textAlign: "right" }}>
                   <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                     {r.status !== "已發放" && <Btn size="sm" variant="success" icon={Check} onClick={() => markPaid(r)}>已發放請打勾</Btn>}
                     {r.status !== "已發放" && (
                       <Btn size="sm" variant={r.status === "暫時不發" ? "default" : "danger"} icon={r.status === "暫時不發" ? RotateCcw : undefined} onClick={() => toggleHold(r)}>
-                        {r.status === "暫時不發" ? "恢復待發放" : "暫時不發"}
+                        {r.status === "暫時不發" ? "恢復待批准" : "暫時不發"}
                       </Btn>
                     )}
                     <Btn size="sm" icon={Pencil} onClick={() => setModal(r)}>編輯</Btn>

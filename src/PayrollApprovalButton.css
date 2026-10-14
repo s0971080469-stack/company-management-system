@@ -1,0 +1,13 @@
+.payroll-approvals{display:contents;color:#1b2333}
+.payroll-approvals button,.payroll-approvals__dialog button{font:inherit;cursor:pointer;border:1px solid #d7d4c9;border-radius:8px;padding:7px 12px;background:#fff;min-height:36px}
+button.payroll-approvals__button{display:inline-flex;align-items:center;justify-content:center;gap:5px;background:#f7e7b5;color:#704b0b;border-color:#c69a38;font-size:13px;font-weight:700;white-space:nowrap}
+.payroll-approvals button:disabled,.payroll-approvals__dialog button:disabled{opacity:.6;cursor:not-allowed}
+.payroll-approvals button:focus-visible,.payroll-approvals__dialog button:focus-visible{outline:3px solid #b8912b;outline-offset:2px}
+.payroll-approvals__notice:empty{display:none}
+.payroll-approvals__notice:not(:empty){flex-basis:100%;font-size:12px;line-height:1.6;color:#704b0b}
+.payroll-approvals__overlay{position:fixed;inset:0;z-index:5000;background:#10182788;display:flex;align-items:center;justify-content:center;padding:20px}
+.payroll-approvals__dialog{width:480px;max-width:100%;max-height:85dvh;overflow:auto;box-sizing:border-box;background:#fff;border-radius:16px;padding:24px;box-shadow:0 18px 70px #0003}
+.payroll-approvals__dialog h3{margin:0 0 16px}.payroll-approvals__dialog p{font-size:14px;line-height:1.7;overflow-wrap:anywhere}
+.payroll-approvals__actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-top:20px}
+@media(max-width:600px){.payroll-approvals button,.payroll-approvals__dialog button{min-height:42px}}
+@media print{.payroll-approvals,.payroll-approvals__overlay{display:none!important}}

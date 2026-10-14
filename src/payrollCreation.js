@@ -1,12 +1,12 @@
 import { generatePayrollForMonth, createEmployeePayroll, assertSalaryMatches } from "./payrollGeneration.js";
 
-async function versionOf(client, key) {
+export async function versionOf(client, key) {
   const { data, error } = await client.from("app_collection_versions").select("version").eq("collection_key", key).single();
   if (error || data?.version == null || !Number.isSafeInteger(Number(data.version))) throw new Error("無法讀取最新資料，請確認網路後重試。");
   return Number(data.version);
 }
 
-async function snapshot(client, key) {
+export async function snapshot(client, key) {
   const version = await versionOf(client, key);
   const rows = [];
   for (let from = 0; ; from += 1000) {
