@@ -9,6 +9,8 @@ import {
 } from "lucide-react";
 import { loadKey, saveKey, generateLatestPayroll, approveLatestPayrollSite } from "./storage.js";
 import { savePaymentDecision } from "./paymentDecision.js";
+import { SYSTEM_CHAT_ID, saveInvoiceWithDepositNotice, sendInvoiceNotice } from "./invoiceDepositNotice.js";
+import { normalizeCompanyPaymentStatus } from "./companyPaymentStatus.js";
 import { supabase, createAuthActionClient } from "./supabaseClient.js";
 import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
@@ -16,6 +18,7 @@ import { renderAsync as renderDocxAsync } from "docx-preview";
 import DashboardOverview from "./DashboardOverview.jsx";
 import InvoiceOverdueReminder from "./InvoiceOverdueReminder.jsx";
 import { getInvoiceReminders } from "./invoiceReminders.js";
+import { matchesInvoiceKeyword } from "./invoiceSearch.js";
 import ReportsOverview from "./ReportsOverview.jsx";
 import { payrollAuditStamp, payrollActivityActor } from "./payrollActivity.js";
 import { nextPayrollMonth, payrollGenerationLocked } from "./payrollGeneration.js";
@@ -558,10 +561,14 @@ function StatCard({ label, value, sub, subNode, icon: Icon, tone = "brass" }) {
     danger: { bg: THEME.dangerSoft, fg: THEME.danger },
     warn: { bg: THEME.warnSoft, fg: THEME.warn },
     ink: { bg: "#EEF0F4", fg: THEME.ink },
+    hold: { bg: "#EEE8F4", fg: "#705A85", surface: "#FAF8FC", border: "#DDD3E6" },
+    payrollPeople: { bg: "#E4ECF5", fg: "#526C89", surface: "#F4F7FB", border: "#D3DFEC" },
+    payrollTotal: { bg: "#F3E8CA", fg: "#8F6E1C", surface: "#FCF9F0", border: "#E7DCBC" },
+    payrollPaid: { bg: "#E1EFE7", fg: "#39765A", surface: "#F3F9F5", border: "#CEE2D5" },
   };
-  const t = tones[tone];
+  const t = tones[tone] || tones.brass;
   return (
-    <div style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 10, padding: "13px 15px", display: "flex", flexDirection: "column", gap: 6, minHeight: 78 }}>
+    <div style={{ background: t.surface || THEME.surface, border: `1px solid ${t.border || THEME.line}`, borderRadius: 10, padding: "13px 15px", display: "flex", flexDirection: "column", gap: 6, minHeight: 78 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{ fontSize: 11, color: THEME.muted, letterSpacing: 0.3 }}>{label}</span>
         {Icon && (
@@ -725,7 +732,10 @@ function ChatWidget({ ctx }) {
   const { sysUsers, currentUser } = ctx;
   const myId = currentUser?.id || ADMIN_CHAT_ID;
   const namedContacts = (sysUsers || []).filter((u) => u.id !== myId && u.status !== "停用");
-  const contacts = currentUser ? [...namedContacts, { id: ADMIN_CHAT_ID, name: "夏碩亞" }] : namedContacts;
+  const contacts = [
+    ...(currentUser ? [...namedContacts, { id: ADMIN_CHAT_ID, name: "夏碩亞" }] : namedContacts),
+    ...(myId === ADMIN_CHAT_ID ? [{ id: SYSTEM_CHAT_ID, name: "系統通知" }] : []),
+  ];
 
   const [open, setOpen] = useState(false);
   const [activeId, setActiveId] = useState(null);
@@ -765,13 +775,13 @@ function ChatWidget({ ctx }) {
 
   // 開啟某個對話串時，把對方傳給我、還沒讀的訊息標記為已讀
   useEffect(() => {
-    if (!myId || !activeId) return;
+    if (!open || !myId || !activeId) return;
     const unreadIds = messages.filter((m) => m.sender_id === activeId && m.recipient_id === myId && !m.read_at).map((m) => m.id);
     if (unreadIds.length === 0) return;
     const readAt = new Date().toISOString();
     setMessages((prev) => prev.map((m) => (unreadIds.includes(m.id) ? { ...m, read_at: readAt } : m)));
     supabase.from("chat_messages").update({ read_at: readAt }).in("id", unreadIds).then(() => {});
-  }, [activeId, messages, myId]);
+  }, [open, activeId, messages, myId]);
 
   useEffect(() => {
     if (open && activeId) listEndRef.current?.scrollIntoView({ block: "end" });
@@ -793,7 +803,7 @@ function ChatWidget({ ctx }) {
 
   const send = async () => {
     const content = draft.trim();
-    if (!content || !activeId) return;
+    if (!content || !activeId || activeId === SYSTEM_CHAT_ID) return;
     setDraft("");
     const { data, error } = await supabase.from("chat_messages").insert({ sender_id: myId, recipient_id: activeId, content }).select().single();
     if (!error && data) setMessages((prev) => (prev.some((m) => m.id === data.id) ? prev : [...prev, data]));
@@ -877,7 +887,7 @@ function ChatWidget({ ctx }) {
                         maxWidth: "78%", padding: "8px 12px", borderRadius: 14,
                         borderBottomRightRadius: mine ? 3 : 14, borderBottomLeftRadius: mine ? 14 : 3,
                         background: mine ? THEME.brass : "#fff", color: mine ? "#fff" : THEME.text,
-                        fontSize: 12.5, lineHeight: 1.5, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", wordBreak: "break-word",
+                        fontSize: 12.5, lineHeight: 1.5, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", wordBreak: "break-word", whiteSpace: "pre-wrap",
                       }}>
                         {m.content}
                       </div>
@@ -890,12 +900,13 @@ function ChatWidget({ ctx }) {
               <div style={{ display: "flex", gap: 8, padding: 10, borderTop: `1px solid ${THEME.line}`, flexShrink: 0 }}>
                 <input
                   value={draft}
+                  disabled={activeId === SYSTEM_CHAT_ID}
                   onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-                  placeholder="輸入訊息…"
+                  placeholder={activeId === SYSTEM_CHAT_ID ? "系統通知不需回覆" : "輸入訊息…"}
                   style={{ flex: 1, border: `1px solid ${THEME.line}`, borderRadius: 8, padding: "8px 10px", fontSize: 12.5, fontFamily: FONT_BODY, outline: "none" }}
                 />
-                <button onClick={send} disabled={!draft.trim()} style={{
+                <button onClick={send} disabled={!draft.trim() || activeId === SYSTEM_CHAT_ID} style={{
                   border: "none", borderRadius: 8, width: 36, height: 36, background: draft.trim() ? THEME.brass : THEME.line,
                   color: "#fff", cursor: draft.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
                 }}>
@@ -1268,6 +1279,11 @@ export default function CompanyManagementSystem({ session }) {
 
   // persist helpers — update state + storage together
   const persist = {
+    invoicesConfirmed: async (v) => {
+      const saved = await saveKey(STORAGE_KEYS.invoices, v);
+      if (saved) setInvoices(v);
+      return saved;
+    },
     billingConfirmed: async (v) => {
       const saved = await saveKey(STORAGE_KEYS.billing, v);
       if (saved) setBilling(v);
@@ -1353,7 +1369,7 @@ export default function CompanyManagementSystem({ session }) {
   }
 
   const ctx = {
-    employees, attendance, payroll, quotes, invoices, billing, accounting,
+    employees, attendance, payroll, quotes, invoices, billing: billing.map(normalizeCompanyPaymentStatus), accounting,
     vendors, documents, documentTemplates, contracts, sysUsers, rolePerms, quoteTemplates, vehicles, companyLocation, contractBilling, leaveRequests,
     currentUser, isAdmin, realIsAdmin,
     persist, addAccountingEntry, removeAccountingBySource, askDelete, now, setTab,
@@ -2290,7 +2306,9 @@ function PayrollView({ ctx }) {
     persist.payroll(payroll.map((x) => (x.id === r.id ? { ...x, status: nextStatus, releaseApproval: null, ...audit } : x)));
   };
 
-  const totalNet = rows.reduce((s, r) => s + payrollNet(r), 0);
+  const heldRows = rows.filter((r) => r.status === "暫時不發");
+  const heldNet = heldRows.reduce((s, r) => s + payrollNet(r), 0);
+  const totalNet = rows.filter((r) => r.status !== "暫時不發").reduce((s, r) => s + payrollNet(r), 0);
   const paidNet = rows.filter((r) => r.status === "已發放").reduce((s, r) => s + payrollNet(r), 0);
   const unpaidNet = totalNet - paidNet;
 
@@ -2312,16 +2330,22 @@ function PayrollView({ ctx }) {
         } />
 
       <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 18 }}>
-        <StatCard label="本月人數" value={rows.length} icon={Users} tone="ink" />
-        <StatCard label="本月薪資總額" value={fmtMoney(totalNet)} icon={Wallet} tone="brass"
+        <StatCard label="本月人數" value={rows.length} icon={Users} tone="payrollPeople" />
+        <StatCard label="本月薪資總額" value={fmtMoney(totalNet)} icon={Wallet} tone="payrollTotal"
           subNode={
             <div style={{ display: "flex", gap: 12, fontFamily: FONT_NUM, fontSize: 13.5, fontWeight: 700 }}>
               <span style={{ color: THEME.success }}>已發放 {fmtMoney(paidNet)}</span>
               <span style={{ color: THEME.warn }}>尚未發放 {fmtMoney(unpaidNet)}</span>
             </div>
           } />
-        <StatCard label="已發放" value={rows.filter((r) => r.status === "已發放").length + " / " + rows.length} icon={Check} tone="success" />
-        <StatCard label="暫時不發" value={rows.filter((r) => r.status === "暫時不發").length + " / " + rows.length} icon={AlertCircle} tone="danger" />
+        <StatCard label="已發放" value={rows.filter((r) => r.status === "已發放").length + " / " + rows.length} icon={Check} tone="payrollPaid" />
+        <StatCard label="暫時不發金額" value={fmtMoney(heldNet)} icon={AlertCircle} tone="hold"
+          subNode={
+            <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: FONT_BODY, fontSize: 13.5, fontWeight: 400, color: "#705A85" }}>
+              <span>暫時不發人數</span>
+              <span style={{ fontFamily: FONT_NUM, fontSize: 13.5, fontWeight: 700 }}>{heldRows.length} / {rows.length}</span>
+            </div>
+          } />
       </div>
 
       <div role="status" aria-live="polite" style={{ marginBottom: 12, color: THEME.muted, fontSize: 13 }}>
@@ -2540,6 +2564,7 @@ function PayrollForm({ data, onSave, onCancel }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 18, marginTop: 18 }}>
         <Field label="保險狀態">
           <Select value={f.insuranceStatus} onChange={set("insuranceStatus")}>
+            <option value="無加保">無加保</option>
             <option value="加保">加保</option>
             <option value="在保">在保</option>
             <option value="退保">退保</option>
@@ -2650,7 +2675,7 @@ const companyRowColor = (companyName) => {
   return "#F0F1F5";
 };
 
-function QuotesView({ ctx, setTab }) {
+export function QuotesView({ ctx, setTab }) {
   const { quotes, persist, invoices, quoteTemplates, vendors, askDelete } = ctx;
   const [modal, setModal] = useState(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -2775,7 +2800,7 @@ function QuotesView({ ctx, setTab }) {
         } />
 
       {quotes.length > 0 && (
-        <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {companyTabs.map((c) => (
               <button key={c} onClick={() => setCompanyFilter(c)}
@@ -3219,19 +3244,45 @@ const emptyInvoice = () => ({
   taxRate: 5, status: "未付款", note: "", posted: false, addedToBankDeposit: false, ...emptyLetterhead(),
 });
 
-function InvoicesView({ ctx }) {
+export function InvoicesView({ ctx }) {
   const { invoices, quotes, billing, vendors, persist, addAccountingEntry, removeAccountingBySource, askDelete } = ctx;
   const [modal, setModal] = useState(null);
   const [companyFilter, setCompanyFilter] = useState("全部");
   const [month, setMonth] = useState(monthStr());
+  const [query, setQuery] = useState("");
+  const [depositBusy, setDepositBusy] = useState(false);
+  const depositBusyRef = useRef(false);
+  const [depositNotice, setDepositNotice] = useState("");
+  const [pendingNotices, setPendingNotices] = useState([]);
+  const sendNotice = (message) => ctx.sendInvoiceNotice
+    ? ctx.sendInvoiceNotice(message)
+    : supabase.from("chat_messages").insert(message);
+
+  const retryNotices = async () => {
+    if (depositBusyRef.current) return;
+    depositBusyRef.current = true;
+    setDepositBusy(true);
+    const remaining = [];
+    try {
+      for (const message of pendingNotices) {
+        try { await sendInvoiceNotice(message, sendNotice); }
+        catch { remaining.push(message); }
+      }
+      setPendingNotices(remaining);
+      setDepositNotice(remaining.length ? "通知仍未送出，請檢查網路後重試。" : "已通知夏碩亞。");
+    } finally {
+      depositBusyRef.current = false;
+      setDepositBusy(false);
+    }
+  };
 
   const KNOWN_COMPANIES = BILLING_COMPANY_OPTIONS.filter((o) => o !== "其他");
   const companyTabs = ["全部", ...KNOWN_COMPANIES, "其他"];
   const filtered = invoices.filter((inv) => {
     if (month && !(inv.date || "").startsWith(month)) return false;
-    if (companyFilter === "全部") return true;
-    if (companyFilter === "其他") return !KNOWN_COMPANIES.includes(inv.companyName);
-    return inv.companyName === companyFilter;
+    if (companyFilter === "其他" && KNOWN_COMPANIES.includes(inv.companyName)) return false;
+    if (companyFilter !== "全部" && companyFilter !== "其他" && inv.companyName !== companyFilter) return false;
+    return matchesInvoiceKeyword(inv, query);
   });
 
   const save = (data) => {
@@ -3250,8 +3301,12 @@ function InvoicesView({ ctx }) {
     persist.invoices(invoices.map((x) => x.id === inv.id ? { ...x, status, posted: status === "已付款", updatedAt: new Date().toISOString() } : x));
   };
 
-  const setDueDate = (inv, dueDate) => {
-    if (!dueDate) return;
+  const setDueDate = async (inv, dueDate) => {
+    if (!dueDate || dueDate === inv.dueDate || depositBusyRef.current) return;
+    depositBusyRef.current = true;
+    setDepositBusy(true);
+    setDepositNotice("正在儲存入帳日…");
+    try {
     const total = inv.total ?? sumItems(inv.items) * (1 + Number(inv.taxRate) / 100);
     const source = `發票 ${inv.no} — ${inv.client}`;
     const existingDeposit = billing.find((b) => b.expenseType === "銀行入帳" && b.sourceInvoiceId === inv.id);
@@ -3266,7 +3321,9 @@ function InvoicesView({ ctx }) {
         companyName: inv.companyName || "",
         updatedAt: new Date().toISOString(),
       };
-      persist.billing(billing.map((b) => b.id === existingDeposit.id ? deposit : b));
+      if (!await persist.billingConfirmed(billing.map((b) => b.id === existingDeposit.id ? deposit : b))) {
+        throw new Error("銀行入帳紀錄儲存失敗，未傳送通知，請重新整理後再試。");
+      }
       removeAccountingBySource("billing", existingDeposit.id);
     } else {
       const bankDeposits = billing.filter((b) => b.expenseType === "銀行入帳");
@@ -3276,7 +3333,9 @@ function InvoicesView({ ctx }) {
         sourceInvoiceId: inv.id,
         createdBy: actorName(ctx), createdAt: new Date().toISOString(),
       };
-      persist.billing([deposit, ...billing]);
+      if (!await persist.billingConfirmed([deposit, ...billing])) {
+        throw new Error("銀行入帳紀錄儲存失敗，未傳送通知，請重新整理後再試。");
+      }
     }
 
     addAccountingEntry({
@@ -3284,10 +3343,27 @@ function InvoicesView({ ctx }) {
       desc: `銀行入帳 — ${deposit.source}`, date: deposit.date,
       sourceType: "billing", sourceId: deposit.id,
     });
-    persist.invoices(invoices.map((x) => x.id === inv.id ? {
-      ...x, dueDate, status: "已付款", posted: true, addedToBankDeposit: true,
+    const updated = {
+      ...inv, dueDate, status: "已付款", posted: true, addedToBankDeposit: true,
       updatedAt: new Date().toISOString(),
-    } : x));
+    };
+    const result = await saveInvoiceWithDepositNotice({
+      previous: inv, updated, amount: total, actor: actorName(ctx),
+      save: () => persist.invoicesConfirmed(invoices.map((x) => x.id === inv.id ? updated : x)),
+      send: sendNotice, formatMoney: fmtMoney, formatDate: fmtDate,
+    });
+    if (result.pending) {
+      setPendingNotices((prev) => [...prev.filter((m) => m.id !== result.pending.id), result.pending]);
+      setDepositNotice("入帳日已儲存，但通知傳送失敗。請按「重送通知」，不必重新設定入帳日。");
+    } else {
+      setDepositNotice("入帳日已儲存，已通知夏碩亞。");
+    }
+    } catch (error) {
+      setDepositNotice(error.message || "儲存失敗，請重新整理後再試。");
+    } finally {
+      depositBusyRef.current = false;
+      setDepositBusy(false);
+    }
   };
 
   const cancelDueDate = (inv) => {
@@ -3309,11 +3385,15 @@ function InvoicesView({ ctx }) {
         action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: { ...emptyInvoice(), no: nextNo("INV", invoices) } })}>開立發票</Btn>} />
 
       <InvoiceOverdueReminder reminders={getInvoiceReminders(invoices, ctx.now)} formatMoney={fmtMoney} formatDate={fmtDate} />
+      {depositNotice && <div role="status" aria-live="polite" style={{ marginBottom: 14, padding: "10px 14px", borderRadius: 8, background: THEME.brassSoft, color: THEME.text, fontSize: 13 }}>
+        {depositNotice}
+        {pendingNotices.length > 0 && <Btn size="sm" disabled={depositBusy} onClick={retryNotices}>重送通知（{pendingNotices.length}）</Btn>}
+      </div>}
 
       {invoices.length > 0 && (
         <>
           <MonthFilterBar month={month} setMonth={setMonth} label="開立日期月份" />
-          <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
             {companyTabs.map((c) => (
               <button key={c} onClick={() => setCompanyFilter(c)}
                 style={{
@@ -3324,6 +3404,13 @@ function InvoicesView({ ctx }) {
                   boxShadow: companyFilter === c ? `inset 0 0 0 1px ${THEME.brassDeep}` : "none",
                 }} aria-pressed={companyFilter === c}>{c}</button>
             ))}
+            <div style={{ position: "relative", width: 210, maxWidth: "100%" }}>
+              <Search size={14} aria-hidden="true" style={{ position: "absolute", left: 10, top: 10, color: THEME.muted, pointerEvents: "none" }} />
+              <TextInput type="search" aria-label="搜尋發票關鍵字"
+                placeholder="搜尋關鍵字"
+                title="可搜尋發票號碼、開票公司、估價單號碼、客戶、工程名稱、付款方式、類別、狀態、備註及品項；多個關鍵字以空白分隔"
+                value={query} onChange={(e) => setQuery(e.target.value)} style={{ paddingLeft: 30 }} />
+            </div>
           </div>
         </>
       )}
@@ -3347,9 +3434,9 @@ function InvoicesView({ ctx }) {
                 <td style={td}>{fmtDate(inv.date)}</td>
                 <td style={td}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    <DatePickerButton value={inv.dueDate} onChange={(v) => setDueDate(inv, v)} />
+                    <DatePickerButton value={inv.dueDate} disabled={depositBusy} onChange={(v) => setDueDate(inv, v)} />
                     {inv.dueDate && (
-                      <Btn size="sm" variant="danger" icon={X} onClick={() => askDelete(
+                      <Btn size="sm" variant="danger" icon={X} disabled={depositBusy} onClick={() => askDelete(
                         `確定要取消發票 ${inv.no} 的入帳日嗎？對應的銀行入帳與帳務紀錄也會一併移除。`,
                         () => cancelDueDate(inv),
                         "確認取消"
@@ -3871,11 +3958,41 @@ function AttendanceView({ ctx }) {
    COMPANY EXPENSES (公司支出) — 零用金紀錄 / 公司付款
 ========================================================= */
 const emptyPettyCash = () => ({ expenseType: "零用金", flowType: "支出", date: todayStr(), item: "", amount: "", handler: "", note: "" });
-const emptyCompanyPayment = () => ({ expenseType: "公司付款", vendor: "", category: "", amount: "", date: todayStr(), plannedPaymentDate: "", status: "未付款", note: "", posted: false, companyName: "", paymentDate: "", approved: false });
+const emptyCompanyPayment = () => ({ expenseType: "公司付款", vendor: "", category: "", invoiceNo: "", amount: "", date: todayStr(), plannedPaymentDate: "", status: "未付款", note: "", posted: false, companyName: "", paymentDate: "", approved: false });
 const emptyBankDeposit = () => ({ expenseType: "銀行入帳", date: todayStr(), source: "", amount: "", note: "", companyName: "" });
 
 function BillingView({ ctx }) {
   const { billing, persist, addAccountingEntry, removeAccountingBySource, askDelete, isAdmin, sysUsers, currentUser } = ctx;
+  const [attachPaymentId, setAttachPaymentId] = useState(null);
+  const [scanPreview, setScanPreview] = useState(null);
+  const latestBilling = useRef(billing);
+  latestBilling.current = billing;
+  const attachmentPayment = billing.find((b) => b.id === attachPaymentId);
+  const savePaymentAttachments = async (attachments) => {
+    if (!latestBilling.current.some((b) => b.id === attachPaymentId)) throw new Error("款項已不存在");
+    const next = latestBilling.current.map((b) => b.id === attachPaymentId ? { ...b, attachments, updatedAt: new Date().toISOString() } : b);
+    if (!await persist.billingConfirmed(next)) throw new Error("掃描檔資料儲存失敗");
+  };
+  const openPaymentScan = async (attachment) => {
+    setScanPreview({ loading: true, name: attachment.name });
+    try {
+      const url = await getQuoteScanUrl(attachment.path);
+      setScanPreview({ url, name: attachment.name, isPdf: isPdfFile(attachment.name) });
+    } catch {
+      setScanPreview(null);
+      alert("掃描檔預覽失敗，請稍後再試。");
+    }
+  };
+  const downloadPaymentScan = async (attachment) => {
+    try {
+      const url = await getQuoteScanUrl(attachment.path);
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("下載失敗");
+      downloadBlob(await response.blob(), attachment.name);
+    } catch {
+      alert("掃描檔下載失敗，請稍後再試。");
+    }
+  };
   const [expenseTab, setExpenseTab] = useState("銀行入帳");
   const [decisionBusy, setDecisionBusy] = useState(false);
   const decisionInFlight = useRef(false);
@@ -3929,6 +4046,7 @@ function BillingView({ ctx }) {
         case "source": return b.source || "";
         case "vendor": return b.vendor || "";
         case "category": return b.category || "";
+        case "invoiceNo": return b.invoiceNo || "";
         case "plannedPaymentDate": return b.plannedPaymentDate || "";
         case "amount": return Number(b.amount) || 0;
         case "handler": return b.handler || "";
@@ -3962,6 +4080,15 @@ function BillingView({ ctx }) {
   };
 
   const saveCompanyPayment = (data) => {
+    data = { ...data, status: data.status || "未付款" };
+    const previous = billing.find((b) => b.id === data.id);
+    if (isAdmin && data.status !== (previous?.status || "未付款")) {
+      data = { ...data, paymentStatusOverride: true };
+    }
+    if (!isAdmin) {
+      const existing = billing.find((b) => b.id === data.id);
+      data = { ...data, status: existing?.status || "未付款", paymentDate: existing?.paymentDate || "", posted: existing?.posted || false };
+    }
     if (billing.find((b) => b.id === data.id)?.paymentOnHold && data.status === "已付款") {
       setDecisionNotice("此款項暫時不發，請由夏碩亞重新核准後再付款。");
       return;
@@ -3988,8 +4115,8 @@ function BillingView({ ctx }) {
   };
 
   const setStatus = (b, status) => {
-    if (b.paymentOnHold || decisionInFlight.current) return;
-    persist.billing(billing.map((x) => x.id === b.id ? { ...x, status, posted: status === "已付款", updatedAt: new Date().toISOString() } : x));
+    if (!isAdmin || b.paymentOnHold || decisionInFlight.current) return;
+    persist.billing(billing.map((x) => x.id === b.id ? { ...x, status, paymentStatusOverride: true, posted: status === "已付款", updatedAt: new Date().toISOString() } : x));
     if (status === "已付款" && !b.posted) {
       addAccountingEntry({ type: "支出", category: b.category || "公司付款", amount: b.amount, desc: `公司付款 ${b.no} — ${b.vendor}`, sourceType: "billing", sourceId: b.id });
     }
@@ -4017,7 +4144,8 @@ function BillingView({ ctx }) {
   };
 
   const setPaymentDate = (b, paymentDate) => {
-    if (b.paymentOnHold || decisionInFlight.current) return;
+    if (!paymentDate || !b.approved || b.paymentOnHold || decisionInFlight.current) return;
+    if (!isAdmin && (b.status === "已付款" || b.paymentDate)) return;
     persist.billing(billing.map((x) => x.id === b.id ? { ...x, paymentDate, status: "已付款", posted: true, updatedAt: new Date().toISOString() } : x));
     if (!b.posted) {
       addAccountingEntry({ type: "支出", category: b.category || "公司付款", amount: b.amount, desc: `公司付款 ${b.no} — ${b.vendor}`, sourceType: "billing", sourceId: b.id });
@@ -4219,6 +4347,7 @@ function BillingView({ ctx }) {
               { key: "no", label: "單號", sortable: true },
               { key: "vendor", label: "廠商／申請人", sortable: true },
               { key: "category", label: "項目類別", sortable: true },
+              { key: "invoiceNo", label: "發票號碼", sortable: true },
               { key: "date", label: "申請日期", sortable: true },
               { key: "plannedPaymentDate", label: "預訂付款日", sortable: true },
               { key: "amount", label: "金額", sortable: true },
@@ -4226,6 +4355,9 @@ function BillingView({ ctx }) {
               { key: "approved", label: "核准", sortable: true },
               { key: "paymentDate", label: "付款日", sortable: true },
               { key: "status", label: "狀態", sortable: true },
+              { key: "scanUpload", label: "掃描檔上傳" },
+              { key: "scanPreview", label: "預覽" },
+              { key: "scanDownload", label: "下載掃描檔" },
               "",
             ]}>
               {sortedFiltered.map((b) => (
@@ -4233,6 +4365,7 @@ function BillingView({ ctx }) {
                   <td style={{ ...td, fontFamily: FONT_NUM }}>{b.no}</td>
                   <td style={td}><strong>{b.vendor}</strong></td>
                   <td style={td}>{b.category || "—"}</td>
+                  <td style={{ ...td, fontFamily: FONT_NUM }}>{b.invoiceNo || "—"}</td>
                   <td style={td}>{fmtDate(b.date)}</td>
                   <td style={td}>{b.plannedPaymentDate ? fmtDate(b.plannedPaymentDate) : "—"}</td>
                   <td style={{ ...td, fontFamily: FONT_NUM, fontWeight: 700 }}>{fmtMoney(b.amount)}</td>
@@ -4249,13 +4382,24 @@ function BillingView({ ctx }) {
                     </div>
                   </td>
                   <td style={td}>
-                    <DatePickerButton value={b.paymentDate} onChange={(v) => setPaymentDate(b, v)} disabled={!b.approved || b.paymentOnHold || decisionBusy} />
+                    <DatePickerButton value={b.paymentDate} onChange={(v) => setPaymentDate(b, v)} disabled={!b.approved || b.paymentOnHold || decisionBusy || (!isAdmin && (b.status === "已付款" || !!b.paymentDate))} />
                   </td>
                   <td style={td}>
-                    <Select value={b.status} disabled={b.paymentOnHold || decisionBusy} onChange={(e) => setStatus(b, e.target.value)} style={{ padding: "4px 8px", fontSize: 12 }}>
+                    {isAdmin ? <Select value={b.status || "未付款"} disabled={b.paymentOnHold || decisionBusy} onChange={(e) => setStatus(b, e.target.value)} style={{ padding: "4px 8px", fontSize: 12 }}>
                       <option value="未付款">未付款</option>
                       <option value="已付款">已付款</option>
-                    </Select>
+                    </Select> : <StatusBadge status={b.status || "未付款"} />}
+                  </td>
+                  <td style={td}>
+                    <Btn size="sm" icon={Upload} disabled={decisionBusy} onClick={() => setAttachPaymentId(b.id)}>
+                      {b.attachments?.length ? `掃描檔（${b.attachments.length}）` : "上傳掃描檔"}
+                    </Btn>
+                  </td>
+                  <td style={td}>
+                    <Btn size="sm" icon={Eye} disabled={!b.attachments?.length} onClick={() => openPaymentScan(b.attachments[b.attachments.length - 1])}>預覽</Btn>
+                  </td>
+                  <td style={td}>
+                    <Btn size="sm" icon={Download} disabled={!b.attachments?.length} onClick={() => downloadPaymentScan(b.attachments[b.attachments.length - 1])}>下載</Btn>
                   </td>
                   <td style={{ ...td, textAlign: "right" }}>
                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
@@ -4270,6 +4414,18 @@ function BillingView({ ctx }) {
         </>
       )}
 
+      {attachmentPayment && (
+        <Modal title={`公司應付款項 ${attachmentPayment.no} — 掃描檔上傳`} onClose={() => setAttachPaymentId(null)} width={600}>
+          <FileAttachments folderKey={`company-payment-${attachmentPayment.id}`} attachments={attachmentPayment.attachments || []} onChange={savePaymentAttachments} askDelete={askDelete} />
+        </Modal>
+      )}
+      {scanPreview && (
+        <Modal title={scanPreview.name || "掃描檔預覽"} onClose={() => setScanPreview(null)} width={1000}>
+          {scanPreview.loading ? <p>載入中…</p> : scanPreview.isPdf ? (
+            <embed src={scanPreview.url} type="application/pdf" title={scanPreview.name} style={{ width: "100%", height: "65vh" }} />
+          ) : <img src={scanPreview.url} alt={scanPreview.name} style={{ maxWidth: "100%", maxHeight: "65vh", display: "block", margin: "auto" }} />}
+        </Modal>
+      )}
       {modal && (
         <Modal title={
           modal.mode === "new"
@@ -4277,7 +4433,7 @@ function BillingView({ ctx }) {
             : (expenseKind(modal.data) === "公司付款" ? `編輯公司應付款項 ${modal.data.no}` : expenseKind(modal.data) === "銀行入帳" ? `編輯銀行入帳紀錄 ${modal.data.no}` : `編輯零用金紀錄 ${modal.data.no}`)
         } onClose={() => setModal(null)}>
           {expenseKind(modal.data) === "公司付款"
-            ? <CompanyPaymentForm data={modal.data} onSave={saveCompanyPayment} onCancel={() => setModal(null)} />
+            ? <CompanyPaymentForm data={modal.data} isAdmin={isAdmin} onSave={saveCompanyPayment} onCancel={() => setModal(null)} />
             : expenseKind(modal.data) === "銀行入帳"
             ? <BankDepositForm data={modal.data} onSave={saveBankDeposit} onCancel={() => setModal(null)} />
             : <PettyCashForm data={modal.data} sysUsers={ctx.sysUsers} onSave={savePettyCash} onCancel={() => setModal(null)} />
@@ -4340,13 +4496,14 @@ function BankDepositForm({ data, onSave, onCancel }) {
   );
 }
 
-function CompanyPaymentForm({ data, onSave, onCancel }) {
-  const [f, setF] = useState({ plannedPaymentDate: "", companyName: "", ...data });
+function CompanyPaymentForm({ data, isAdmin, onSave, onCancel }) {
+  const [f, setF] = useState({ plannedPaymentDate: "", companyName: "", invoiceNo: "", ...data, status: data.status || "未付款" });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
       <Field label="廠商／申請人" span={2}><TextInput value={f.vendor} onChange={set("vendor")} placeholder="廠商名稱或申請人" /></Field>
       <Field label="項目類別"><TextInput value={f.category} onChange={set("category")} placeholder="如：辦公用品、差旅費" /></Field>
+      <Field label="發票號碼"><TextInput value={f.invoiceNo || ""} onChange={set("invoiceNo")} placeholder="請輸入發票號碼（選填）" /></Field>
       <Field label="付款公司">
         <Select value={f.companyName} onChange={set("companyName")}>
           <option value="">請選擇</option>
@@ -4357,10 +4514,10 @@ function CompanyPaymentForm({ data, onSave, onCancel }) {
       <Field label="申請日期"><TextInput type="date" value={f.date} onChange={set("date")} /></Field>
       <Field label="預訂付款日"><TextInput type="date" value={f.plannedPaymentDate} onChange={set("plannedPaymentDate")} /></Field>
       <Field label="狀態" span={2}>
-        <Select value={f.status} disabled={f.paymentOnHold} onChange={set("status")}>
+        {isAdmin ? <Select value={f.status} disabled={f.paymentOnHold} onChange={set("status")}>
           <option value="未付款">未付款</option>
           <option value="已付款">已付款</option>
-        </Select>
+        </Select> : <StatusBadge status={f.status || "未付款"} />}
       </Field>
       <Field label="備註說明" span={2}><TextArea value={f.note} onChange={set("note")} placeholder="說明付款事由" /></Field>
       <div style={{ gridColumn: "span 2", display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 6 }}>
@@ -4590,7 +4747,7 @@ const INVOICE_TYPES = ["二聯式", "三聯式"];
 
 const emptyVendor = { name: "", vendorType: "供應商", contact: "", phone: "", email: "", category: "", taxId: "", paymentMethod: "匯款", tradingCompany: "", address: "", invoiceType: "", note: "" };
 
-function VendorsView({ ctx }) {
+export function VendorsView({ ctx }) {
   const { vendors, persist, askDelete } = ctx;
   const [modal, setModal] = useState(null);
   const [query, setQuery] = useState("");
@@ -4624,7 +4781,7 @@ function VendorsView({ ctx }) {
         <StatCard label="業主家數" value={ownerCount} icon={Building2} tone="brass" />
       </div>
 
-      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
         <div style={{ display: "flex", gap: 6 }}>
           {["全部", ...VENDOR_TYPES].map((t) => (
             <button key={t} onClick={() => setTypeFilter(t)}
@@ -5755,7 +5912,7 @@ function FileAttachments({ folderKey, attachments, onChange, askDelete, emptyTex
       for (const file of files) {
         uploaded.push(await uploadQuoteScan(folderKey, file));
       }
-      onChange([...(attachments || []), ...uploaded]);
+      await onChange([...(attachments || []), ...uploaded]);
     } catch (err) {
       console.error(err);
       alert("檔案上傳失敗，請稍後再試一次。");
@@ -5802,7 +5959,12 @@ function FileAttachments({ folderKey, attachments, onChange, askDelete, emptyTex
       } catch (err) {
         console.error(err);
       }
-      onChange((attachments || []).filter((a) => a.id !== att.id));
+      try {
+        await onChange((attachments || []).filter((a) => a.id !== att.id));
+      } catch (err) {
+        console.error(err);
+        alert("掃描檔清單儲存失敗，請重新整理後確認。");
+      }
     });
   };
 
