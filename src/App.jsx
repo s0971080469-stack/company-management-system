@@ -23,6 +23,7 @@ import ReportsOverview from "./ReportsOverview.jsx";
 import { payrollAuditStamp, payrollActivityActor } from "./payrollActivity.js";
 import { nextPayrollMonth, payrollGenerationLocked } from "./payrollGeneration.js";
 import PayrollApprovalButton from "./PayrollApprovalButton.jsx";
+import WebsiteManagement from "./WebsiteManagement.jsx";
 import { payrollSiteOf, payrollNetAmount, payrollReleaseStatus } from "./payrollApproval.js";
 
 /* ---------------------------------------------------------
@@ -65,6 +66,7 @@ const NAV = [
   { key: "contracts", label: "契約管理", icon: FileSignature },
   { key: "contractBilling", label: "每月請款追蹤", icon: CalendarDays },
   { key: "vehicles", label: "車輛管理", icon: Car },
+  { key: "website", label: "網站資訊管理", icon: BarChart3 },
   { key: "attendance", label: "打卡上下班", icon: Clock },
   { key: "accounting", label: "帳務入口", icon: Landmark },
   { key: "reports", label: "公司報表", icon: BarChart3 },
@@ -1497,6 +1499,7 @@ export default function CompanyManagementSystem({ session }) {
           {tab === "quotes" && <QuotesView ctx={ctx} setTab={setTab} />}
           {tab === "invoices" && <InvoicesView ctx={ctx} />}
           {tab === "attendance" && <AttendanceView ctx={ctx} />}
+          {tab === "website" && <WebsiteManagement />}
           {tab === "billing" && <BillingView ctx={ctx} />}
           {tab === "contracts" && <ContractsView ctx={ctx} />}
           {tab === "contractBilling" && <ContractBillingView ctx={ctx} />}

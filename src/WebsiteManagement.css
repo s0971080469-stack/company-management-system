@@ -1,0 +1,31 @@
+.website-management { color:#1b2333; font-family:'Microsoft JhengHei',system-ui,sans-serif; font-size:14px; min-width:0; }
+.website-management * { box-sizing:border-box; }
+.website-management button,.website-management input,.website-management select,.website-management textarea { font:inherit; border:1px solid #dddcd3; border-radius:8px; background:#fff; padding:8px 11px; color:#1b2333; }
+.website-management button { cursor:pointer; }
+.website-management button:hover { border-color:#997321; }
+.website-management :focus-visible { outline:3px solid #ba922d; outline-offset:2px; }
+.website-management button:disabled { opacity:.5; cursor:wait; }
+.wm-heading,.wm-list-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+.wm-eyebrow { letter-spacing:2px; font-size:11px; color:#8f6e1c; }
+.wm-heading h1 { font-size:25px; margin:7px 0; }
+.wm-heading p,.wm-muted { color:#767b8a; font-size:12px; line-height:1.7; }
+.wm-connection { margin:15px 0; display:flex; gap:10px; align-items:center; padding:11px 14px; border:1px solid #e7dcc0; background:#fbf5e7; border-radius:10px; font-size:12px; }
+.wm-connection svg { flex-shrink:0; }.wm-connection-tag { margin-left:auto; white-space:nowrap; color:#8f6e1c; }
+.wm-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin:14px 0; }
+.wm-toolbar label { display:flex; align-items:center; gap:8px; }
+.wm-stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; margin:18px 0; }
+.wm-stat,.wm-panel { background:#fff; border:1px solid #e6e4da; border-radius:12px; padding:18px; min-width:0; }
+.wm-stat > div { display:flex; justify-content:space-between; gap:8px; color:#626979; font-size:12px; }
+.wm-stat svg { color:#9a7625; }.wm-stat.blue svg { color:#486f8f; }.wm-stat.purple svg { color:#85639c; }.wm-stat.orange svg { color:#b47538; }
+.wm-stat strong { display:block; font-size:28px; margin:10px 0 4px; font-variant-numeric:tabular-nums; }.wm-stat small { color:#767b8a; font-size:11px; }
+.wm-overview { display:grid; grid-template-columns:1.5fr 1fr; gap:16px; margin-bottom:18px; }
+.wm-panel h2 { font-size:15px; margin:0; }.wm-panel h2 small { margin-left:8px; color:#767b8a; font-weight:400; font-size:11px; }
+.wm-chart { display:flex; height:142px; align-items:end; justify-content:space-around; gap:12px; padding-top:14px; }
+.wm-chart > div { flex:1; max-width:60px; text-align:center; font-size:11px; color:#767b8a; }.wm-chart > div > div { background:#c5a454; border-radius:4px 4px 0 0; margin:5px 0; }
+.wm-flow { display:flex; flex-wrap:wrap; align-items:center; gap:9px; padding:22px 0 9px; font-size:12px; }.wm-flow span { background:#f4f3ef; padding:9px; border-radius:7px; }.wm-flow svg { color:#b8912b; }
+.wm-search { display:flex; align-items:center; gap:8px; }.wm-search input { width:260px; max-width:100%; }
+.wm-tabs { display:flex; gap:6px; flex-wrap:wrap; }.wm-tabs button { border-radius:99px; font-size:12px; }.wm-tabs button[aria-pressed=true] { background:#b8912b; color:white; border-color:#b8912b; }
+.wm-table-wrap { overflow-x:auto; }.wm-table-wrap table { border-collapse:collapse; width:100%; min-width:850px; font-size:12px; }.wm-table-wrap th { background:#f7f5ee; color:#767364; text-align:left; font-weight:500; padding:12px; white-space:nowrap; }.wm-table-wrap td { padding:14px 12px; border-bottom:1px solid #eeece5; vertical-align:middle; }.wm-table-wrap td small { display:block; color:#767b8a; margin-top:5px; }.wm-subject { max-width:220px; overflow-wrap:anywhere; }.wm-status { display:inline-block; padding:5px 9px; border-radius:99px; white-space:nowrap; font-size:11px; background:#f2f1ee; }.status-0 { background:#fff0d8; color:#9e681b; }.status-1 { background:#ece6f6; color:#73548e; }.status-2 { background:#e4f3ea; color:#1f7a52; }
+.wm-empty { text-align:center; color:#767b8a; padding:28px 12px; font-size:13px; }.wm-detail { margin-top:18px; border-color:#c8af70; }.wm-message { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.8; }.wm-primary { background:#b8912b!important; color:white!important; border-color:#b8912b!important; }
+@media(max-width:900px) { .wm-stats { grid-template-columns:repeat(2,minmax(0,1fr)); }.wm-overview { grid-template-columns:1fr; } }
+@media(max-width:540px) { .wm-stat,.wm-panel { padding:13px; }.wm-stats { gap:9px; }.wm-stat strong { font-size:24px; }.wm-heading h1 { font-size:22px; }.wm-search { width:100%; }.wm-search input { width:100%; min-width:0; }.wm-connection-tag { display:none; } }
