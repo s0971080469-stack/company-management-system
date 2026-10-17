@@ -61,10 +61,21 @@ Supabase advisor 說明： https://supabase.com/docs/guides/database/database-li
 - 管理系統新增 `GET /api/website-analytics?month=YYYY-MM`。伺服器以 `auth.getUser(token)` 驗證登入，並在使用者 RLS 下查詢 `website_form_members`；不使用前端角色、不使用 service-role key。
 - Vercel 來源固定為 team `team_dJ9x9mzVYxAOnXv49AAs3zzN` / `oak-environment-website` / production，呼叫 visits/aggregate，不允許客戶端指定其他專案或查詢。
 - `OAK_ANALYTICS_TOKEN` 僅在 **company-management-system-6582 → Production → Secret**；不可加 VITE_ 前綴、不可放入程式、瀏覽器或 Git。
-- 專用 Token `oak-website-analytics` 僅限官網專案，使用者明確同意其非唯讀權限；期限 2027-01-15。到期需更新 Secret 並重新部署，不會影響表單收件。
+- 專用 Token `oak-website-analytics-permanent` 僅限官網專案，使用者明確同意其非唯讀權限與永不到期設定；原 90 天 Token 已撤銷。若需撤銷，先替換 Secret 並重新部署驗證，不影響表單收件。
 - 月報依 Vercel UTC 日期，保留最近 12 個月份；表單月份仍依台灣時間。訪客數採全期間 aggregate，不將每日訪客相加。圖表為所選月份最後七個有涵蓋的日曆日（本月截至今天）。訪客是 Vercel 隱私估計值，不是實名、跨日可能重複。
 - 管理頁可見時每五分鐘更新統計，月分切換會取消舊請求；API 回應 private/no-store，不使用公開 CDN 或 PWA 快取。
 - 統計資料留在 Vercel，管理系統只讀取報表；不新增或寫入任何公司帳務／人員資料表。
 - 測試：`node --test tests/*.test.mjs`；官網 `npm run build`。正式部署後另驗證收集出現、管理頁數字一致與匿名 API 拒絕存取。
 
 參考：https://vercel.com/docs/analytics/web-analytics-api 、 https://vercel.com/docs/analytics/quickstart
+
+## 新表單系統通知（2026-10-17）
+
+- `website_form_received_notification` 在新收件 INSERT 時，由伺服器以 invoker 權限寫入既有 `chat_messages`，不依賴管理頁是否開啟。
+- 收件人為夏碩亞的既有聊天代號 `__admin__`，及 `app_records/sys_users` 中啟用的「行政」角色；不通知財務、一般員工或停用行政。
+- 發送者為 `__system__`，右下角內部對話的「系統通知」對所有身分可見，但各身分只載入自己收到的通知，系統對話不能回覆。
+- 通知只含新表單提醒與收件編號，不複製電話、地址、客戶自由填寫內容至聊天室。原收件清單存取權限不變；通知不代表新增收件會員權限。
+- 表單及通知同一交易提交，通知失敗會使本次收件交易回滾，不回傳假成功。相同收件 ID／收件人使用固定訊息 ID；收件重試、查閱或更新狀態不重送。不補發啟用前的舊資料。
+- 此功能為管理系統內部通知，不是新增 LINE、Email 或手機推播；原本的 LINE 管線不作變更。
+- 遷移：`supabase/migrations/20261017034051_website_form_notifications.sql`。SQL 測試在交易中執行 `supabase/tests/website_form_notifications.sql`，最後 rollback，避免真實測試通知。
+- 既有聊天室 RLS 允許 authenticated 廣泛讀寫，本次不擴大其權限；因此通知刻意不包含客戶個資。未來若需在通知加入詳細個資，應先改善聊天室的伺服器端收件人權限。

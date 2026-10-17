@@ -736,7 +736,7 @@ function ChatWidget({ ctx }) {
   const namedContacts = (sysUsers || []).filter((u) => u.id !== myId && u.status !== "停用");
   const contacts = [
     ...(currentUser ? [...namedContacts, { id: ADMIN_CHAT_ID, name: "夏碩亞" }] : namedContacts),
-    ...(myId === ADMIN_CHAT_ID ? [{ id: SYSTEM_CHAT_ID, name: "系統通知" }] : []),
+    { id: SYSTEM_CHAT_ID, name: "系統通知" },
   ];
 
   const [open, setOpen] = useState(false);
