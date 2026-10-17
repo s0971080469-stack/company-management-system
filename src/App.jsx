@@ -23,7 +23,7 @@ import ReportsOverview from "./ReportsOverview.jsx";
 import { payrollAuditStamp, payrollActivityActor } from "./payrollActivity.js";
 import { nextPayrollMonth, payrollGenerationLocked } from "./payrollGeneration.js";
 import PayrollApprovalButton from "./PayrollApprovalButton.jsx";
-import WebsiteManagement from "./WebsiteManagement.jsx";
+import WebsiteInbox from "./WebsiteInbox.jsx";
 import { payrollSiteOf, payrollNetAmount, payrollReleaseStatus } from "./payrollApproval.js";
 
 /* ---------------------------------------------------------
@@ -1499,7 +1499,7 @@ export default function CompanyManagementSystem({ session }) {
           {tab === "quotes" && <QuotesView ctx={ctx} setTab={setTab} />}
           {tab === "invoices" && <InvoicesView ctx={ctx} />}
           {tab === "attendance" && <AttendanceView ctx={ctx} />}
-          {tab === "website" && <WebsiteManagement />}
+          {tab === "website" && <WebsiteInbox />}
           {tab === "billing" && <BillingView ctx={ctx} />}
           {tab === "contracts" && <ContractsView ctx={ctx} />}
           {tab === "contractBilling" && <ContractBillingView ctx={ctx} />}
