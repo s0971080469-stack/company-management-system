@@ -2,17 +2,22 @@
 
 ## 專案邊界
 
-- 管理系統：本專案 / oak.boats。
+- 管理系統：本專案 / oak.boats；實際綁定網域的 Vercel 專案為 `company-management-system-6582`，另一個 `company-management-system` 亦接同一儲存庫但不是 oak.boats 網域目標。
 - 官網：獨立 GitHub 儲存庫 `s0971080469-stack/oak-environment-website`；本機 `C:/Users/MyronH/Desktop/oak-environment-website`。
 - Supabase：`udcasyazdrwytnntptev`。不得使用兩個 recovery 專案。
 - 官網在其他對話可能有尚未合併的設計分支；發布前須核對目前正式部署的 commit，保留最新設計，不可直接覆蓋。
 - 本次已快轉同步官網 `ebdeea7`（新增服務與詢價版面調整），未覆蓋新的設計；發布時仍須再次 fetch。
 
-## 已建立但尚未啟用
+## 正式啟用狀態（2026-10-17）
 
 - Migration `20261017020542_website_form_intake.sql`：獨立收件、會員 ACL、設定、重試識別與頻率限制表。
 - Edge Function `website-intake`，`verify_jwt=true`。公用 anon JWT 僅作平台通道識別，不代表使用者身分；RLS 和 service-only RPC 保護資料。
-- `website_form_settings.intake_enabled=false`。公開送件會回覆 503，不儲存資料。
+- `website_form_settings.intake_enabled=true`。已於使用者明確要求發布後啟用。
+- 管理系統功能提交 `fed5784`；官網串接提交 `1187154`（基於最新正式設計 `ebdeea7`），皆已推送 main 並部署。
+- 官網 Vercel 正式環境已設定 `OAK_FORM_ENABLED=true` 與公用 anon JWT；預覽環境未啟用。legacy JWT 是 Edge verify_jwt 的相容通道，絕非 service-role key。
+- 已於正式官網瀏覽器送出測試、在 oak.boats 登入帳號內收到，並將狀態從待處理改為處理中、已完成。測試收件 ID：`7c2e7ec3-bc56-41a3-84f1-84bb12a54148`，名稱「串接測試（請忽略）」；保留供驗證，不需派工或聯絡。
+- 同一 ID／相同內容重試回傳原收件 ID；匿名讀取收件清單回覆 401。
+- 與既有系統共用 Supabase 專案及資料庫，但使用獨立 `website_form_*` 資料表與權限；不寫入原本 app_records/app_storage，不是另一套實體資料庫或獨立備份。
 - 管理帳號以已驗證的 `s0971080469@gmail.com` 對應 auth UUID 加入 `website_form_members`，不依前端可切換的角色判斷。
 - 真實流量統計尚未接入，畫面不得以假數據取代。
 
@@ -27,7 +32,7 @@
 - `website_form_receipts` 的 RLS 無公開 policy 為刻意 deny-all；僅 service role 使用。既有 `pg_net`、`save_app_collection`、密碼外洩防護警示不在本次修改範圍。
 - 資料保留期限尚未由公司訂定，不自動刪除收件。
 
-## 啟用順序（需要確認發布兩個網站）
+## 後續重新發布／啟用順序
 
 1. 確認官網正式分支／commit（不能用舊 main 蓋掉新設計）；測試、提交兩個專案。
 2. 先發布管理系統，使用管理帳號確認收件清單顯示「待啟用」、沒有權限錯誤。
@@ -35,6 +40,8 @@
 4. 發布官網；啟用時以正式同意文字替代預覽告知，確認按鈕需要使用者再次確認才送出。
 5. 將獨立設定表 intake_enabled 改為 true。兩邊都成功後才宣布正式收件。
 6. 用清楚標示的測試資料做一次真實端到端測試並核對清單／重試／狀態。測試資料清理需限定確切測試 ID，不可清空表格。
+
+注意：Vercel 顯示官網網域聯絡資訊仍待 email 驗證，期限 2026-10-30。這不是程式錯誤，需網域持有人處理以免中斷。
 
 停用：將獨立設定表 intake_enabled 設回 false；既有紀錄保留。正式停用時同步關閉官網表單設定並重新部署。
 
