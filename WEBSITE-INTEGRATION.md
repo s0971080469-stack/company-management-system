@@ -19,7 +19,7 @@
 - 同一 ID／相同內容重試回傳原收件 ID；匿名讀取收件清單回覆 401。
 - 與既有系統共用 Supabase 專案及資料庫，但使用獨立 `website_form_*` 資料表與權限；不寫入原本 app_records/app_storage，不是另一套實體資料庫或獨立備份。
 - 管理帳號以已驗證的 `s0971080469@gmail.com` 對應 auth UUID 加入 `website_form_members`，不依前端可切換的角色判斷。
-- 真實流量統計尚未接入，畫面不得以假數據取代。
+- 流量統計使用 Vercel Web Analytics；讀取未成功時顯示錯誤，不以假數據或 0 取代。
 
 ## 安全與限制
 
@@ -53,3 +53,18 @@
 - Edge 關閉狀態回覆 503，錯誤來源回覆 403；正式啟用前不宣稱已完整驗證真實網站到收件頁的流程。
 
 Supabase advisor 說明： https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy
+
+## 官網瀏覽次數與訪客數（2026-10-17）
+
+- 官網專案 `oak-environment-website` 使用基本 Web Analytics；不加購 Plus、不送出 custom events。
+- 官網 build 只在 `VERCEL_ENV=production` 加入收集程式，並限制官網三個正式 hostname；本機與 preview 不收集。送出前移除 URL 的查詢參數與 hash，不送出表單內容。
+- 管理系統新增 `GET /api/website-analytics?month=YYYY-MM`。伺服器以 `auth.getUser(token)` 驗證登入，並在使用者 RLS 下查詢 `website_form_members`；不使用前端角色、不使用 service-role key。
+- Vercel 來源固定為 team `team_dJ9x9mzVYxAOnXv49AAs3zzN` / `oak-environment-website` / production，呼叫 visits/aggregate，不允許客戶端指定其他專案或查詢。
+- `OAK_ANALYTICS_TOKEN` 僅在 **company-management-system-6582 → Production → Secret**；不可加 VITE_ 前綴、不可放入程式、瀏覽器或 Git。
+- 專用 Token `oak-website-analytics` 僅限官網專案，使用者明確同意其非唯讀權限；期限 2027-01-15。到期需更新 Secret 並重新部署，不會影響表單收件。
+- 月報依 Vercel UTC 日期，保留最近 12 個月份；表單月份仍依台灣時間。訪客數採全期間 aggregate，不將每日訪客相加。圖表為所選月份最後七個有涵蓋的日曆日（本月截至今天）。訪客是 Vercel 隱私估計值，不是實名、跨日可能重複。
+- 管理頁可見時每五分鐘更新統計，月分切換會取消舊請求；API 回應 private/no-store，不使用公開 CDN 或 PWA 快取。
+- 統計資料留在 Vercel，管理系統只讀取報表；不新增或寫入任何公司帳務／人員資料表。
+- 測試：`node --test tests/*.test.mjs`；官網 `npm run build`。正式部署後另驗證收集出現、管理頁數字一致與匿名 API 拒絕存取。
+
+參考：https://vercel.com/docs/analytics/web-analytics-api 、 https://vercel.com/docs/analytics/quickstart

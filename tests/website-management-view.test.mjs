@@ -18,6 +18,14 @@ test("未串接頁面不顯示虛構流量或假裝已收到資料", () => {
   assert.match(html, /尚未啟用自動接收/);
   assert.doesNotMatch(html, /2,486|1,032|林小姐/);
 });
+test('正式流量顯示來源與 UTC，失敗不掩蓋收件或以假數字取代', () => {
+  const html=render({connected:true,intakeEnabled:true,analytics:{month:'2026-10',views:20,visitors:5,daily:[{label:'10/17',views:20}]}});
+  assert.match(html,/Vercel/);assert.match(html,/UTC/);assert.doesNotMatch(html,/最近 7 日 · 模擬/);
+  const failed=render({connected:true,intakeEnabled:true,analyticsError:'尚未設定金鑰'});
+  assert.match(failed,/尚未設定金鑰/);assert.match(failed,/不影響表單收件/);
+  const changed=render({selectedMonth:'2026-09',analytics:{month:'2026-10',views:99999,visitors:99999,daily:[]}});
+  assert.doesNotMatch(changed,/99,999/);
+});
 test("測試收件顯示民國日期與需求且安全轉義使用者內容", () => {
   const html = render({ preview: true, rows: [{ id: "a", name: "<script>alert(1)</script>", type: "預約服務", subject: "清潔維護", status: "待處理", receivedAt: "2026-10-01T04:20:30Z" }] });
   assert.match(html, /民國115\/10\/01\s+12:20:30/);
