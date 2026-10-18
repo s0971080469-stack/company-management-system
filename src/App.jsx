@@ -5443,7 +5443,7 @@ const emptyContract = (vendors) => ({
   contractorCompany: "",
 });
 
-function ContractsView({ ctx }) {
+export function ContractsView({ ctx }) {
   const { contracts, vendors, sysUsers, isAdmin, persist, askDelete } = ctx;
   const [modal, setModal] = useState(null);
   const [year, setYear] = useState(String(new Date().getFullYear()));
@@ -5553,10 +5553,11 @@ function ContractsView({ ctx }) {
                 <button key={c} onClick={() => setCompanyFilter(c)}
                   style={{
                     padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-                    border: `1px solid ${companyFilter === c ? THEME.brass : THEME.line}`,
-                    background: companyFilter === c ? THEME.brass : "#fff",
-                    color: companyFilter === c ? "#fff" : THEME.text,
-                  }}>{c}</button>
+                    border: `1px solid ${companyFilter === c ? THEME.brassDeep : "#B8B6AA"}`,
+                    background: c === "全部" ? THEME.canvas : companyRowColor(c),
+                    color: THEME.text,
+                    boxShadow: companyFilter === c ? `inset 0 0 0 1px ${THEME.brassDeep}` : "none",
+                  }} aria-pressed={companyFilter === c}>{c}</button>
               ))}
             </div>
             <div style={{ position: "relative", maxWidth: 260 }}>
@@ -5584,13 +5585,16 @@ function ContractsView({ ctx }) {
           ]}
         >
           {sortedFiltered.map((c) => (
-            <tr key={c.id} style={isExpiringSoon(c) ? { background: THEME.warnSoft } : undefined}>
+            <tr key={c.id} style={{ background: companyRowColor(c.contractorCompany) }}>
               <td style={{ ...td, fontFamily: FONT_NUM }}>{c.no}</td>
               <td style={td}><strong>{c.title}</strong></td>
               <td style={td}>{c.party || "—"}</td>
               <td style={td}>{c.contractorCompany ? <StatusBadge status={BILLING_COMPANY_OPTIONS.includes(c.contractorCompany) ? c.contractorCompany : "其他"} /> : "—"}</td>
               <td style={td}>{c.type}</td>
-              <td style={td}>{fmtDate(c.startDate)} — {fmtDate(c.endDate)}</td>
+              <td style={td}>
+                {fmtDate(c.startDate)} — {fmtDate(c.endDate)}
+                {isExpiringSoon(c) && <span style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 4, color: THEME.warn, fontSize: 12 }}><AlertCircle size={13} />30 天內到期</span>}
+              </td>
               <td style={{ ...td, fontFamily: FONT_NUM }}>{fmtMoney(c.amount)}</td>
               <td style={td}>
                 {c.hasPerformanceBond === "有" ? (
@@ -5648,7 +5652,7 @@ function ContractsView({ ctx }) {
   );
 }
 
-function ContractBillingView({ ctx }) {
+export function ContractBillingView({ ctx, previewOnly = false }) {
   const { contracts, contractBilling, persist, isAdmin, askDelete } = ctx;
   const [month, setMonth] = useState(periodDefaultMonth(11));
   const [companyFilter, setCompanyFilter] = useState("全部");
@@ -5776,10 +5780,11 @@ function ContractBillingView({ ctx }) {
             <button key={c} onClick={() => setCompanyFilter(c)}
               style={{
                 padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-                border: `1px solid ${companyFilter === c ? THEME.brass : THEME.line}`,
-                background: companyFilter === c ? THEME.brass : "#fff",
-                color: companyFilter === c ? "#fff" : THEME.text,
-              }}>{c}</button>
+                border: `1px solid ${companyFilter === c ? THEME.brassDeep : "#B8B6AA"}`,
+                background: c === "全部" ? THEME.canvas : companyRowColor(c),
+                color: THEME.text,
+                boxShadow: companyFilter === c ? `inset 0 0 0 1px ${THEME.brassDeep}` : "none",
+              }} aria-pressed={companyFilter === c}>{c}</button>
           ))}
         </div>
         <div style={{ position: "relative", maxWidth: 260 }}>
@@ -5824,7 +5829,7 @@ function ContractBillingView({ ctx }) {
               toggleBilled(c.id);
             };
             return (
-              <tr key={c.id}>
+              <tr key={c.id} style={{ background: companyRowColor(c.contractorCompany) }}>
                 <td style={{ ...td, fontFamily: FONT_NUM }}>{c.no}</td>
                 <td style={td}><strong>{c.title}</strong></td>
                 <td style={td}>{c.contractorCompany ? <StatusBadge status={BILLING_COMPANY_OPTIONS.includes(c.contractorCompany) ? c.contractorCompany : "其他"} /> : "—"}</td>
@@ -5849,7 +5854,7 @@ function ContractBillingView({ ctx }) {
                 </td>
                 <td style={td}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}>
-                    <Btn size="sm" icon={Upload} disabled={!month} onClick={() => month && setAttachModal({ contractId: c.id })}>
+                    <Btn size="sm" icon={Upload} disabled={!month || previewOnly} onClick={() => month && !previewOnly && setAttachModal({ contractId: c.id })}>
                       {hasAttachment ? `掃描檔（${attachments.length}）` : "上傳掃描檔"}
                     </Btn>
                     {!hasAttachment && <span style={{ fontSize: 11, color: THEME.warn }}>尚未上傳</span>}
