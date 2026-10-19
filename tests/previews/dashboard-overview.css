@@ -1,0 +1,8 @@
+.dashboard-preview-shell { background:#f2f5f7; }
+.dashboard-preview-controls { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:15px; color:#687c8d; font-size:10px; }
+.dashboard-preview-controls p { display:flex; align-items:center; gap:7px; margin:0; line-height:1.7; }
+.dashboard-preview-controls > div,.dashboard-preview-controls label { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }.dashboard-preview-controls > div { gap:14px; }
+.dashboard-preview-controls select { border:1px solid #d5dfe6; border-radius:6px; padding:6px; background:white; color:#425b70; font:inherit; }
+.dashboard-preview-status { display:inline-block; background:var(--tint); color:var(--accent); padding:3px 7px; border-radius:5px; font-size:10px; }
+.dashboard-preview-message { display:flex; justify-content:space-between; align-items:center; gap:10px; border:1px solid #cde4dd; border-radius:8px; padding:10px 12px; margin-bottom:15px; background:#eaf5f1; color:#27735f; font-size:12px; line-height:1.7; }.dashboard-preview-message button { border:0; background:none; display:flex; cursor:pointer; color:inherit; }
+@media(max-width:680px) { .dashboard-preview-controls { font-size:10px; }.dashboard-preview-shell .wm-preview-content { padding:15px 12px; } }
