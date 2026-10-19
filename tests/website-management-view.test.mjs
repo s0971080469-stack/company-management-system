@@ -40,3 +40,30 @@ test("導航位於打卡上方，測試頁獨立且不匯入正式儲存或登�
   assert.match(preview, /import\.meta\.env\.DEV/);
   assert.doesNotMatch(preview, /supabase|storage\.js|AuthGate/);
 });
+
+test("新營運版面保留統計、分類、行動版欄名及處理進度", () => {
+  const html = render({ preview: true, rows: [
+    {id:'a',name:'甲',type:'服務詢價',status:'待處理',receivedAt:'2026-10-01T00:00:00Z'},
+    {id:'b',name:'乙',type:'預約服務',status:'處理中',receivedAt:'2026-10-02T00:00:00Z'},
+    {id:'c',name:'丙',type:'服務詢價',status:'已完成',receivedAt:'2026-10-03T00:00:00Z'},
+    {id:'d',name:'其他月份',status:'待處理',receivedAt:'2026-09-01T00:00:00Z'},
+  ] });
+  assert.match(html, /收件處理進度/);
+  assert.match(html, /aria-label="統計年份"/);
+  assert.match(html, /民國 115 年/);
+  assert.doesNotMatch(html, /type="month"/);
+  assert.match(html, /data-label="客戶／公司"/);
+  assert.match(html, /data-label="需求內容"/);
+  assert.match(html, /wm-unread/);
+  assert.match(html, /顯示 3 筆／所選期間 3 筆/);
+  assert.doesNotMatch(html, /其他月份/);
+});
+
+test("趨勢圖處理空資料、零流量與單日資料，不產生無效 SVG 座標", () => {
+  for (const daily of [[], [{label:'10/01',views:0}], [{label:'10/01',views:125}]]) {
+    const html = render({ analytics:{month:'2026-10',views:daily[0]?.views || 0,visitors:0,daily} });
+    assert.doesNotMatch(html, /NaN|Infinity/);
+    if (daily.length) assert.match(html, /每日瀏覽次數/);
+    else assert.match(html, /這段期間尚無每日流量資料/);
+  }
+});

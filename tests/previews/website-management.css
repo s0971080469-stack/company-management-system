@@ -1,4 +1,9 @@
 .wm-preview-shell { display:flex; height:100vh; height:100dvh; overflow:hidden; background:#f3f3ef; font:14px 'Microsoft JhengHei',system-ui,sans-serif; color:#1b2333; }
+.wm-preview-shell * { box-sizing:border-box; }
+.wm-preview-form { padding:22px; }
+.wm-preview-main { min-height:0; }
+.wm-preview-content { min-height:0; }
+.wm-preview-topbar { flex-shrink:0; }
 .wm-preview-sidebar { width:230px; flex-shrink:0; background:#1b2333; color:#c5cbd7; display:flex; flex-direction:column; min-height:0; }
 .wm-preview-brand { display:flex; align-items:center; gap:12px; padding:24px 17px; font-weight:bold; font-size:17px; color:white; border-bottom:1px solid #30384b; }.wm-preview-brand svg { color:#c2a255; }.wm-preview-brand small { display:block; font-size:9px; letter-spacing:1px; color:#919aaa; margin-top:6px; }
 .wm-preview-sidebar nav { overflow-y:auto; overscroll-behavior:contain; padding:12px 9px; flex:1; min-height:0; }.wm-preview-sidebar nav > div { padding:12px 10px; margin:3px 0; border-radius:8px; font-size:13px; }.wm-preview-sidebar nav span { margin-right:13px; font-size:10px; color:#87909f; }.wm-preview-sidebar nav .active { color:white; background:#b8912b; font-weight:700; }.wm-preview-sidebar nav .active span { color:#f2e7c8; }.wm-preview-sidebar footer { padding:16px; font-size:10px; line-height:1.8; color:#929bad; border-top:1px solid #30384b; }

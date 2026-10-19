@@ -7,9 +7,9 @@ import "./website-management.css";
 
 const now = new Date();
 const month = taipeiMonth(now);
-const names = ["林小姐（示範）", "陳先生（示範）", "黃小姐（示範）", "王先生（示範）"];
+const names = ["林小姐（示範）", "陳先生（示範）", "黃小姐（示範）", "王先生（示範）", "蔡主任（示範）", "李小姐（示範）", "張先生（示範）", "吳經理（示範）"];
 const services = ["清潔維護", "園藝與植栽維護", "環境消毒", "人力派遣", "其他 / 尚待討論"];
-const sample = names.map((name, i) => ({ id: `demo-${i}`, name, company: ["示範社區管理委員會", "示範科技有限公司", "示範商務中心", "示範環境企業"][i], type: i % 2 ? "預約服務" : "服務詢價", service: services[i], location: "高雄市（示範服務地點）", preferredDate: i % 2 ? `${month}-28` : "", preferredTime: "上午", subject: ["社區環境清潔報價", "預約植栽修剪服務", "辦公大樓環境消毒", "人力支援預約"][i], message: "這是測試需求內容：希望了解服務範圍、施作時間及報價方式，請安排人員聯繫。", phone: "0900-000-000", receivedAt: new Date(now.getTime() - i * 3600000).toISOString(), status: FORM_STATUSES[i % 3], source: "歐克官網（模擬）" }));
+const sample = names.map((name, i) => ({ id: `demo-${i}`, name, company: ["示範社區管理委員會", "示範科技有限公司", "示範商務中心", "示範環境企業", "示範學校總務處", "示範大樓管理中心", "示範物流有限公司", "示範飯店管理部"][i], type: i === 6 ? "聯絡我們" : i % 2 ? "預約服務" : "服務詢價", service: services[i % services.length], location: "高雄市（示範服務地點）", preferredDate: i % 2 ? `${month}-28` : "", preferredTime: "上午", subject: ["社區環境清潔報價", "預約植栽修剪服務", "辦公大樓環境消毒", "人力支援預約", "校園病媒防治年度服務詢價", "公共空間清潔維護預約", "物流倉儲環境維護合作洽詢", "飯店周邊植栽定期養護"][i], message: "這是測試需求內容：希望了解服務範圍、施作時間及報價方式，請安排人員聯繫。\n\n場域預計安排定期維護，請提供合適的服務方案與作業建議。", email: `contact${i + 1}@example.com`, phone: "0900-000-000", receivedAt: new Date(now.getTime() - i * 3600000).toISOString(), status: FORM_STATUSES[i % 3], source: "歐克官網（模擬）" }));
 const analytics = { month, views: 2486, visitors: 1032, daily: [186, 243, 210, 368, 295, 424, 381].map((views, i) => ({ views, label: new Intl.DateTimeFormat("zh-TW", { timeZone: "Asia/Taipei", month: "2-digit", day: "2-digit" }).format(new Date(now.getTime() - (6-i) * 86400000)) })) };
 const nav = ["總覽儀表板", "人員管理", "薪資表管理", "廠商管理", "公文管理", "估價單", "發票", "收支管理", "契約管理", "每月請款追蹤", "車輛管理", "網站資訊管理", "打卡上下班", "帳務入口", "公司報表", "權限設定"];
 
