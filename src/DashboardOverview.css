@@ -51,5 +51,32 @@
   .overview-secondary-grid { grid-template-columns:minmax(0,1fr); gap:14px; }.overview-activity { grid-column:auto; }.overview-secondary-grid > .overview-panel { height:425px; }.overview-secondary-grid > .overview-activity { height:460px; }.overview-primary-grid { gap:14px; margin-bottom:14px; }.overview-panel { padding:18px 17px 0; }.overview-section-label > span { font-size:9px; }.overview-trend-chart { height:220px; }
   .overview-cumulative { grid-template-columns:minmax(0,1fr); gap:12px; }.overview-cumulative > div { display:flex; justify-content:space-between; gap:10px; align-items:center; }.overview-cumulative span { margin:0; }.overview-cumulative strong { font-size:13px; }.overview-chart-legend { gap:10px; }.overview-panel-heading h3 { font-size:16px; }.overview-category { grid-template-columns:6px minmax(0,1fr) auto 32px; }.overview-category small { grid-column:auto; text-align:right; }.overview-footer { font-size:9px; line-height:1.7; }
 }
+/* Compact overview, with readable supporting text at every breakpoint. */
+.overview-header { padding:15px 26px; }
+.overview-header h2 { margin:5px 0 4px; }
+.overview-header p { font-size:13px; }
+.overview-metric { padding:12px 16px; }
+.overview-metric-label { font-size:14px; }
+.overview-metric .overview-icon { width:30px; height:30px; }
+.overview-money { margin:3px 0 7px; }
+.overview-currency { font-size:14px; }
+.overview-metric-foot { font-size:14px; line-height:1.45; color:#526378; }
+.overview-period-tag { font-size:13px; }
+.overview-metric-english { font-size:12px; letter-spacing:.8px; margin-top:6px; padding-top:5px; overflow-wrap:anywhere; }
+.overview-operation { padding:11px 14px; gap:10px; }
+.overview-operation h4,.overview-operation-value span { font-size:14px; }
+.overview-operation-value { margin:2px 0; }
+.overview-operation p { font-size:14px; line-height:1.45; }
+.overview-section-label { flex-wrap:wrap; }
+.overview-section-label > span,.overview-panel-heading p,.overview-panel-footer,
+.overview-cumulative span,.overview-expense-total,.overview-billing-gauge span,
+.overview-billing-counts span,.overview-billing-counts small,.overview-donut-center span { font-size:13px; }
+.overview-dashboard .invoice-overdue__hint,.overview-dashboard .invoice-overdue__detail { font-size:13px; }
+.overview-dashboard .invoice-overdue__days { font-size:14px; }
+@media(max-width:680px) {
+  .overview-header { padding:15px 18px; gap:10px; }
+  .overview-header-meta { padding-top:8px; gap:6px 12px; }
+  .overview-operation { gap:5px; }
+}
 @media(prefers-reduced-motion:reduce) { .overview-dashboard * { transition:none!important; scroll-behavior:auto!important; } }
 @media print { .overview-dashboard { print-color-adjust:exact; -webkit-print-color-adjust:exact; }.overview-secondary-grid > .overview-panel { height:auto; }.overview-activity-list,.overview-category-list,.overview-todo-list { max-height:none; overflow:visible; }.overview-panel,.overview-finance,.overview-operations { break-inside:avoid; } }

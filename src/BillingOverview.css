@@ -105,5 +105,39 @@
   .billing-metric-foot { align-items:flex-start; flex-direction:column; }
 }
 @media(max-width:380px) { .billing-metrics { grid-template-columns:minmax(0,1fr); } }
+/* Compact cards and reminders without reducing readable dates or day counts. */
+.billing-header { padding:15px 26px; }
+.billing-header h2 { margin:5px 0 4px; }
+.billing-header p { font-size:13px; }
+.billing-metric { padding:12px 16px; }
+.billing-metric-heading h4 { font-size:14px; }
+.billing-metric .billing-icon { width:30px; height:30px; }
+.billing-value { margin:3px 0 7px; }
+.billing-currency,.billing-unit { font-size:14px; }
+.billing-metric-foot { font-size:14px; line-height:1.45; padding-top:7px; color:#526378; }
+.billing-period { font-size:13px; }
+.billing-tab-copy small,.billing-section-label > span { font-size:13px; }
+.billing-reminder-summary { padding:12px 16px; gap:9px; }
+.billing-reminder-symbol { width:30px; height:30px; }
+.billing-reminder h3 > span { font-size:13px; }
+.billing-reminder p { font-size:13px; margin-top:4px; line-height:1.6; }
+.billing-reminder-list { padding:2px 16px; gap:0 20px; max-height:210px; }
+.billing-reminder-list li { padding:6px 0; gap:10px; }
+.billing-reminder-copy > strong,.billing-reminder-amount strong { font-size:14px; }
+.billing-reminder-copy > span { font-size:14px; line-height:1.45; margin-top:2px; flex-wrap:wrap; overflow-wrap:anywhere; }
+.billing-reminder-copy > span svg { width:14px; height:14px; }
+.billing-reminder-amount > span { font-size:14px; line-height:1.45; font-weight:600; margin-top:2px; }
+@media(max-width:1500px) and (min-width:1201px) {
+  .billing-metrics--5 { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .billing-reminder-list { grid-template-columns:minmax(0,1fr); }
+  .billing-reminder-list li:nth-last-child(2):nth-child(odd) { border-bottom:1px solid #edf0f3; }
+}
+@media(max-width:680px) {
+  .billing-header { padding:15px 18px; gap:12px; }
+  .billing-metrics { grid-template-columns:minmax(0,1fr); }
+  .billing-metric-foot { flex-direction:row; align-items:center; }
+  .billing-reminder-summary { padding:10px 14px; }
+  .billing-reminder-list { padding:0 14px; max-height:210px; }
+}
 @media(prefers-reduced-motion:reduce) { .billing-overview * { transition:none!important; } }
 @media print { .billing-overview { print-color-adjust:exact; -webkit-print-color-adjust:exact; }.billing-reminder-list { max-height:none; overflow:visible; }.billing-new { display:none!important; }.billing-metric,.billing-reminder { break-inside:avoid; } }

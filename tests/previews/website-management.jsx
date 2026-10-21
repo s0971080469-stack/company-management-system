@@ -4,6 +4,7 @@ import { Building2, Globe, Menu, Plus, X } from "lucide-react";
 import WebsiteManagement from "../../src/WebsiteManagement.jsx";
 import { taipeiMonth, FORM_STATUSES } from "../../src/websiteManagement.js";
 import "./website-management.css";
+import CompactPreviewNav from './CompactPreviewNav.jsx';
 
 const now = new Date();
 const month = taipeiMonth(now);
@@ -34,6 +35,7 @@ function Preview() {
     {mobileNav && <button className="wm-preview-backdrop" aria-label="關閉側邊欄" onClick={() => setMobileNav(false)} />}
     <aside className={`wm-preview-sidebar ${mobileNav ? "open" : ""}`}><div className="wm-preview-brand"><Building2 size={26} /><div>公司管理系統<small>COMPANY OS · 測試預覽</small></div></div><nav aria-label="側邊欄位置預覽">{nav.map((label, i) => <div key={label} className={label === "網站資訊管理" ? "active" : ""}><span>{String(i + 1).padStart(2, "0")}</span>{label}</div>)}</nav><footer>測試頁側欄僅示範排列位置<br />不連接正式系統資料</footer></aside>
     <div className="wm-preview-main"><header className="wm-preview-topbar"><button aria-label="開啟側邊欄" onClick={() => setMobileNav(value => !value)}><Menu size={20} /></button><Globe size={19} /><strong>網站資訊管理</strong><small>測試環境 · 尚未上傳正式版</small></header><main className="wm-preview-content">
+      <CompactPreviewNav />
       {message && <div role="status" className="wm-preview-success">{message}<button aria-label="關閉提示" onClick={() => setMessage("")}><X size={14} /></button></div>}
       {showForm && <section className="website-management wm-panel wm-preview-form">
         <div className="wm-list-heading"><h2>模擬客戶填寫網站表單</h2><button aria-label="關閉模擬表單" onClick={() => setShowForm(false)}><X size={16} /></button></div>
@@ -52,4 +54,4 @@ function Preview() {
     </main></div>
   </div>;
 }
-if (import.meta.env.DEV) createRoot(document.getElementById("root")).render(<Preview />);
+if (import.meta.env.DEV || import.meta.env.MODE === 'design-preview') createRoot(document.getElementById("root")).render(<Preview />);

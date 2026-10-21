@@ -2,6 +2,7 @@ node_modules
 dist
 dist-billing-preview
 dist-contract-preview
+dist-compact-preview
 supabase/.temp/
 .env
 .env.local

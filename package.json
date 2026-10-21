@@ -8,6 +8,7 @@
     "build": "vite build",
     "build:billing-preview": "vite build --config vite.billing-preview.config.js",
     "build:contract-preview": "vite build --config vite.contract-preview.config.js",
+    "build:compact-preview": "vite build --config vite.compact-preview.config.js",
     "preview": "vite preview"
   },
   "dependencies": {

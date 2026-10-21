@@ -94,4 +94,24 @@
   .wm-workflow { padding:18px; gap:15px; }.wm-workflow ol { flex-direction:column; gap:11px; }.wm-workflow li > svg { display:none; }.wm-workflow li { font-size:11px; }.wm-workflow li > span { display:grid; place-items:center; width:24px; height:24px; border-radius:7px; background:#dfe8ed; }
 }
 @media(max-width:420px) { .wm-heading { padding:20px; }.wm-heading-side { display:none; }.wm-heading-copy { width:100%; }.wm-heading h1 { font-size:24px; }.wm-stats { gap:9px; }.wm-stat { padding:13px 12px 10px; }.wm-stat-top { font-size:11px; }.wm-stat-icon { width:28px; height:28px; border-radius:8px; }.wm-stat-value strong { font-size:27px; }.wm-stat-label { font-size:7px; letter-spacing:.8px; }.wm-stat > small { font-size:10px; min-height:32px; }.wm-progress-list { grid-template-columns:1fr; gap:15px; }.wm-stat-value { gap:5px; }.wm-detail-header { padding:22px 20px; }.wm-detail-body { padding:22px 20px; }.wm-detail-grid { grid-template-columns:1fr; gap:19px; }.wm-detail-footer { padding:16px 20px max(16px,env(safe-area-inset-bottom)); }.wm-detail-header h2 { font-size:17px; }.wm-detail-subject { font-size:19px; }.wm-inbox-filters { padding-left:14px; padding-right:14px; }.website-management .wm-tabs button { padding:7px 6px; gap:4px; font-size:10px; } }
+/* Match the compact dashboard rhythm while keeping captions legible. */
+.wm-heading { padding:15px 26px; }
+.wm-heading h1 { margin:5px 0 4px; }
+.wm-heading p { font-size:13px; }
+.website-management .wm-hero-link { margin-top:8px; font-size:13px; }
+.wm-heading-side { gap:5px; }
+.wm-site-symbol { width:48px; height:48px; }
+.wm-site-symbol > svg { width:42px; height:42px; }
+.wm-heading-caption,.wm-connection-pill { font-size:12px; }
+.wm-stat { padding:12px 16px; }
+.wm-stat-top { font-size:14px; }
+.wm-stat-icon { width:30px; height:30px; }
+.wm-stat-value { padding:3px 0 5px; }
+.wm-stat-value > span { font-size:14px; }
+.wm-stat > small { font-size:14px; min-height:0; line-height:1.45; color:#526378; }
+.wm-stat-label { font-size:12px; letter-spacing:.8px; margin-top:6px; padding-top:5px; overflow-wrap:anywhere; }
+.wm-panel-footnote,.wm-progress-note,.wm-progress-caption,.wm-chart-caption,
+.wm-progress-label,.wm-progress-label small,.wm-legend { font-size:13px; }
+@media(max-width:720px) { .wm-heading { padding:15px 18px; gap:12px; } }
+@media(max-width:480px) { .wm-stats { grid-template-columns:minmax(0,1fr); } }
 @media(prefers-reduced-motion:reduce) { .website-management * { scroll-behavior:auto!important; transition:none!important; } }
