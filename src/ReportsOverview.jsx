@@ -1,10 +1,11 @@
 import React from "react";
-import { BarChart3, CalendarDays, ChevronDown, CircleHelp, Layers3, TrendingUp, Users, Wallet } from "lucide-react";
+import { BarChart3, CalendarDays, ChevronDown, CircleHelp, Layers3, Users } from "lucide-react";
 import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import "./ReportsOverview.css";
+import { AdministrationHeader, ReportMetrics } from "./AdministrationOverview.jsx";
 
 const CATEGORY_COLORS = ["#56758c", "#639086", "#b69962", "#8b819d", "#b67f78", "#809baf", "#a7a078", "#8e9e87", "#ba957f", "#75859f", "#a789a0", "#88aaa8"];
 const monthLabel = (value) => `${Number.parseInt(value, 10)}月`;
@@ -15,10 +16,6 @@ const percentage = (value, total) => {
   const share = total > 0 ? value / total * 100 : 0;
   return share > 0 && share < 0.1 ? "<0.1%" : `${share.toFixed(1)}%`;
 };
-
-function Amount({ value }) {
-  return <div className="reports-amount"><span>NT$</span><strong>{Number(value).toLocaleString("zh-TW")}</strong></div>;
-}
 
 function ReportTooltip({ active, payload, label, money }) {
   if (!active || !payload?.length) return null;
@@ -70,14 +67,7 @@ export default function ReportsOverview({ year, years, onYearChange, revenueTren
 
   return (
     <div className="reports-overview">
-      <header className="reports-header">
-        <div>
-          <div className="reports-eyebrow">COMPANY OS / REPORTS</div>
-          <h2>公司報表</h2>
-          <p>掌握年度財務趨勢，清楚看見支出結構與人力配置。</p>
-        </div>
-        <div className="reports-edition"><BarChart3 size={22} aria-hidden="true" /><div><strong>{rocYear} 年度</strong><span>營運分析報表</span></div></div>
-      </header>
+      <AdministrationHeader kind="reports" period={rocYear} />
 
       <section className="reports-filters" aria-label="報表年度篩選">
         <div className="reports-year-options">
@@ -89,23 +79,7 @@ export default function ReportsOverview({ year, years, onYearChange, revenueTren
         <span className="reports-period">統計期間 <b>{rocYear} / 01 — {rocYear} / 12</b></span>
       </section>
 
-      <section className="reports-finance" aria-label="年度重點統計">
-        <article className="reports-metric reports-metric--featured">
-          <div className="reports-metric-label"><h3>年度營收</h3><TrendingUp size={19} aria-hidden="true" /></div>
-          <Amount value={totals.revenue} />
-          <div className="reports-metric-foot"><span>帳務入口・收入</span><span>{rocYear} 年累計</span></div>
-        </article>
-        <article className="reports-metric">
-          <div className="reports-metric-label"><h3>年度支出</h3><span className="reports-icon reports-icon--blue"><Layers3 size={18} aria-hidden="true" /></span></div>
-          <Amount value={totals.expense} />
-          <div className="reports-metric-foot"><span>帳務入口・支出</span><span>{rocYear} 年累計</span></div>
-        </article>
-        <article className="reports-metric">
-          <div className="reports-metric-label"><h3>年度薪資成本</h3><span className="reports-icon reports-icon--gold"><Wallet size={18} aria-hidden="true" /></span></div>
-          <Amount value={totals.payroll} />
-          <div className="reports-metric-foot"><span>薪資表・全部發放狀態</span><span>{rocYear} 年累計</span></div>
-        </article>
-      </section>
+      <ReportMetrics totals={totals} year={rocYear} />
 
       <div className="reports-section-label"><span>財務趨勢</span><span>依月份檢視全年變化</span></div>
       <div className="reports-grid reports-trends">

@@ -1,0 +1,9 @@
+.administration-preview .workforce-preview-switch { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.administration-preview .permission-section-actions input { width:180px; padding:8px 10px; border:1px solid #d5dfe8; border-radius:7px; font:inherit; }
+.administration-preview .permission-section-actions button,.administration-preview .office-preview-table button { display:inline-flex; align-items:center; gap:6px; padding:8px 12px; border:1px solid #d5dfe8; border-radius:7px; background:#fff; color:#203047; font:inherit; cursor:pointer; }
+.access-demo-status { display:inline-block; padding:3px 8px; border-radius:5px; background:#e8f5f3; color:#0d7978; font-size:12px; }
+.access-demo-status.is-inactive { color:#8b632a; background:#fcf2df; }
+.access-demo-matrix { max-height:400px; overflow:auto; }
+.access-demo-matrix input { accent-color:#7c62a1; width:16px; height:16px; }
+.access-demo-matrix th,.access-demo-matrix td { white-space:nowrap; }
+.access-demo-matrix th:not(:first-child),.access-demo-matrix td { text-align:center; }

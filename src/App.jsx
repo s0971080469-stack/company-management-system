@@ -29,6 +29,7 @@ import { EmployeesOverview, PayrollOverview } from "./WorkforceOverview.jsx";
 import { VendorsOverview, DocumentsOverview } from "./OfficeOverview.jsx";
 import { SalesOverview, SalesFilters } from "./SalesOverview.jsx";
 import { OperationsOverview, OperationsFilters, OperationsSearch, VehicleReminders, AttendanceControls } from "./OperationsOverview.jsx";
+import { PermissionsOverview, PermissionSectionHeading } from "./AdministrationOverview.jsx";
 import { quoteOverviewStats, invoiceOverviewStats } from "./salesOverview.js";
 import { filterPersonnel } from "./personnelFilters.js";
 import WebsiteInbox from "./WebsiteInbox.jsx";
@@ -6003,15 +6004,9 @@ function PermissionsView({ ctx }) {
 
   return (
     <div>
-      <SectionHeader eyebrow="ACCESS · 15" title="權限設定"
-        action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptySysUser(roles) })}>新增系統帳號</Btn>} />
+      <PermissionsOverview onNew={() => setModal({ mode: "new", data: emptySysUser(roles) })} />
 
-      <div style={{ background: "#FBF7EC", border: `1px solid ${THEME.brassSoft}`, borderRadius: 10, padding: "10px 16px", fontSize: 12.5, color: THEME.brassDeep, marginBottom: 16, display: "flex", gap: 8, alignItems: "center" }}>
-        <AlertCircle size={14} />
-        側邊欄下方可切換「目前身分」。非夏碩亞角色在打卡上下班頁面，只能選自己綁定的員工打卡，也只能看到自己的出勤紀錄。
-      </div>
-
-      <h3 style={{ fontSize: 14.5, fontWeight: 700, color: THEME.text, marginBottom: 12 }}>系統帳號</h3>
+      <PermissionSectionHeading />
       {sysUsers.length === 0 ? (
         <EmptyState icon={UserCog} text="尚未建立任何系統帳號。" action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptySysUser(roles) })}>新增第一個帳號</Btn>} />
       ) : (
@@ -6048,13 +6043,10 @@ function PermissionsView({ ctx }) {
         </Table>
       )}
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "30px 0 12px" }}>
-        <h3 style={{ fontSize: 14.5, fontWeight: 700, color: THEME.text, margin: 0 }}>角色權限矩陣</h3>
-        <div style={{ display: "flex", gap: 8 }}>
+      <PermissionSectionHeading matrix>
           <TextInput value={newRole} onChange={(e) => setNewRole(e.target.value)} placeholder="新增角色名稱" style={{ width: 160 }} />
           <Btn size="sm" icon={Plus} onClick={addRole}>新增角色</Btn>
-        </div>
-      </div>
+      </PermissionSectionHeading>
 
       <div style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 12, overflow: "auto", maxHeight: "70vh" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
