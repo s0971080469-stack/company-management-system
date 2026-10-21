@@ -27,6 +27,8 @@ import { nextPayrollMonth, payrollGenerationLocked } from "./payrollGeneration.j
 import PayrollApprovalButton from "./PayrollApprovalButton.jsx";
 import { EmployeesOverview, PayrollOverview } from "./WorkforceOverview.jsx";
 import { VendorsOverview, DocumentsOverview } from "./OfficeOverview.jsx";
+import { SalesOverview, SalesFilters } from "./SalesOverview.jsx";
+import { quoteOverviewStats, invoiceOverviewStats } from "./salesOverview.js";
 import { filterPersonnel } from "./personnelFilters.js";
 import WebsiteInbox from "./WebsiteInbox.jsx";
 import { payrollSiteOf, payrollNetAmount, payrollReleaseStatus } from "./payrollApproval.js";
@@ -2716,34 +2718,10 @@ export function QuotesView({ ctx, setTab }) {
 
   return (
     <div>
-      <SectionHeader eyebrow="QUOTATION · 06" title="估價單"
-        action={
-          <div style={{ display: "flex", gap: 8 }}>
-            <Btn icon={FileSignature} onClick={() => setTemplateManagerOpen(true)}>管理估價範本</Btn>
-            <Btn variant="brass" icon={Plus} onClick={() => setPickerOpen(true)}>新增估價單</Btn>
-          </div>
-        } />
-
-      {quotes.length > 0 && (
-        <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {companyTabs.map((c) => (
-              <button key={c} onClick={() => setCompanyFilter(c)}
-                style={{
-                  padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-                  border: `1px solid ${companyFilter === c ? THEME.brassDeep : "#B8B6AA"}`,
-                  background: c === "全部" ? THEME.canvas : c === "未填公司" ? THEME.surface : quoteRowColor(c),
-                  color: THEME.text,
-                  boxShadow: companyFilter === c ? `inset 0 0 0 1px ${THEME.brassDeep}` : "none",
-                }} aria-pressed={companyFilter === c}>{c === "全部" || c === "未填公司" ? c : c.slice(0, 4)}</button>
-            ))}
-          </div>
-          <div style={{ position: "relative", maxWidth: 260 }}>
-            <Search size={14} style={{ position: "absolute", left: 10, top: 10, color: THEME.muted }} />
-            <TextInput placeholder="搜尋客戶名稱" value={query} onChange={(e) => setQuery(e.target.value)} style={{ paddingLeft: 30 }} />
-          </div>
-        </div>
-      )}
+      <SalesOverview kind="quotes" stats={quoteOverviewStats(filteredQuotes, q => sumItems(q.items))} period="全部月份" formatMoney={fmtMoney}
+        onTemplates={() => setTemplateManagerOpen(true)} onNew={() => setPickerOpen(true)} />
+      <SalesFilters kind="quotes" count={filteredQuotes.length} company={companyFilter} companies={companyTabs} onCompanyChange={setCompanyFilter}
+        companyColor={c => c === "全部" ? THEME.canvas : c === "未填公司" ? THEME.surface : quoteRowColor(c)} query={query} onQueryChange={setQuery} />
 
       {quotes.length === 0 ? (
         <EmptyState icon={FileText} text="尚未建立任何估價單。" action={<Btn variant="brass" icon={Plus} onClick={() => setPickerOpen(true)}>建立第一張估價單</Btn>} />
@@ -3306,39 +3284,19 @@ export function InvoicesView({ ctx }) {
 
   return (
     <div>
-      <SectionHeader eyebrow="INVOICE · 07" title="發票"
-        action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: { ...emptyInvoice(), no: nextNo("INV", invoices) } })}>開立發票</Btn>} />
-
-      <InvoiceOverdueReminder reminders={getInvoiceReminders(invoices, ctx.now)} formatMoney={fmtMoney} formatDate={fmtDate} />
+      <SalesOverview kind="invoices" stats={invoiceOverviewStats(filtered, inv => inv.total ?? sumItems(inv.items) * (1 + Number(inv.taxRate) / 100))}
+        period={month ? fmtMonthLabel(month) : "全部月份"} formatMoney={fmtMoney}
+        onNew={() => setModal({ mode: "new", data: { ...emptyInvoice(), no: nextNo("INV", invoices) } })}>
+        <InvoiceOverdueReminder reminders={getInvoiceReminders(invoices, ctx.now)} formatMoney={fmtMoney} formatDate={fmtDate} />
+      </SalesOverview>
       {depositNotice && <div role="status" aria-live="polite" style={{ marginBottom: 14, padding: "10px 14px", borderRadius: 8, background: THEME.brassSoft, color: THEME.text, fontSize: 13 }}>
         {depositNotice}
         {pendingNotices.length > 0 && <Btn size="sm" disabled={depositBusy} onClick={retryNotices}>重送通知（{pendingNotices.length}）</Btn>}
       </div>}
 
-      {invoices.length > 0 && (
-        <>
-          <MonthFilterBar month={month} setMonth={setMonth} label="開立日期月份" />
-          <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
-            {companyTabs.map((c) => (
-              <button key={c} onClick={() => setCompanyFilter(c)}
-                style={{
-                  padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-                  border: `1px solid ${companyFilter === c ? THEME.brassDeep : "#B8B6AA"}`,
-                  background: c === "全部" ? THEME.canvas : companyRowColor(c),
-                  color: THEME.text,
-                  boxShadow: companyFilter === c ? `inset 0 0 0 1px ${THEME.brassDeep}` : "none",
-                }} aria-pressed={companyFilter === c}>{c}</button>
-            ))}
-            <div style={{ position: "relative", width: 210, maxWidth: "100%" }}>
-              <Search size={14} aria-hidden="true" style={{ position: "absolute", left: 10, top: 10, color: THEME.muted, pointerEvents: "none" }} />
-              <TextInput type="search" aria-label="搜尋發票關鍵字"
-                placeholder="搜尋關鍵字"
-                title="可搜尋發票號碼、開票公司、估價單號碼、客戶、工程名稱、付款方式、類別、狀態、備註及品項；多個關鍵字以空白分隔"
-                value={query} onChange={(e) => setQuery(e.target.value)} style={{ paddingLeft: 30 }} />
-            </div>
-          </div>
-        </>
-      )}
+      <SalesFilters kind="invoices" count={filtered.length} company={companyFilter} companies={companyTabs} onCompanyChange={setCompanyFilter}
+        companyColor={c => c === "全部" ? THEME.canvas : companyRowColor(c)} query={query} onQueryChange={setQuery}
+        monthControl={<MonthFilterBar month={month} setMonth={setMonth} label="開立日期月份" />} />
 
       {invoices.length === 0 ? (
         <EmptyState icon={Receipt} text="尚未開立任何發票。" action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: { ...emptyInvoice(), no: nextNo("INV", invoices) } })}>開立第一張發票</Btn>} />
