@@ -17,6 +17,7 @@ import Docxtemplater from "docxtemplater";
 import { renderAsync as renderDocxAsync } from "docx-preview";
 import DashboardOverview from "./DashboardOverview.jsx";
 import BillingOverview from "./BillingOverview.jsx";
+import ContractOverview from "./ContractOverview.jsx";
 import InvoiceOverdueReminder from "./InvoiceOverdueReminder.jsx";
 import { getInvoiceReminders } from "./invoiceReminders.js";
 import { matchesInvoiceKeyword } from "./invoiceSearch.js";
@@ -5461,32 +5462,16 @@ export function ContractsView({ ctx }) {
 
   return (
     <div>
-      <SectionHeader eyebrow="CONTRACT · 09" title="契約管理"
-        action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptyContract(vendors) })}>新增契約</Btn>} />
-
-      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 18 }}>
-        <StatCard label="契約總數" value={contracts.length} icon={FileSignature} tone="ink" />
-        <StatCard label={year === "全部" ? "承攬總金額" : `${toROCYear(year)} 年度承攬總金額`} value={fmtMoney(filtered.reduce((s, c) => s + Number(c.amount || 0), 0))} icon={Landmark} tone="brass" />
-        <StatCard label="生效中" value={contracts.filter((c) => c.status === "生效中").length} icon={Check} tone="success" />
-        <StatCard label="30 天內到期" value={contracts.filter(isExpiringSoon).length} icon={AlertCircle} tone="warn" />
-      </div>
+      <ContractOverview totalCount={contracts.length}
+        totalAmount={filtered.reduce((s, c) => s + Number(c.amount || 0), 0)} filteredCount={filtered.length}
+        activeCount={contracts.filter((c) => c.status === "生效中").length} expiringCount={contracts.filter(isExpiringSoon).length}
+        year={year} yearTabs={yearTabs} onYearChange={setYear} formatYear={toROCYear} formatMoney={fmtMoney}
+        onNew={() => setModal({ mode: "new", data: emptyContract(vendors) })} />
 
       {contracts.length === 0 ? (
         <EmptyState icon={FileSignature} text="尚未建立任何契約。" action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptyContract(vendors) })}>建立第一份契約</Btn>} />
       ) : (
         <>
-          <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
-            <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600, marginRight: 4 }}>年度（起訖日期有含該年度）</span>
-            {yearTabs.map((y) => (
-              <button key={y} onClick={() => setYear(y)}
-                style={{
-                  padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-                  border: `1px solid ${year === y ? THEME.brass : THEME.line}`,
-                  background: year === y ? THEME.brass : "#fff",
-                  color: year === y ? "#fff" : THEME.text,
-                }}>{y === "全部" ? y : `${toROCYear(y)} 年`}</button>
-            ))}
-          </div>
           <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
               <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600, marginRight: 4 }}>承攬公司</span>
