@@ -16,6 +16,7 @@ import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import { renderAsync as renderDocxAsync } from "docx-preview";
 import DashboardOverview from "./DashboardOverview.jsx";
+import BillingOverview from "./BillingOverview.jsx";
 import InvoiceOverdueReminder from "./InvoiceOverdueReminder.jsx";
 import { getInvoiceReminders } from "./invoiceReminders.js";
 import { matchesInvoiceKeyword } from "./invoiceSearch.js";
@@ -4196,75 +4197,15 @@ function BillingView({ ctx }) {
 
   return (
     <div>
-      <SectionHeader eyebrow="EXPENSE MANAGEMENT · 08" title="收支管理"
-        action={<Btn variant="brass" icon={Plus} disabled={decisionBusy} onClick={openNew}>{newLabel}</Btn>} />
-
-      {decisionNotice && (
-        <div role="status" style={{ background: THEME.warnSoft, color: THEME.text, padding: "12px 16px", borderRadius: 10, marginBottom: 18 }}>
-          {decisionNotice}
-        </div>
-      )}
-
-      {overdueApproved.length > 0 && (
-        <div className="page-alert page-alert--danger">
-          <AlertCircle size={16} />
-          <div className="page-alert__content">
-            <strong>{overdueApproved.length} 筆已核准公司應付款項逾期未付款：</strong>
-            {overdueApproved.map((b) => (
-              <div key={b.id}>{b.vendor}（{fmtMoney(b.amount)}）— 已逾期 {daysOverdue(b.plannedPaymentDate)} 天（預訂付款日 {fmtDate(b.plannedPaymentDate)}）</div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {duePayments.length > 0 && (
-        <div className="page-alert">
-          <AlertCircle size={16} />
-          <div className="page-alert__content">
-            <strong>{duePayments.length} 筆公司應付款項將於 5 天內到期：</strong>
-            {duePayments.map((b) => (
-              <div key={b.id}>{b.vendor}（{fmtMoney(b.amount)}）— {daysUntil(b.plannedPaymentDate) === 0 ? "今日到期" : `剩 ${daysUntil(b.plannedPaymentDate)} 天`}</div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div style={{ display: "flex", gap: 6, marginBottom: 18, flexWrap: "wrap" }}>
-        {[{ key: "銀行入帳", label: "銀行入帳紀錄", icon: Landmark }, { key: "公司付款", label: "公司應付款項", icon: HandCoins }, { key: "零用金", label: "零用金紀錄", icon: Wallet }].map((t) => (
-          <button key={t.key} disabled={decisionBusy} onClick={() => setExpenseTab(t.key)}
-            style={{
-              display: "flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 999, fontSize: 13, fontWeight: 700, cursor: "pointer",
-              border: `1px solid ${expenseTab === t.key ? THEME.brass : THEME.line}`,
-              background: expenseTab === t.key ? THEME.brass : "#fff",
-              color: expenseTab === t.key ? "#fff" : THEME.text,
-            }}>
-            <t.icon size={14} />{t.label}
-          </button>
-        ))}
-      </div>
-
-      {expenseTab === "零用金" ? (
-        <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 18 }}>
-          <StatCard label="本月零用金支出" value={fmtMoney(pettyCashMonthTotal)} icon={Wallet} tone="brass" />
-          <StatCard label="累計零用金支出" value={fmtMoney(pettyCashTotal)} icon={Landmark} tone="ink" />
-          <StatCard label="紀錄筆數" value={pettyCash.length} icon={Check} tone="success" />
-          <StatCard label="零用金餘額" value={fmtMoney(pettyCashBalance)} icon={Wallet} tone={pettyCashBalance < 0 ? "danger" : "brass"} />
-        </div>
-      ) : expenseTab === "銀行入帳" ? (
-        <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
-          <StatCard label="本月入帳金額" value={fmtMoney(bankDepositMonthTotal)} icon={Landmark} tone="brass" />
-          <StatCard label="累計入帳金額" value={fmtMoney(bankDepositTotal)} icon={TrendingUp} tone="success" />
-          <StatCard label="紀錄筆數" value={bankDeposits.length} icon={Check} tone="ink" />
-        </div>
-      ) : (
-        <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 14, marginBottom: 18 }}>
-          <StatCard label="公司應付款項總數" value={companyPayments.length} icon={HandCoins} tone="ink" />
-          <StatCard label="已付款件數" value={companyPayments.filter((b) => b.status === "已付款").length} icon={Check} tone="success" />
-          <StatCard label="核准金額" value={fmtMoney(approvedTotal)} icon={Check} tone="ink" />
-          <StatCard label="未付款金額" value={fmtMoney(pendingTotal)} icon={AlertCircle} tone="warn" />
-          <StatCard label="已核准逾期未付" value={overdueApproved.length} icon={AlertCircle} tone="danger" />
-        </div>
-      )}
+      <BillingOverview expenseTab={expenseTab} onTabChange={setExpenseTab} onNew={openNew}
+        newLabel={newLabel} busy={decisionBusy} notice={decisionNotice}
+        duePayments={duePayments} overdueApproved={overdueApproved} daysUntil={daysUntil} daysOverdue={daysOverdue}
+        currentMonthLabel={fmtMonthLabel(monthStr())} filterPeriodLabel={month ? fmtMonthLabel(month) : "全部月份"}
+        companyFilter={companyFilter} formats={{ money: fmtMoney, date: fmtDate }}
+        stats={{ pettyCashMonthTotal, pettyCashTotal, pettyCashCount: pettyCash.length, pettyCashBalance,
+          bankDepositMonthTotal, bankDepositTotal, bankDepositCount: bankDeposits.length,
+          companyPaymentCount: companyPayments.length, paidCount: companyPayments.filter((b) => b.status === "已付款").length,
+          approvedTotal, pendingTotal }} />
 
       {list.length === 0 ? (
         <EmptyState icon={emptyIcon} text={`尚未建立任何${expenseTab === "零用金" ? "零用金紀錄" : expenseTab === "銀行入帳" ? "銀行入帳紀錄" : "公司應付款項"}。`} action={<Btn variant="brass" icon={Plus} onClick={openNew}>{newLabel}</Btn>} />
