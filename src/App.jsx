@@ -25,6 +25,8 @@ import ReportsOverview from "./ReportsOverview.jsx";
 import { payrollAuditStamp, payrollActivityActor } from "./payrollActivity.js";
 import { nextPayrollMonth, payrollGenerationLocked } from "./payrollGeneration.js";
 import PayrollApprovalButton from "./PayrollApprovalButton.jsx";
+import { EmployeesOverview, PayrollOverview } from "./WorkforceOverview.jsx";
+import { filterPersonnel } from "./personnelFilters.js";
 import WebsiteInbox from "./WebsiteInbox.jsx";
 import { payrollSiteOf, payrollNetAmount, payrollReleaseStatus } from "./payrollApproval.js";
 
@@ -1982,15 +1984,7 @@ function EmployeesView({ ctx }) {
 
   const KNOWN_COMPANIES = BILLING_COMPANY_OPTIONS.filter((o) => o !== "其他");
   const companyTabs = ["全部", ...KNOWN_COMPANIES, "其他"];
-  const filtered = employees.filter((e) => {
-    if (!(e.name + e.dept + e.title).toLowerCase().includes(query.toLowerCase())) return false;
-    if (companyFilter !== "全部") {
-      if (companyFilter === "其他") return e.company && !KNOWN_COMPANIES.includes(e.company);
-      return e.company === companyFilter;
-    }
-    if (siteFilter !== "全部" && (e.siteName || "") !== siteFilter) return false;
-    return true;
-  });
+  const filtered = filterPersonnel(employees, { query, company: companyFilter, site: siteFilter, knownCompanies: KNOWN_COMPANIES });
   const siteOrder = new Map(siteOptions.map((site, index) => [site, index]));
   const sortedFiltered = [...filtered].sort((a, b) => {
     const aOrder = siteOrder.has(a.siteName) ? siteOrder.get(a.siteName) : Number.MAX_SAFE_INTEGER;
@@ -2014,42 +2008,13 @@ function EmployeesView({ ctx }) {
 
   return (
     <div>
-      <SectionHeader eyebrow="PERSONNEL · 02" title="人員管理"
-        action={
-          <div style={{ display: "flex", gap: 8 }}>
-            <Btn icon={Printer} onClick={() => window.print()}>列印</Btn>
-            <Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptyEmployee })}>新增員工</Btn>
-          </div>
-        } />
-
-      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
-        <div style={{ position: "relative", maxWidth: 280 }}>
-          <Search size={14} style={{ position: "absolute", left: 10, top: 10, color: THEME.muted }} />
-          <TextInput placeholder="搜尋姓名／部門／職位" value={query} onChange={(e) => setQuery(e.target.value)} style={{ paddingLeft: 30 }} />
-        </div>
-        <Select value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} style={{ width: 200 }}>
-          <option value="全部">所屬案場：全部</option>
-          {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-        </Select>
-      </div>
-
-      {employees.length > 0 && (
-        <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
-          <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600, marginRight: 4 }}>投保公司</span>
-          {companyTabs.map((c) => (
-            <button key={c} onClick={() => setCompanyFilter(c)}
-              style={{
-                padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-                border: `1px solid ${companyFilter === c ? THEME.brass : THEME.line}`,
-                background: companyFilter === c ? THEME.brass : "#fff",
-                color: companyFilter === c ? "#fff" : THEME.text,
-              }}>{c}</button>
-          ))}
-        </div>
-      )}
+      <EmployeesOverview employeeCount={employees.length} activeCount={employees.filter(e => e.status === "在職").length} filteredCount={filtered.length}
+        query={query} onQueryChange={setQuery} site={siteFilter} sites={siteOptions} onSiteChange={setSiteFilter}
+        company={companyFilter} companies={companyTabs} onCompanyChange={setCompanyFilter}
+        onPrint={() => window.print()} onNew={() => setModal({ mode: "new", data: emptyEmployee })} />
 
       {filtered.length === 0 ? (
-        <EmptyState icon={Users} text="尚未建立任何員工資料。" action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptyEmployee })}>新增第一位員工</Btn>} />
+        <EmptyState icon={Users} text={employees.length ? "沒有符合目前篩選條件的人員。" : "尚未建立任何員工資料。"} action={!employees.length && <Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptyEmployee })}>新增第一位員工</Btn>} />
       ) : (
         <Table columns={["姓名", "部門", "職位", "投保公司", "到職日", "底薪", "聯絡方式", "銀行帳號", "投保級距", "狀態", "所屬案場", ""]}>
           {sortedFiltered.map((e) => (
@@ -2319,63 +2284,17 @@ function PayrollView({ ctx }) {
 
   return (
     <div>
-      <SectionHeader eyebrow="PAYROLL · 03" title="薪資表管理"
-        action={
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <Btn icon={Printer} onClick={() => window.print()}>列印</Btn>
-            <Btn variant="brass" icon={generateLocked && month ? Check : Plus} onClick={() => generate(month)} disabled={generating || generateLocked}>
-              {generateLocked && month ? "本月薪資表已產生" : "產生本月薪資表"}
-            </Btn>
-            <div title={nextMonth ? `產生 ${fmtMonthLabel(nextMonth)} 的薪資表；以目前選取月份的下一個月為準。` : "請先選擇月份"}>
-              <Btn variant="primary" icon={nextGenerateLocked && nextMonth ? Check : CalendarDays} onClick={() => generate(nextMonth)} disabled={generating || nextGenerateLocked}>
-                {nextGenerateLocked && nextMonth ? "下月薪資表已產生" : "產生下月薪資表"}
-              </Btn>
-            </div>
-          </div>
-        } />
-
-      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 18 }}>
-        <StatCard label="本月人數" value={rows.length} icon={Users} tone="payrollPeople" />
-        <StatCard label="本月薪資總額" value={fmtMoney(totalNet)} icon={Wallet} tone="payrollTotal"
-          subNode={
-            <div style={{ display: "flex", gap: 12, fontFamily: FONT_NUM, fontSize: 13.5, fontWeight: 700 }}>
-              <span style={{ color: THEME.success }}>已發放 {fmtMoney(paidNet)}</span>
-              <span style={{ color: THEME.warn }}>尚未發放 {fmtMoney(unpaidNet)}</span>
-            </div>
-          } />
-        <StatCard label="已發放" value={rows.filter((r) => r.status === "已發放").length + " / " + rows.length} icon={Check} tone="payrollPaid" />
-        <StatCard label="暫時不發金額" value={fmtMoney(heldNet)} icon={AlertCircle} tone="hold"
-          subNode={
-            <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: FONT_BODY, fontSize: 13.5, fontWeight: 400, color: "#705A85" }}>
-              <span>暫時不發人數</span>
-              <span style={{ fontFamily: FONT_NUM, fontSize: 13.5, fontWeight: 700 }}>{heldRows.length} / {rows.length}</span>
-            </div>
-          } />
-      </div>
-
-      <div role="status" aria-live="polite" style={{ marginBottom: 12, color: THEME.muted, fontSize: 13 }}>
-        {generating ? "正在讀取最新人員資料、核對金額並儲存…" : generationNotice || "新增薪資表將套用人員管理最新已儲存的完整薪資數字；既有薪資表不會覆蓋。"}
-      </div>
       {/* 即使所選月份還沒有薪資，也要保留月份切換入口。 */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "center", flexWrap: "wrap" }}>
-          <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600 }}>負責老闆</span>
-          <Select value={bossFilter} onChange={(e) => { setBossFilter(e.target.value); setSiteFilter("全部"); }} style={{ width: 130 }}>
-            <option value="全部">全部</option>
-            <option value="夏碩亞">夏碩亞</option>
-            <option value="夏壽松">夏壽松</option>
-          </Select>
-          <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600 }}>所屬案場</span>
-          <Select value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} style={{ width: 200 }}>
-            {sites.map((s) => <option key={s} value={s}>{s}</option>)}
-          </Select>
-          <label style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600 }}>月份</span>
-            <TextInput type="month" value={month} onChange={(e) => setMonth(e.target.value)} style={{ width: 150 }} />
-          </label>
-          <PayrollApprovalButton key={`${month}:${bossFilter}:${siteFilter}`} rows={rows} employees={employees} month={month} site={siteFilter}
+      <PayrollOverview rowCount={rows.length} totalNet={totalNet} paidNet={paidNet} unpaidNet={unpaidNet}
+        paidCount={rows.filter(r => r.status === "已發放").length} heldNet={heldNet} heldCount={heldRows.length}
+        month={month} nextMonth={nextMonth} boss={bossFilter} site={siteFilter} sites={sites}
+        onBossChange={value => { setBossFilter(value); setSiteFilter("全部"); }} onSiteChange={setSiteFilter}
+        monthControl={<TextInput type="month" aria-label="薪資月份" value={month} onChange={e => setMonth(e.target.value)} />}
+        approvalControl={<PayrollApprovalButton key={`${month}:${bossFilter}:${siteFilter}`} rows={rows} employees={employees} month={month} site={siteFilter}
             isAdmin={isAdmin} formatMoney={fmtMoney} formatMonth={fmtMonthLabel}
-            onApprove={(selection) => approveLatestPayrollSite({ ...selection, isAdmin, actor: actorName(ctx), senderId: ctx.currentUser?.id || ADMIN_CHAT_ID })} />
-      </div>
+            onApprove={(selection) => approveLatestPayrollSite({ ...selection, isAdmin, actor: actorName(ctx), senderId: ctx.currentUser?.id || ADMIN_CHAT_ID })} />}
+        generateLocked={generateLocked} nextGenerateLocked={nextGenerateLocked} generating={generating} generationNotice={generationNotice}
+        onGenerate={generate} onPrint={() => window.print()} formatMoney={fmtMoney} formatMonth={fmtMonthLabel} />
 
       {allRows.length === 0 ? (
         <EmptyState icon={Wallet} text={`尚未建立 ${month} 的薪資表。`} action={<Btn variant="brass" icon={Plus} onClick={() => generate(month)} disabled={generating || generateLocked}>依在職員工產生薪資表</Btn>} />

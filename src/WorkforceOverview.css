@@ -1,0 +1,73 @@
+.workforce-overview { --wf-ink:#203047; --wf-muted:#65768a; --wf-line:#e1e7ed; color:var(--wf-ink); margin-bottom:18px; min-width:0; font:14px 'PingFang TC','Microsoft JhengHei',system-ui,sans-serif; }
+.workforce-overview * { box-sizing:border-box; }
+.workforce-overview h2,.workforce-overview h3,.workforce-overview p { margin:0; }
+.workforce-overview button,.workforce-overview input,.workforce-overview select { font:inherit; }
+.workforce-overview svg { flex-shrink:0; }
+.workforce-overview :focus-visible { outline:3px solid #168d98; outline-offset:3px; }
+.workforce-header { position:relative; display:flex; align-items:center; justify-content:space-between; gap:22px; background:linear-gradient(110deg,#192c43,#25445a); padding:24px 28px; border-radius:15px; color:#fff; margin-bottom:18px; overflow:hidden; }
+.workforce-header::after { content:''; position:absolute; width:270px; height:270px; border:1px solid #ffffff0c; border-radius:50%; right:100px; top:-175px; pointer-events:none; }
+.workforce-header-copy { min-width:0; flex-shrink:0; }.workforce-eyebrow { display:flex; align-items:center; gap:8px; color:#b0cfce; font-size:9px; letter-spacing:1.5px; font-weight:600; }.workforce-eyebrow i { width:6px; height:6px; background:#7ad0c0; border-radius:50%; }
+.workforce-header h2 { font-size:26px; letter-spacing:1px; line-height:1.4; margin:9px 0 6px; }.workforce-header p { color:#c5d2df; font-size:11px; line-height:1.8; }
+.workforce-header-actions { display:flex; justify-content:flex-end; align-items:center; flex-wrap:wrap; gap:8px; position:relative; z-index:1; }
+.workforce-overview .workforce-action { display:inline-flex; align-items:center; justify-content:center; gap:6px; min-height:38px; padding:9px 12px; background:#ffffff0d; border:1px solid #ffffff38; border-radius:8px; color:#e7eff5; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; }
+.workforce-overview .workforce-action--primary { background:#d9eee9; border-color:#d9eee9; color:#1a5b59; }.workforce-action:hover:not(:disabled) { filter:brightness(1.12); }.workforce-overview .workforce-action:disabled { opacity:.5; cursor:not-allowed; }
+.workforce-tone--blue { --wf-accent:#466aa8; --wf-tint:#ecf2fb; }.workforce-tone--teal { --wf-accent:#0d7978; --wf-tint:#e8f5f3; }.workforce-tone--amber { --wf-accent:#a56d20; --wf-tint:#fcf2df; }.workforce-tone--violet { --wf-accent:#7c62a1; --wf-tint:#f2eef9; }
+.workforce-personnel-stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:13px; margin-bottom:18px; }.workforce-payroll-stats { display:grid; grid-template-columns:minmax(135px,.8fr) minmax(255px,1.5fr) minmax(140px,.8fr) minmax(190px,1fr); gap:13px; margin-bottom:18px; }
+.workforce-metric { position:relative; min-width:0; background:#fff; border:1px solid var(--wf-line); border-radius:11px; padding:15px 17px 13px; overflow:hidden; }.workforce-metric::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--wf-accent); opacity:.8; }
+.workforce-metric-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; }.workforce-metric-heading h3 { font-size:12px; font-weight:600; }.workforce-metric-heading > span { color:var(--wf-accent); background:var(--wf-tint); border-radius:9px; width:32px; height:32px; display:grid; place-items:center; }
+.workforce-metric-value { display:block; font-size:25px; line-height:1.4; font-variant-numeric:tabular-nums; letter-spacing:-.5px; margin:6px 0; overflow-wrap:anywhere; font-weight:650; }.workforce-metric-value small { color:var(--wf-muted); font-weight:400; font-size:11px; margin-left:6px; letter-spacing:0; }.workforce-metric p { color:var(--wf-muted); font-size:10px; line-height:1.7; }
+.workforce-personnel-stats .workforce-metric { padding:13px 17px; }.workforce-personnel-stats .workforce-metric-value { font-size:27px; margin:0 0 2px; }
+.workforce-paid-split { display:flex; flex-wrap:wrap; gap:7px 16px; padding:8px 0; margin-top:4px; border-top:1px solid #e5efef; }.workforce-paid-split > div { display:flex; flex-direction:column; gap:4px; }.workforce-paid-split span { color:var(--wf-muted); font-size:10px; }.workforce-paid-split b { color:#0d7978; font-variant-numeric:tabular-nums; font-size:12px; }.workforce-paid-split > div:last-child b { color:#a56d20; }
+.workforce-section-heading { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin:0 0 12px; }.workforce-section-heading h3 { display:flex; gap:8px; flex-wrap:wrap; align-items:center; font-size:13px; }.workforce-section-heading h3 svg { color:#54778c; }.workforce-section-heading h3 > span { font-size:11px; font-weight:400; color:var(--wf-muted); border-left:1px solid #ccd8e1; padding-left:8px; }.workforce-section-heading p { color:var(--wf-muted); font-size:10px; }
+.workforce-filters { background:#fff; border:1px solid var(--wf-line); border-radius:11px; overflow:hidden; }.workforce-filter-heading { display:flex; justify-content:space-between; gap:10px; align-items:center; padding:14px 18px 0; }.workforce-filter-heading h3 { display:flex; gap:7px; align-items:center; font-size:12px; }.workforce-filter-heading h3 svg { color:#6f8799; }.workforce-filter-heading > span { color:var(--wf-muted); font-size:10px; }.workforce-filter-heading b { color:#275974; font-size:12px; padding:0 3px; }
+.workforce-personnel-controls { display:grid; grid-template-columns:minmax(200px,1.2fr) minmax(200px,1fr); gap:16px; padding:15px 18px; }.workforce-field { display:flex; flex-direction:column; gap:7px; min-width:0; }.workforce-field > span { color:#5f7386; font-size:11px; font-weight:500; }
+.workforce-field input,.workforce-field select { width:100%; max-width:100%; min-width:0; height:40px; border:1px solid #dbe3ea; border-radius:7px; color:#30485d; background:#fbfcfe; padding:8px 11px; font-size:13px; }.workforce-field select { text-overflow:ellipsis; }.workforce-search > div { position:relative; }.workforce-search svg { position:absolute; top:12px; left:12px; color:#7b91a4; }.workforce-search input { padding-left:37px; }.workforce-field input::placeholder { color:#8393a2; }
+.workforce-company-filters { display:flex; align-items:center; gap:12px; padding:0 18px 16px; }.workforce-company-filters > span { font-size:11px; color:#5f7386; white-space:nowrap; }.workforce-company-filters > div { display:flex; flex-wrap:wrap; gap:7px; }.workforce-company-filters button { display:flex; align-items:center; gap:6px; padding:7px 10px; min-height:33px; font-size:11px; font-weight:500; border-radius:6px; border:1px solid #e0e6ec; background:#fff; color:var(--company-fg); cursor:pointer; }.workforce-company-filters button i { width:6px; height:6px; border-radius:50%; background:var(--company-fg); }.workforce-company-filters button[aria-pressed="true"] { background:var(--company-bg); border-color:var(--company-fg); font-weight:700; }.workforce-company-filters button:hover { background:var(--company-bg); }
+.workforce-filter-footer { display:flex; justify-content:space-between; gap:10px; align-items:center; border-top:1px solid #edf1f4; background:#fafcfd; padding:9px 18px; color:#7b8c9b; font-size:10px; }.workforce-filter-footer > span:last-child { display:flex; align-items:center; gap:7px; }
+.workforce-payroll-controls { display:flex; flex-wrap:wrap; align-items:flex-end; gap:14px; padding:15px 18px; }.workforce-payroll-controls > .workforce-field { flex:0 1 145px; }.workforce-payroll-controls > .workforce-site { flex:1 1 210px; max-width:380px; }.workforce-period-approval { display:flex; align-items:flex-end; flex-wrap:wrap; gap:8px 12px; min-width:0; flex:1 1 280px; }.workforce-month { flex:0 1 165px; }.workforce-month input { font-family:inherit!important; font-size:13px!important; }.workforce-period-approval .payroll-approvals__button { min-height:40px; }.workforce-period-approval .payroll-approvals__notice { max-width:100%; overflow-wrap:anywhere; }
+.workforce-generation-notice { display:flex; gap:8px; align-items:flex-start; padding:11px 18px; color:#627d8d; background:#f4f8fa; border-top:1px solid #e6eef2; font-size:11px; line-height:1.8; }.workforce-generation-notice svg { color:#528b88; margin-top:2px; }
+@media(max-width:1250px) { .workforce-header { align-items:flex-start; flex-direction:column; gap:16px; }.workforce-header-actions { justify-content:flex-start; }.workforce-payroll-stats { grid-template-columns:repeat(2,minmax(0,1fr)); }.workforce-metric-value { font-size:25px; } }
+@media(max-width:680px) { .workforce-header { padding:20px; }.workforce-header-copy { flex-shrink:1; }.workforce-header h2 { font-size:25px; }.workforce-eyebrow { font-size:8px; letter-spacing:1px; }.workforce-header-actions { gap:7px; }.workforce-overview .workforce-action { font-size:11px; padding:9px 11px; min-height:40px; }.workforce-personnel-stats { gap:8px; }.workforce-personnel-stats .workforce-metric { padding:12px; }.workforce-personnel-stats .workforce-metric-heading > span { display:none; }.workforce-personnel-stats .workforce-metric-heading h3 { font-size:10px; }.workforce-personnel-stats .workforce-metric-value { margin:7px 0 3px; font-size:25px; }.workforce-personnel-stats .workforce-metric p { font-size:9px; }.workforce-personnel-controls { grid-template-columns:minmax(0,1fr); gap:12px; }.workforce-company-filters { align-items:flex-start; flex-direction:column; gap:9px; }.workforce-company-filters button { min-height:38px; }.workforce-payroll-stats { gap:9px; }.workforce-payroll-stats .workforce-metric { padding:13px; }.workforce-payroll-stats .workforce-metric-value { font-size:21px; }.workforce-payroll-stats .workforce-metric-heading > span { width:27px; height:27px; }.workforce-paid-split { gap:8px; }.workforce-paid-split b { font-size:11px; }.workforce-paid-split > div { flex:1 1 90px; }.workforce-filter-heading,.workforce-personnel-controls,.workforce-payroll-controls { padding-left:14px; padding-right:14px; }.workforce-payroll-controls { gap:12px; }.workforce-payroll-controls > .workforce-field { flex:1 1 100px; }.workforce-payroll-controls > .workforce-site { flex:1.7 1 150px; max-width:none; }.workforce-period-approval { flex:1 1 100%; }.workforce-generation-notice { padding:10px 14px; }.workforce-filter-footer { padding:9px 14px; font-size:9px; }.workforce-section-heading p { font-size:9px; } }
+@media(max-width:360px) { .workforce-payroll-stats { grid-template-columns:minmax(0,1fr); }.workforce-payroll-stats .workforce-metric { padding:14px 16px; }.workforce-paid-split > div { flex:1; } }
+/* Match the current BillingOverview banner, including its inherited text line height. */
+.workforce-header { padding:15px 26px; gap:24px; border-radius:16px; flex-direction:row; align-items:center; flex-wrap:wrap; }
+.workforce-header-copy { flex-shrink:1; }
+.workforce-eyebrow { display:flex; font-size:10px; line-height:1.6; letter-spacing:1.7px; }
+.workforce-header h2 { font-size:27px; margin:5px 0 4px; line-height:1.4; }
+.workforce-header p { display:block; font-size:13px; line-height:1.8; }
+.workforce-metric,
+.workforce-personnel-stats .workforce-metric { min-height:148px; padding:13px 16px; }
+.workforce-metric-heading h3 { font-size:15px; }
+.workforce-metric-heading > span { width:26px; height:26px; }
+.workforce-metric-value,
+.workforce-personnel-stats .workforce-metric-value { font-size:32px; line-height:1.2; margin:6px 0; }
+.workforce-metric-value small { font-size:13px; }
+.workforce-metric p { font-size:12px; line-height:1.5; }
+.workforce-personnel-stats .workforce-metric { min-height:114px; padding:10px 16px; }
+.workforce-personnel-stats .workforce-metric-value { margin:4px 0; }
+.workforce-paid-split { padding:4px 0 2px; margin-top:0; gap:2px 14px; }
+.workforce-paid-split > div { flex-direction:row; align-items:baseline; gap:6px; flex-wrap:wrap; }
+.workforce-paid-split span { font-size:11px; }
+.workforce-paid-split b { font-size:13px; }
+.workforce-payroll-stats .workforce-metric { min-height:124px; padding:9px 14px; }
+.workforce-payroll-stats .workforce-metric-value { margin:2px 0; }
+.workforce-payroll-stats .workforce-paid-split { padding:2px 0 0; }
+.workforce-section-heading h3 { font-size:15px; }
+.workforce-section-heading h3 > span { font-size:13px; }
+@media(min-width:1050px) {
+  .workforce-header { flex-direction:row; align-items:center; }
+  .workforce-header-actions { justify-content:flex-end; }
+}
+@media(max-width:680px) {
+  .workforce-header { padding:15px 18px; gap:12px; flex-direction:column; align-items:flex-start; }
+  .workforce-header h2 { font-size:25px; }
+  .workforce-personnel-stats .workforce-metric { padding:10px; }
+  .workforce-personnel-stats .workforce-metric-heading h3 { font-size:13px; }
+  .workforce-personnel-stats .workforce-metric-value { font-size:30px; }
+  .workforce-personnel-stats .workforce-metric p { font-size:11px; }
+  .workforce-payroll-stats .workforce-metric { padding:9px 12px; }
+  .workforce-payroll-stats .workforce-metric-heading h3 { font-size:13px; }
+  .workforce-payroll-stats .workforce-metric-value { font-size:24px; }
+  .workforce-paid-split > div { flex:1 1 100%; }
+}
+@media print { .workforce-header-actions,.workforce-company-filters button,.workforce-generation-notice,.workforce-filter-footer { display:none!important; }.workforce-header { background:#fff; color:#203047; border:1px solid #dbe3ea; }.workforce-header p,.workforce-eyebrow { color:#65768a; }.workforce-overview { print-color-adjust:exact; -webkit-print-color-adjust:exact; }.workforce-metric,.workforce-filters { break-inside:avoid; } }
