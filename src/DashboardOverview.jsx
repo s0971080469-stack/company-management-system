@@ -2,6 +2,7 @@ import React from "react";
 import { Users, Receipt, HandCoins, Clock, Truck, FileSignature, ArrowUpRight, ChevronRight, AlertCircle, Check, CalendarDays, Activity, ListChecks, CircleDollarSign, ShieldCheck, FileText } from "lucide-react";
 import { ResponsiveContainer, ComposedChart, Bar, Line, CartesianGrid, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, ReferenceLine } from "recharts";
 import "./DashboardOverview.css";
+import "./CompactOverview.css";
 import InvoiceOverdueReminder from "./InvoiceOverdueReminder.jsx";
 
 const COLORS = { income: "#148c8b", expense: "#829bbb", net: "#b5873e" };

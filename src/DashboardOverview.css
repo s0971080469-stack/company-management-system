@@ -78,5 +78,14 @@
   .overview-header-meta { padding-top:8px; gap:6px 12px; }
   .overview-operation { gap:5px; }
 }
+/* Only the first (finance) row is denser; operations, charts and scroll panels stay unchanged. */
+.overview-eyebrow { line-height:1.6; }
+.overview-finance .overview-metric { padding:8px 16px; }
+.overview-finance .overview-icon { width:26px; height:26px; }
+.overview-finance .overview-money { font-size:28px; line-height:1.2; margin:2px 0 4px; }
+.overview-finance .overview-metric-foot { font-size:12px; line-height:1.5; }
+.overview-finance .overview-period-tag { font-size:12px; padding:0 6px; }
+.overview-finance .overview-metric-english { font-size:10px; margin-top:4px; padding-top:4px; }
+@media(max-width:680px) { .overview-finance .overview-money { font-size:27px; } }
 @media(prefers-reduced-motion:reduce) { .overview-dashboard * { transition:none!important; scroll-behavior:auto!important; } }
 @media print { .overview-dashboard { print-color-adjust:exact; -webkit-print-color-adjust:exact; }.overview-secondary-grid > .overview-panel { height:auto; }.overview-activity-list,.overview-category-list,.overview-todo-list { max-height:none; overflow:visible; }.overview-panel,.overview-finance,.overview-operations { break-inside:avoid; } }

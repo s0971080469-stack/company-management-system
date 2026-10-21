@@ -1,6 +1,7 @@
 import React from "react";
 import { Truck, Building2, Stamp, CalendarDays, FileText, Plus, Printer } from "lucide-react";
 import "./ContractOverview.css";
+import "./CompactOverview.css";
 import "./OfficeOverview.css";
 
 // Reuse the contract overview's actual styles, not a separately estimated height.

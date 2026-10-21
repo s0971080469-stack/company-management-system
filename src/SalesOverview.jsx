@@ -1,6 +1,7 @@
 import React from "react";
 import { FileText, Receipt, Check, Clock, Plus, FileSignature, Search, SlidersHorizontal } from "lucide-react";
 import "./BillingOverview.css";
+import "./CompactOverview.css";
 import "./SalesOverview.css";
 
 // Display only: callers retain filtering, financial calculations and all write actions.

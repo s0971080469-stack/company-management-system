@@ -1,6 +1,7 @@
 import React from "react";
 import { Landmark, HandCoins, Wallet, Plus, Check, AlertCircle, CalendarDays, TrendingUp, ArrowUpRight, Receipt, Clock } from "lucide-react";
 import "./BillingOverview.css";
+import "./CompactOverview.css";
 
 const TABS = [
   { key: "銀行入帳", label: "銀行入帳紀錄", caption: "掌握每一筆收入", icon: Landmark, tone: "teal" },

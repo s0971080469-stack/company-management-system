@@ -1,6 +1,7 @@
 import React from "react";
 import { BarChart3, Plus, ShieldCheck, Users, Layers3, TrendingUp, Wallet, Info } from "lucide-react";
 import "./BillingOverview.css";
+import "./CompactOverview.css";
 import "./AdministrationOverview.css";
 
 // Display-only components. Existing views own all calculations and write handlers.

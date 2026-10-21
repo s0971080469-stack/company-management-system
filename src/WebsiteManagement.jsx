@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Globe, Users, Inbox, Clock, Search, X, ArrowUpRight, ArrowRight, CalendarDays, CheckCircle2, CircleDot, FileText, Mail, Phone, MapPin, Activity, ShieldCheck, SlidersHorizontal, AlertCircle } from "lucide-react";
 import { FORM_STATUSES, filterWebsiteForms, taipeiMonth, websiteSummary, websiteDate } from "./websiteManagement.js";
 import "./WebsiteManagement.css";
+import "./CompactOverview.css";
 
 const STATUS_ICONS = [Clock, CircleDot, CheckCircle2];
 function StatusBadge({ status }) {
@@ -116,8 +117,8 @@ export default function WebsiteManagement({ rows = [], analytics = null, analyti
   }
   return <section className="website-management">
     <header className="wm-heading">
-      <div className="wm-heading-copy"><div className="wm-eyebrow"><span />WEBSITE OPERATIONS · 網站營運</div><h1>網站資訊管理</h1><p>從網站流量到客戶需求，每一個接觸都清楚掌握。</p><button className="wm-hero-link" onClick={() => focusInbox("待處理")}>前往處理收件 <ArrowRight size={15} /></button></div>
-      <div className="wm-heading-side"><div className="wm-site-symbol" aria-hidden="true"><Globe size={46} strokeWidth={1} /><span /></div><div className={`wm-connection-pill ${preview ? "is-preview" : connected && intakeEnabled ? "is-connected" : "is-offline"}`}><i />{connectionLabel}</div><span className="wm-heading-caption">官網營運 · 客戶服務</span></div>
+      <div className="wm-heading-copy"><div className="wm-eyebrow"><span />WEBSITE OPERATIONS · 網站營運</div><h1>網站資訊管理</h1><p>從網站流量到客戶需求，每一個接觸都清楚掌握。</p></div>
+      <div className="wm-heading-side"><div className={`wm-connection-pill ${preview ? "is-preview" : connected && intakeEnabled ? "is-connected" : "is-offline"}`}><i />{connectionLabel}</div><button className="wm-hero-link" onClick={() => focusInbox("待處理")}>前往處理收件 <ArrowRight size={15} /></button></div>
     </header>
     {preview && <div className="wm-preview-notice"><ShieldCheck size={15} /><span>測試預覽｜所有數字與表單皆為模擬資料；重新整理會重設。</span></div>}
     {error && <div role="alert" className="wm-error"><AlertCircle size={17} /><span>{error}</span></div>}

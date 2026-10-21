@@ -1,0 +1,80 @@
+/* Shared headers for pages 01–16 and metric density for pages 02–16.
+   Minimum heights intentionally allow long captions and mobile actions to wrap. */
+:is(.workforce-overview, .billing-overview, .contract-overview, .website-management)
+:is(.workforce-header, .billing-header, .contract-overview-header, .wm-heading),
+.overview-dashboard .overview-header {
+  padding-top: 5px;
+  padding-bottom: 5px;
+  min-height: 89px;
+}
+:is(.workforce-overview, .billing-overview, .contract-overview, .website-management)
+:is(.workforce-header, .billing-header, .contract-overview-header, .wm-heading) :is(h1, h2),
+.billing-overview.administration-header .billing-header h2,
+.overview-dashboard .overview-header h2 {
+  font-size: 24px;
+  margin-top: 1px;
+  margin-bottom: 1px;
+}
+.workforce-overview :is(.workforce-personnel-stats, .workforce-payroll-stats) .workforce-metric,
+.billing-overview .billing-metric,
+.contract-overview .contract-overview-metric,
+.website-management .wm-stat {
+  min-height: 98px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.workforce-overview :is(.workforce-personnel-stats, .workforce-payroll-stats) .workforce-metric-value,
+.billing-overview .billing-value,
+.contract-overview .contract-overview-value,
+.website-management .wm-stat-value {
+  margin: 2px 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  line-height: 1.2;
+}
+.workforce-overview :is(.workforce-personnel-stats, .workforce-payroll-stats) .workforce-metric-value,
+.billing-overview .billing-value strong,
+.contract-overview .contract-overview-value strong,
+.website-management .wm-stat-value strong {
+  font-size: 28px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.billing-overview .billing-metric .billing-icon,
+.contract-overview .contract-overview-metric .contract-overview-icon,
+.website-management .wm-stat-icon {
+  width: 26px;
+  height: 26px;
+}
+.billing-overview .billing-metric-foot,
+.contract-overview .contract-overview-metric-foot,
+.website-management .wm-stat > small {
+  font-size: 12px;
+  line-height: 1.5;
+  border-top: 0;
+  padding-top: 0;
+}
+.billing-overview .billing-period,
+.contract-overview .contract-overview-scope {
+  font-size: 12px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+/* Keep the inbox action and connection state while removing decorative height. */
+.website-management .wm-heading-side { flex-direction: row; flex-wrap: wrap; justify-content: flex-end; gap: 10px; min-width: 0; }
+.website-management .wm-hero-link { margin-top: 0; min-height: 36px; }
+.website-management .wm-heading-caption,
+.website-management .wm-site-symbol,
+.website-management .wm-stat-label { display: none; }
+.workforce-overview .workforce-metric-note { display: inline-block; margin-left: 7px; font-size: 11px; font-weight: 400; color: var(--wf-muted); }
+.workforce-overview .workforce-payroll-stats .workforce-paid-split { padding-top: 0; border-top: 0; line-height: 18px; }
+@media (max-width: 680px) {
+  :is(.workforce-overview, .billing-overview, .contract-overview, .website-management)
+  :is(.workforce-header, .billing-header, .contract-overview-header, .wm-heading),
+  .overview-dashboard .overview-header { gap: 10px; }
+  .workforce-overview :is(.workforce-personnel-stats, .workforce-payroll-stats) .workforce-metric-value,
+  .billing-overview .billing-value strong,
+  .contract-overview .contract-overview-value strong,
+  .website-management .wm-stat-value strong { font-size: 27px; }
+  .website-management .wm-heading-side { display: flex; justify-content: flex-start; }
+}

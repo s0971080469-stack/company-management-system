@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>02–16 頁統一高度｜測試預覽</title>
+  <style>
+    * { box-sizing:border-box; }
+    body { margin:0; font:13px/1.5 'Microsoft JhengHei',system-ui,sans-serif; color:#203047; background:#f3f6f8; }
+    #preview { height:100vh; height:100dvh; display:flex; flex-direction:column; }
+    nav { padding:8px 14px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; border-bottom:1px solid #dbe4eb; }
+    nav strong { margin-right:8px; }
+    a { padding:5px 9px; border:1px solid #dbe4eb; border-radius:6px; text-decoration:none; color:#35576f; background:white; }
+    a[aria-current="page"] { color:white; background:#205e69; border-color:#205e69; }
+    a:focus-visible { outline:3px solid #b48c31; outline-offset:2px; }
+    iframe { width:100%; flex:1; min-height:0; border:0; background:white; }
+    @media(max-width:680px) { nav { flex-wrap:nowrap; overflow-x:auto; } nav>* { flex-shrink:0; } }
+  </style>
+</head>
+<body>
+  <div id="preview" hidden></div>
+  <script type="module">
+    if (import.meta.env.DEV) {
+      const pages = [
+        ['人員／薪資','workforce-overview'], ['廠商／公文／契約','office-overview'],
+        ['估價單／發票','sales-overview'], ['收支管理','billing-overview'],
+        ['請款／車輛／打卡／帳務','operations-overview'],
+        ['網站資訊','website-management'], ['公司報表／權限','administration-overview'],
+      ];
+      const root = document.querySelector('#preview');
+      root.hidden = false;
+      const nav = document.createElement('nav');
+      nav.setAttribute('aria-label','選擇頁面群組');
+      const heading = document.createElement('strong');
+      heading.textContent = '02–16 精簡版 · 僅測試';
+      nav.append(heading);
+      const frame = document.createElement('iframe');
+      frame.name = 'compact-preview';
+      frame.title = '精簡高度測試頁（模擬資料）';
+      frame.src = './workforce-overview.html';
+      pages.forEach(([label,path], index) => {
+        const link = document.createElement('a');
+        link.textContent = label;
+        link.href = `./${path}.html`;
+        link.target = frame.name;
+        if (index === 0) link.setAttribute('aria-current','page');
+        link.addEventListener('click', () => {
+          nav.querySelectorAll('a').forEach(a => a.removeAttribute('aria-current'));
+          link.setAttribute('aria-current','page');
+        });
+        nav.append(link);
+      });
+      root.append(nav,frame);
+    }
+  </script>
+</body>
+</html>

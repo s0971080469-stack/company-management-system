@@ -1,6 +1,7 @@
 import React from "react";
 import { FileSignature, Check, Clock, Car, AlertCircle, TrendingUp, TrendingDown, Landmark, Plus, Search, SlidersHorizontal, MapPin } from "lucide-react";
 import "./BillingOverview.css";
+import "./CompactOverview.css";
 import "./OperationsOverview.css";
 
 const PAGES = {

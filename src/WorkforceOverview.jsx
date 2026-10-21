@@ -1,6 +1,7 @@
 import React from "react";
 import { Users, Wallet, Check, AlertCircle, Plus, Printer, Search, SlidersHorizontal, CalendarDays, ArrowRight, ShieldCheck } from "lucide-react";
 import "./WorkforceOverview.css";
+import "./CompactOverview.css";
 
 // Matches the existing company badges; colors identify companies, not payment status.
 export const WORKFORCE_COMPANY_COLORS = {
@@ -18,8 +19,8 @@ function Action({ icon: Icon, children, primary, ...props }) {
 function Header({ eyebrow, title, description, actions }) {
   return <header className="workforce-header"><div className="workforce-header-copy"><div className="workforce-eyebrow"><i />{eyebrow}</div><h2>{title}</h2><p>{description}</p></div><div className="workforce-header-actions">{actions}</div></header>;
 }
-function Metric({ label, value, caption, tone, icon: Icon, children, className = "" }) {
-  return <article className={`workforce-metric workforce-tone--${tone} ${className}`}><div className="workforce-metric-heading"><h3>{label}</h3><span><Icon size={18} aria-hidden="true" /></span></div><strong className="workforce-metric-value">{value}</strong>{children || <p>{caption}</p>}</article>;
+function Metric({ label, value, caption, note, tone, icon: Icon, children, className = "" }) {
+  return <article className={`workforce-metric workforce-tone--${tone} ${className}`}><div className="workforce-metric-heading"><h3>{label}{note && <small className="workforce-metric-note">{note}</small>}</h3><span><Icon size={18} aria-hidden="true" /></span></div><strong className="workforce-metric-value">{value}</strong>{children || <p>{caption}</p>}</article>;
 }
 function FilterHeading({ count, unit, children }) {
   return <div className="workforce-filter-heading"><h3><SlidersHorizontal size={15} aria-hidden="true" />清單篩選</h3><span>目前顯示 <b>{count}</b> {unit}{children}</span></div>;
@@ -27,7 +28,7 @@ function FilterHeading({ count, unit, children }) {
 
 // Display-only components: persistence, calculation and approval callbacks stay in App.jsx.
 export function EmployeesOverview({ employeeCount, activeCount, filteredCount, query, onQueryChange, site, sites, onSiteChange, company, companies, onCompanyChange, onPrint, onNew }) {
-  return <div className="workforce-overview">
+  return <div className="workforce-overview workforce-overview--personnel">
     <Header eyebrow="PEOPLE OPERATIONS · 人員與組織" title="人員管理" description="整合人員資料，清楚掌握案場配置與投保公司。" actions={<><Action icon={Printer} onClick={onPrint}>列印</Action><Action icon={Plus} primary onClick={onNew}>新增員工</Action></>} />
     <section className="workforce-personnel-stats" aria-label="人員統計">
       <Metric label="員工總數" value={<>{employeeCount}<small>位</small></>} caption="所有已建立的人員資料" tone="blue" icon={Users} />
@@ -52,7 +53,7 @@ export function PayrollOverview({ rowCount, totalNet, paidNet, unpaidNet, paidCo
     <div className="workforce-section-heading"><h3><CalendarDays size={15} aria-hidden="true" />{month ? formatMonth(month) : "請選擇月份"}<span>薪資概況</span></h3><p>依目前老闆、案場篩選統計</p></div>
     <section className="workforce-payroll-stats" aria-label="薪資統計">
       <Metric label="本月人數" value={<>{rowCount}<small>人</small></>} caption="目前篩選內的薪資筆數" tone="blue" icon={Users} />
-      <Metric label="本月薪資總額" value={formatMoney(totalNet)} tone="teal" icon={Wallet} className="workforce-payroll-total"><div className="workforce-paid-split"><div><span>已發放</span><b>{formatMoney(paidNet)}</b></div><div><span>尚未發放</span><b>{formatMoney(unpaidNet)}</b></div></div><p>不含暫時不發金額</p></Metric>
+      <Metric label="本月薪資總額" note="不含暫時不發金額" value={formatMoney(totalNet)} tone="teal" icon={Wallet} className="workforce-payroll-total"><div className="workforce-paid-split"><div><span>已發放</span><b>{formatMoney(paidNet)}</b></div><div><span>尚未發放</span><b>{formatMoney(unpaidNet)}</b></div></div></Metric>
       <Metric label="已發放" value={<>{paidCount}<small>/ {rowCount} 人</small></>} caption="已完成發放的人員" tone="amber" icon={Check} />
       <Metric label="暫時不發金額" value={formatMoney(heldNet)} caption={`暫時不發人數 ${heldCount} / ${rowCount}`} tone="violet" icon={AlertCircle} />
     </section>

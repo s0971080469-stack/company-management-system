@@ -1,6 +1,7 @@
 import React from "react";
 import { FileSignature, Landmark, Check, Clock, CalendarDays, Plus, ArrowUpRight, Layers3 } from "lucide-react";
 import "./ContractOverview.css";
+import "./CompactOverview.css";
 
 // Display only: contract filtering, dates, amounts and persistence stay in ContractsView.
 export default function ContractOverview({ totalCount, totalAmount, activeCount, expiringCount, filteredCount, year, yearTabs, onYearChange, onNew, formatMoney, formatYear }) {
