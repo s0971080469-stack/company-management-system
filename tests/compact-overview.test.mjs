@@ -38,3 +38,16 @@ test("薪資卡保留已發未發金額說明，網站收件捷徑及狀態仍�
   const website = await read("WebsiteManagement.jsx");
   assert.match(website, /className="wm-heading-side"[^\n]+connectionLabel[^\n]+focusInbox\("待處理"\)/);
 });
+
+test("總覽下方三欄放大文字，限定字級變更並保留捲動容器", async () => {
+  const css = await read("DashboardOverview.css");
+  const lower = css.split("/* Improve lower-panel readability")[1].split("/* Only the first (finance)")[0];
+  assert.match(lower, /overview-activity-copy > div:first-child \{ font-size:14px/);
+  assert.match(lower, /overview-activity-copy p \{ font-size:12px/);
+  assert.match(lower, /overview-category strong/);
+  assert.match(lower, /overview-todo > strong/);
+  assert.doesNotMatch(lower, /(?:height|padding|overflow|grid-template)[\w-]*\s*:/);
+  for (const name of ["category", "todo", "activity"]) {
+    assert.match(css, new RegExp(`\\.overview-${name}-list \\{[^}]*min-height:0;[^}]*overflow-y:auto`));
+  }
+});

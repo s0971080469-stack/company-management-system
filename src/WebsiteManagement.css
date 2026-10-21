@@ -114,4 +114,34 @@
 .wm-progress-label,.wm-progress-label small,.wm-legend { font-size:13px; }
 @media(max-width:720px) { .wm-heading { padding:15px 18px; gap:12px; } }
 @media(max-width:480px) { .wm-stats { grid-template-columns:minmax(0,1fr); } }
+/* Inbox readability: keep the compact page header and statistics unchanged. */
+.wm-inbox .wm-inbox-heading h2 { font-size:18px; }
+.wm-inbox .wm-section-kicker { font-size:11px; }
+.wm-inbox .wm-inbox-heading p,
+.wm-inbox .wm-count,
+.wm-inbox .wm-table-wrap th,
+.wm-inbox .wm-table-wrap td small,
+.wm-inbox .wm-table-wrap .wm-date-cell,
+.wm-inbox .wm-table-wrap td::before,
+.wm-inbox .wm-type,
+.wm-inbox .wm-status,
+.wm-inbox .wm-inbox-footer,
+.wm-inbox .wm-empty > span { font-size:13px; }
+.wm-inbox .wm-table-wrap table,
+.wm-inbox .wm-table-wrap td,
+.wm-inbox .wm-customer strong,
+.wm-inbox .wm-type-filter,
+.wm-inbox .wm-empty,
+.website-management .wm-inbox .wm-type-filter select,
+.website-management .wm-inbox .wm-tabs button,
+.website-management .wm-inbox .wm-view-button { font-size:14px; }
+.website-management .wm-inbox .wm-search input { font-size:16px; }
+.wm-inbox .wm-tabs { flex-wrap:wrap; }
+.wm-inbox .wm-tabs button > span { font-size:12px; }
+.wm-workflow .wm-workflow-title strong { font-size:15px; }
+.wm-workflow .wm-workflow-title span,
+.wm-workflow li,
+.wm-workflow li > span,
+.wm-workflow p { font-size:13px; }
+.wm-workflow ol { flex-wrap:wrap; }
 @media(prefers-reduced-motion:reduce) { .website-management * { scroll-behavior:auto!important; transition:none!important; } }

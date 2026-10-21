@@ -12,6 +12,17 @@ const mod = { exports: {} };
 new Function("require", "module", "exports", bundle.outputFiles[0].text)(createRequire(import.meta.url), mod, mod.exports);
 const render = (props = {}) => renderToStaticMarkup(React.createElement(mod.exports.default, { initialMonth: "2026-10", ...props }));
 
+test("收件清單放大文字並保留窄螢幕換行，不影響頁首統計", async () => {
+  const css = await readFile(new URL("../src/WebsiteManagement.css", import.meta.url), "utf8");
+  const overrides = css.split("/* Inbox readability:")[1].split("@media(prefers-reduced-motion")[0];
+  assert.match(overrides, /\.wm-inbox \.wm-table-wrap td,[\s\S]*font-size:14px/);
+  assert.match(overrides, /\.wm-inbox \.wm-table-wrap \.wm-date-cell,[\s\S]*font-size:13px/);
+  assert.match(overrides, /\.wm-inbox \.wm-search input \{ font-size:16px; \}/);
+  assert.match(overrides, /\.wm-inbox \.wm-tabs \{ flex-wrap:wrap; \}/);
+  assert.match(overrides, /\.wm-workflow ol \{ flex-wrap:wrap; \}/);
+  assert.doesNotMatch(overrides, /\.wm-heading|\.wm-stat\s*\{/);
+});
+
 test("未串接頁面不顯示虛構流量或假裝已收到資料", () => {
   const html = render();
   assert.match(html, /尚未串接網站/);

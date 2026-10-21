@@ -78,6 +78,29 @@
   .overview-header-meta { padding-top:8px; gap:6px 12px; }
   .overview-operation { gap:5px; }
 }
+/* Improve lower-panel readability without enlarging cards or their scroll containers. */
+.overview-secondary-grid .overview-panel-heading h3 { font-size:18px; }
+.overview-secondary-grid .overview-panel-heading p,
+.overview-secondary-grid .overview-panel-footer,
+.overview-secondary-grid .overview-expense-total,
+.overview-secondary-grid .overview-donut-center span { font-size:14px; }
+.overview-secondary-grid .overview-expense-total strong { font-size:16px; }
+.overview-secondary-grid .overview-kicker { font-size:10px; }
+.overview-secondary-grid .overview-category,
+.overview-secondary-grid .overview-category strong,
+.overview-secondary-grid .overview-category-note,
+.overview-secondary-grid .overview-approval strong,
+.overview-secondary-grid .overview-todo > strong { font-size:13px; }
+.overview-secondary-grid .overview-category small,
+.overview-secondary-grid .overview-todo-number { font-size:11px; }
+.overview-secondary-grid .overview-approval small,
+.overview-secondary-grid .overview-section-note,
+.overview-secondary-grid .overview-activity-copy p { font-size:12px; }
+.overview-secondary-grid .overview-approval b { font-size:24px; }
+.overview-secondary-grid .overview-todo,
+.overview-secondary-grid .overview-activity-copy > div:first-child { font-size:14px; }
+.overview-secondary-grid .overview-activity-status > span { font-size:12px!important; }
+.overview-secondary-grid .overview-empty { font-size:14px; }
 /* Only the first (finance) row is denser; operations, charts and scroll panels stay unchanged. */
 .overview-eyebrow { line-height:1.6; }
 .overview-finance .overview-metric { padding:8px 16px; }
