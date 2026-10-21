@@ -19,10 +19,16 @@ test('契約沿用既有公司配色，不改動其他畫面色碼', () => {
 test('兩頁清單和篩選均使用共享配色，選取狀態不覆蓋公司底色', () => {
   for (const view of [contracts, billing]) {
     assert.match(view, /<tr key=\{c.id\} style=\{\{ background: companyRowColor\(c.contractorCompany\) \}\}>/);
-    assert.match(view, /background: c === "全部" \? THEME.canvas : companyRowColor\(c\)/);
-    assert.match(view, /aria-pressed=\{companyFilter === c\}/);
-    assert.match(view, /boxShadow: companyFilter === c/);
   }
+  assert.match(contracts, /background: c === "全部" \? THEME.canvas : companyRowColor\(c\)/);
+  assert.match(contracts, /aria-pressed=\{companyFilter === c\}/);
+  assert.match(contracts, /boxShadow: companyFilter === c/);
+  assert.match(billing, /selected=\{companyFilter\} onSelect=\{setCompanyFilter\} colorOf=\{c => c === "全部" \? THEME.canvas : companyRowColor\(c\)\}/);
+  const component = readFileSync(new URL('../src/OperationsOverview.jsx', import.meta.url), 'utf8');
+  assert.match(component, /aria-pressed=\{selected===value\} style=\{\{background:colorOf\(value\)\}\}/);
+  const css = readFileSync(new URL('../src/OperationsOverview.css', import.meta.url), 'utf8');
+  const selectedRule=css.match(/\.operations-options button\[aria-pressed="true"\] \{([^}]+)\}/)?.[1];
+  assert.ok(selectedRule); assert.doesNotMatch(selectedRule, /background/);
 });
 test('到期提醒保留在日期下方，不再覆蓋整列公司色', () => {
   assert.match(contracts, /isExpiringSoon\(c\) && <span[\s\S]*?30 天內到期/);

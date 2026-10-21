@@ -28,6 +28,7 @@ import PayrollApprovalButton from "./PayrollApprovalButton.jsx";
 import { EmployeesOverview, PayrollOverview } from "./WorkforceOverview.jsx";
 import { VendorsOverview, DocumentsOverview } from "./OfficeOverview.jsx";
 import { SalesOverview, SalesFilters } from "./SalesOverview.jsx";
+import { OperationsOverview, OperationsFilters, OperationsSearch, VehicleReminders, AttendanceControls } from "./OperationsOverview.jsx";
 import { quoteOverviewStats, invoiceOverviewStats } from "./salesOverview.js";
 import { filterPersonnel } from "./personnelFilters.js";
 import WebsiteInbox from "./WebsiteInbox.jsx";
@@ -3651,7 +3652,7 @@ function AttendanceView({ ctx }) {
   if (restricted && !myEmployeeId) {
     return (
       <div>
-        <SectionHeader eyebrow="ATTENDANCE · 12" title="打卡上下班" />
+        <OperationsOverview kind="attendance" />
         <div style={{ background: THEME.warnSoft, border: `1px solid #E9D8AE`, borderRadius: 10, padding: "14px 18px", fontSize: 13, color: THEME.warn, display: "flex", gap: 8, alignItems: "center" }}>
           <AlertCircle size={16} />
           您目前的帳號尚未綁定員工資料，請聯絡夏碩亞到「權限設定」→「系統帳號」設定綁定的員工後才能打卡。
@@ -3662,11 +3663,11 @@ function AttendanceView({ ctx }) {
 
   return (
     <div>
-      <SectionHeader eyebrow="ATTENDANCE · 12" title="打卡上下班" />
+      <OperationsOverview kind="attendance" />
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>
-        <div style={{ background: THEME.surface, border: `1px solid ${THEME.line}`, borderRadius: 12, padding: "16px 18px" }}>
-          <div style={{ fontSize: 12.5, fontWeight: 700, color: THEME.text, marginBottom: 6 }}>打卡地點限制</div>
+      <div className="operations-attendance-layout">
+        <AttendanceControls time={now.toLocaleTimeString("zh-TW", { hour12: false })} date={fmtDate(today)}
+          locationControl={<>
           <div style={{ fontSize: 12, color: THEME.muted, marginBottom: 10 }}>
             設定公司座標後，夏碩亞以下所有人員只能在公司 {CLOCK_RADIUS_M} 公尺範圍內打卡。
           </div>
@@ -3678,18 +3679,8 @@ function AttendanceView({ ctx }) {
             )}
             <Btn size="sm" icon={MapPin} onClick={useCurrentLocationAsCompany}>使用目前位置</Btn>
           </div>
-        </div>
-
-        <div style={{ background: THEME.ink, borderRadius: 14, padding: "24px 26px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 18 }}>
-          <div>
-            <div style={{ fontSize: 12, color: "#9BA2B5", letterSpacing: 1, marginBottom: 6 }}>打卡鐘 · PUNCH CLOCK</div>
-            <div style={{ fontFamily: FONT_NUM, fontSize: 34, fontWeight: 700, color: "#fff", letterSpacing: 1 }}>
-              {now.toLocaleTimeString("zh-TW", { hour12: false })}
-            </div>
-            <div style={{ fontSize: 13, color: "#C7CBD9", marginTop: 4 }}>{today}</div>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 220 }}>
-            {restricted ? (
+          </>}
+          employeeControl={restricted ? (
               <div style={{ background: "#fff", borderRadius: 7, padding: "9px 12px", fontSize: 13.5, fontWeight: 700, color: THEME.text }}>
                 {empName(myEmployeeId)}
               </div>
@@ -3699,16 +3690,15 @@ function AttendanceView({ ctx }) {
                 {activeEmployees.map((e) => <option key={e.id} value={e.id}>{e.name}（{e.dept || "未設部門"}）</option>)}
               </Select>
             )}
-            <div style={{ display: "flex", gap: 8 }}>
+          actions={<>
               <Btn variant="success" icon={LogIn} onClick={clockIn} disabled={!empId || (selfRecord && selfRecord.clockIn)}>上班打卡</Btn>
               <Btn variant="danger" icon={LogOut} onClick={clockOut} disabled={!empId || !selfRecord || !selfRecord.clockIn || selfRecord.clockOut}>下班打卡</Btn>
-            </div>
-          </div>
-        </div>
+          </>} />
 
         <div>
-          <h3 style={{ fontSize: 14.5, fontWeight: 700, color: THEME.text, marginBottom: 12 }}>{restricted ? "我的月份出勤" : "月份出勤"}</h3>
-          <MonthFilterBar month={month} setMonth={setMonth} label="出勤月份" />
+          <OperationsFilters title={restricted ? "我的月份出勤" : "月份出勤"} count={monthRows.length}>
+            <MonthFilterBar month={month} setMonth={setMonth} label="出勤月份" />
+          </OperationsFilters>
         </div>
 
         <div style={{ gridRow: "span 2" }}>
@@ -4410,37 +4400,17 @@ function AccountingView({ ctx }) {
 
   return (
     <div>
-      <SectionHeader eyebrow="LEDGER · 13" title="帳務入口"
-        action={<Btn variant="brass" icon={Plus} onClick={() => setModal(true)}>新增帳務紀錄</Btn>} />
-
-      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
-        <StatCard label="總收入" value={fmtMoney(income)} icon={TrendingUp} tone="success" />
-        <StatCard label="總支出" value={fmtMoney(expense)} icon={TrendingDown} tone="danger" />
-        <StatCard label="淨額" value={fmtMoney(income - expense)} icon={Landmark} tone="brass" />
-      </div>
-
-      <div style={{ background: "#FBF7EC", border: `1px solid ${THEME.brassSoft}`, borderRadius: 10, padding: "10px 16px", fontSize: 12.5, color: THEME.brassDeep, marginBottom: 16, display: "flex", gap: 8, alignItems: "center" }}>
+      <OperationsOverview kind="ledger" stats={{ income, expense, net: income - expense }} formatMoney={fmtMoney} onNew={() => setModal(true)}>
+      <div className="operations-ledger-note">
         <AlertCircle size={14} />
 收支管理內的紀錄（含發票加入的銀行入帳）與已發放薪資會自動登錄於此帳冊，亦可手動新增其他收支項目。
       </div>
+      </OperationsOverview>
 
-      {accounting.length > 0 && (
-        <>
+      <OperationsFilters title="帳務清單篩選" count={sorted.length} options={["全部", "收入", "支出"]} selected={typeFilter} onSelect={setTypeFilter}
+        colorOf={t => t === "收入" ? "#EAF5F1" : t === "支出" ? "#FBEFF0" : THEME.canvas}>
           <MonthFilterBar month={month} setMonth={setMonth} label="日期月份" />
-          <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
-            {["全部", "收入", "支出"].map((t) => (
-              <button key={t} onClick={() => setTypeFilter(t)}
-                style={{
-                  padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-                  border: `1px solid ${typeFilter === t ? THEME.brassDeep : "#B8B6AA"}`,
-                  background: t === "收入" ? "#EAF5F1" : t === "支出" ? "#FBEFF0" : THEME.canvas,
-                  color: THEME.text,
-                  boxShadow: typeFilter === t ? `inset 0 0 0 1px ${THEME.brassDeep}` : "none",
-                }} aria-pressed={typeFilter === t}>{t}</button>
-            ))}
-          </div>
-        </>
-      )}
+      </OperationsFilters>
 
       {accounting.length === 0 ? (
         <EmptyState icon={Landmark} text="尚無帳務紀錄。" action={<Btn variant="brass" icon={Plus} onClick={() => setModal(true)}>新增第一筆紀錄</Btn>} />
@@ -5545,35 +5515,11 @@ export function ContractBillingView({ ctx, previewOnly = false }) {
 
   return (
     <div>
-      <SectionHeader eyebrow="CONTRACT · 10" title="每月請款追蹤" />
-
-      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
-        <StatCard label="本月契約數" value={filtered.length} icon={FileSignature} tone="ink" />
-        <StatCard label="已請款" value={billedCount} icon={Check} tone="success" />
-        <StatCard label="未請款" value={filtered.length - billedCount} icon={AlertCircle} tone="warn" />
-      </div>
-
-      <MonthFilterBar month={month} setMonth={setMonth} label="請款月份" />
-
-      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-          <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600, marginRight: 4 }}>承攬公司</span>
-          {companyTabs.map((c) => (
-            <button key={c} onClick={() => setCompanyFilter(c)}
-              style={{
-                padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-                border: `1px solid ${companyFilter === c ? THEME.brassDeep : "#B8B6AA"}`,
-                background: c === "全部" ? THEME.canvas : companyRowColor(c),
-                color: THEME.text,
-                boxShadow: companyFilter === c ? `inset 0 0 0 1px ${THEME.brassDeep}` : "none",
-              }} aria-pressed={companyFilter === c}>{c}</button>
-          ))}
-        </div>
-        <div style={{ position: "relative", maxWidth: 260 }}>
-          <Search size={14} style={{ position: "absolute", left: 10, top: 10, color: THEME.muted }} />
-          <TextInput placeholder="搜尋契約編號／名稱／對方單位" value={query} onChange={(e) => setQuery(e.target.value)} style={{ paddingLeft: 30 }} />
-        </div>
-      </div>
+      <OperationsOverview kind="tracking" stats={{ count: filtered.length, billed: billedCount, unbilled: filtered.length - billedCount }} period={month ? fmtMonthLabel(month) : "未指定請款月"} />
+      <OperationsFilters title="請款清單篩選" count={filtered.length} unit="份" options={companyTabs} optionLabel="承攬公司" selected={companyFilter} onSelect={setCompanyFilter} colorOf={c => c === "全部" ? THEME.canvas : companyRowColor(c)}>
+        <MonthFilterBar month={month} setMonth={setMonth} label="請款月份" />
+        <OperationsSearch label="搜尋契約編號／名稱／對方單位" query={query} onChange={setQuery} />
+      </OperationsFilters>
 
       {filtered.length === 0 ? (
         <EmptyState icon={FileSignature} text="這個篩選條件下沒有契約。" />
@@ -5915,50 +5861,10 @@ function VehiclesView({ ctx }) {
 
   return (
     <div>
-      <SectionHeader eyebrow="VEHICLE · 11" title="車輛管理"
-        action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptyVehicle })}>新增車輛</Btn>} />
-
-      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 18 }}>
-        <StatCard label="車輛總數" value={vehicles.length} icon={Car} tone="ink" />
-        <StatCard label="使用中" value={vehicles.filter((v) => v.status === "使用中").length} icon={Check} tone="success" />
-        <StatCard label="保險／驗車 30 天內到期" value={expiringVehicles.length} icon={AlertCircle} tone="warn" />
-        <StatCard label="保險／驗車已逾期" value={overdueVehicles.length} icon={AlertCircle} tone="danger" />
-      </div>
-
-      {overdueVehicles.length > 0 && (
-        <div className="page-alert page-alert--danger">
-          <AlertCircle size={16} />
-          <div className="page-alert__content">
-            <strong>{overdueVehicles.length} 輛車保險或驗車已經逾期，請盡快處理：</strong>
-            {overdueVehicles.map((v) => {
-              const parts = [];
-              if (isOverdue(v.insuranceExpiry)) parts.push(`保險已逾期 ${-daysUntil(v.insuranceExpiry)} 天`);
-              if (isOverdue(v.inspectionExpiry)) parts.push(`驗車已逾期 ${-daysUntil(v.inspectionExpiry)} 天`);
-              return <div key={v.id}>{v.plate}（{v.model || "未填車型"}）— {parts.join("、")}</div>;
-            })}
-          </div>
-        </div>
-      )}
-
-      {expiringVehicles.length > 0 && (
-        <div className="page-alert">
-          <AlertCircle size={16} />
-          <div className="page-alert__content">
-            <strong>{expiringVehicles.length} 輛車保險或驗車將於 30 天內到期：</strong>
-            {expiringVehicles.map((v) => {
-              const parts = [];
-              if (isExpiringSoon(v.insuranceExpiry)) parts.push(daysUntil(v.insuranceExpiry) === 0 ? "保險今日到期" : `保險剩 ${daysUntil(v.insuranceExpiry)} 天`);
-              if (isExpiringSoon(v.inspectionExpiry)) parts.push(daysUntil(v.inspectionExpiry) === 0 ? "驗車今日到期" : `驗車剩 ${daysUntil(v.inspectionExpiry)} 天`);
-              return <div key={v.id}>{v.plate}（{v.model || "未填車型"}）— {parts.join("、")}</div>;
-            })}
-          </div>
-        </div>
-      )}
-
-      <div style={{ marginBottom: 16, position: "relative", maxWidth: 280 }}>
-        <Search size={14} style={{ position: "absolute", left: 10, top: 10, color: THEME.muted }} />
-        <TextInput placeholder="搜尋車牌／車型／使用人" value={query} onChange={(e) => setQuery(e.target.value)} style={{ paddingLeft: 30 }} />
-      </div>
+      <OperationsOverview kind="vehicles" stats={{ count: vehicles.length, active: vehicles.filter(v => v.status === "使用中").length, expiring: expiringVehicles.length, overdue: overdueVehicles.length }} onNew={() => setModal({ mode: "new", data: emptyVehicle })}>
+        <VehicleReminders overdue={overdueVehicles} expiring={expiringVehicles} isOverdue={isOverdue} isExpiringSoon={isExpiringSoon} daysUntil={daysUntil} />
+      </OperationsOverview>
+      <OperationsFilters title="車輛清單篩選" count={filtered.length} unit="輛"><OperationsSearch label="搜尋車牌／車型／使用人" query={query} onChange={setQuery} /></OperationsFilters>
 
       {filtered.length === 0 ? (
         <EmptyState icon={Car} text="尚未建立任何車輛資料。" action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptyVehicle })}>新增第一輛車</Btn>} />
