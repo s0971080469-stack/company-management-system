@@ -1,0 +1,16 @@
+.office-overview-copy { min-width:0; }
+.office-overview-actions { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:8px; }
+.office-overview .office-overview-secondary { background:#ffffff0d; border-color:#ffffff38; color:#e7eff5; }
+.office-overview .office-overview-secondary:hover { background:#ffffff20; }
+.office-overview-metrics--2 { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.office-overview-metrics--3 { grid-template-columns:repeat(3,minmax(0,1fr)); }
+@media(max-width:1050px) {
+  .office-overview .contract-overview-header { flex-wrap:wrap; }
+  .office-overview-actions { justify-content:flex-start; }
+}
+@media(max-width:680px) {
+  .office-overview-metrics { grid-template-columns:minmax(0,1fr); gap:10px; }
+  .office-overview-actions { max-width:100%; }
+  .office-overview .contract-overview-new { padding:10px 12px; }
+}
+@media print { .office-overview-actions { display:none!important; } }

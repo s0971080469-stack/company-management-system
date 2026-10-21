@@ -26,6 +26,7 @@ import { payrollAuditStamp, payrollActivityActor } from "./payrollActivity.js";
 import { nextPayrollMonth, payrollGenerationLocked } from "./payrollGeneration.js";
 import PayrollApprovalButton from "./PayrollApprovalButton.jsx";
 import { EmployeesOverview, PayrollOverview } from "./WorkforceOverview.jsx";
+import { VendorsOverview, DocumentsOverview } from "./OfficeOverview.jsx";
 import { filterPersonnel } from "./personnelFilters.js";
 import WebsiteInbox from "./WebsiteInbox.jsx";
 import { payrollSiteOf, payrollNetAmount, payrollReleaseStatus } from "./payrollApproval.js";
@@ -4632,18 +4633,8 @@ export function VendorsView({ ctx }) {
 
   return (
     <div>
-      <SectionHeader eyebrow="VENDOR · 04" title="廠商管理"
-        action={
-          <div style={{ display: "flex", gap: 8 }}>
-            <Btn icon={Printer} onClick={() => window.print()}>列印</Btn>
-            <Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptyVendor })}>新增廠商</Btn>
-          </div>
-        } />
-
-      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 14, marginBottom: 18 }}>
-        <StatCard label="供應商家數" value={supplierCount} icon={Truck} tone="ink" />
-        <StatCard label="業主家數" value={ownerCount} icon={Building2} tone="brass" />
-      </div>
+      <VendorsOverview supplierCount={supplierCount} ownerCount={ownerCount}
+        onPrint={() => window.print()} onNew={() => setModal({ mode: "new", data: emptyVendor })} />
 
       <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
         <div style={{ display: "flex", gap: 6 }}>
@@ -5044,20 +5035,8 @@ function DocumentsView({ ctx }) {
 
   return (
     <div>
-      <SectionHeader eyebrow="DOCUMENT · 05" title="公文管理"
-        action={
-          <div style={{ display: "flex", gap: 8 }}>
-            <Btn icon={FileText} onClick={() => setTemplateManagerOpen(true)}>管理公文範本</Btn>
-            <Btn icon={Printer} onClick={() => window.print()}>列印</Btn>
-            <Btn variant="brass" icon={Plus} onClick={() => setPickerOpen(true)}>新增公文</Btn>
-          </div>
-        } />
-
-      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
-        <StatCard label="公文總數" value={documents.length} icon={Stamp} tone="ink" />
-        <StatCard label="本月新增" value={monthCount} icon={CalendarDays} tone="brass" />
-        <StatCard label="已套用範本" value={templatedCount} icon={FileText} tone="success" />
-      </div>
+      <DocumentsOverview totalCount={documents.length} monthCount={monthCount} templatedCount={templatedCount}
+        onTemplates={() => setTemplateManagerOpen(true)} onPrint={() => window.print()} onNew={() => setPickerOpen(true)} />
 
       {documents.length === 0 ? (
         <EmptyState icon={Stamp} text="尚未建立任何公文紀錄。" action={<Btn variant="brass" icon={Plus} onClick={() => setPickerOpen(true)}>建立第一筆公文</Btn>} />
