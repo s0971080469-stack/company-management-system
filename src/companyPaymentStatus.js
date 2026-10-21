@@ -9,3 +9,11 @@ export function normalizeCompanyPaymentStatus(payment) {
   }
   return payment;
 }
+
+// Receives the current month/company-filtered rows; suspended payments remain
+// in the records but do not contribute to the pending-payment amount.
+export function sumPendingPaymentAmount(payments) {
+  return payments
+    .filter((payment) => payment.status !== "已付款" && !payment.paymentOnHold)
+    .reduce((total, payment) => total + Number(payment.amount || 0), 0);
+}

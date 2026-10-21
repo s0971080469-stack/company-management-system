@@ -10,7 +10,7 @@ import {
 import { loadKey, saveKey, generateLatestPayroll, approveLatestPayrollSite } from "./storage.js";
 import { savePaymentDecision } from "./paymentDecision.js";
 import { SYSTEM_CHAT_ID, saveInvoiceWithDepositNotice, sendInvoiceNotice } from "./invoiceDepositNotice.js";
-import { normalizeCompanyPaymentStatus } from "./companyPaymentStatus.js";
+import { normalizeCompanyPaymentStatus, sumPendingPaymentAmount } from "./companyPaymentStatus.js";
 import { supabase, createAuthActionClient } from "./supabaseClient.js";
 import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
@@ -4156,7 +4156,7 @@ function BillingView({ ctx }) {
     }
   };
 
-  const pendingTotal = filtered.filter((b) => b.status !== "已付款").reduce((s, b) => s + Number(b.amount || 0), 0);
+  const pendingTotal = sumPendingPaymentAmount(filtered);
   // 核准金額明確依目前選取的「預訂付款月份」與付款公司篩選計算。
   const approvedTotal = companyPayments
     .filter((b) => {
