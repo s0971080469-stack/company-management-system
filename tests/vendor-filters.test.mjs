@@ -30,6 +30,12 @@ test("零筆狀態可顯示，搜尋字串由 React 安全跳脫",()=>{
   assert.ok(html.includes("&lt;script&gt;"));
   assert.ok(!html.includes("<script>"));
 });
+test("分類在前、搜尋在後，兩者位於同一篩選列",()=>{
+  const all=nodes(VendorFilters({count:5,type:"全部",query:"",onTypeChange:()=>{},onQueryChange:()=>{}}));
+  const row=all.find(e=>e.props?.className==="sales-filter-controls vendor-filter-row");
+  assert.ok(row);
+  assert.deepEqual(nodes(row).filter(e=>e.type==="button"||e.type==="input").map(e=>e.type),["button","button","button","input"]);
+});
 test("正式頁只替換篩選元件，原本分類與搜尋條件不變",async()=>{
   const app=await readFile(new URL("../src/App.jsx",import.meta.url),"utf8");
   for(const snippet of ['<VendorFilters','count={filtered.length}','onTypeChange={setTypeFilter}','onQueryChange={setQuery}', 'typeFilter === "全部" || v.vendorType === typeFilter', '(v.name + (v.category || "") + (v.tradingCompany || "")).toLowerCase().includes(query.toLowerCase())']) assert.ok(app.includes(snippet),snippet);
