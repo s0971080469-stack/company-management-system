@@ -27,6 +27,7 @@ import { nextPayrollMonth, payrollGenerationLocked } from "./payrollGeneration.j
 import PayrollApprovalButton from "./PayrollApprovalButton.jsx";
 import { EmployeesOverview, PayrollOverview } from "./WorkforceOverview.jsx";
 import { VendorsOverview, DocumentsOverview } from "./OfficeOverview.jsx";
+import VendorFilters from "./VendorFilters.jsx";
 import { SalesOverview, SalesFilters } from "./SalesOverview.jsx";
 import { OperationsOverview, OperationsFilters, OperationsSearch, VehicleReminders, AttendanceControls } from "./OperationsOverview.jsx";
 import { PermissionsOverview, PermissionSectionHeading } from "./AdministrationOverview.jsx";
@@ -4565,24 +4566,7 @@ export function VendorsView({ ctx }) {
       <VendorsOverview supplierCount={supplierCount} ownerCount={ownerCount}
         onPrint={() => window.print()} onNew={() => setModal({ mode: "new", data: emptyVendor })} />
 
-      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
-        <div style={{ display: "flex", gap: 6 }}>
-          {["全部", ...VENDOR_TYPES].map((t) => (
-            <button key={t} onClick={() => setTypeFilter(t)}
-              style={{
-                padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-                border: `1px solid ${typeFilter === t ? THEME.brassDeep : "#B8B6AA"}`,
-                background: t === "供應商" ? "#E4E9F0" : t === "業主" ? "#F5E9EE" : THEME.canvas,
-                color: THEME.text,
-                boxShadow: typeFilter === t ? `inset 0 0 0 1px ${THEME.brassDeep}` : "none",
-              }} aria-pressed={typeFilter === t}>{t}</button>
-          ))}
-        </div>
-        <div style={{ position: "relative", maxWidth: 260 }}>
-          <Search size={14} style={{ position: "absolute", left: 10, top: 10, color: THEME.muted }} />
-          <TextInput placeholder="搜尋名稱／業務類別／往來公司" value={query} onChange={(e) => setQuery(e.target.value)} style={{ paddingLeft: 30 }} />
-        </div>
-      </div>
+      <VendorFilters count={filtered.length} type={typeFilter} onTypeChange={setTypeFilter} query={query} onQueryChange={setQuery} />
 
       {filtered.length === 0 ? (
         <EmptyState icon={Truck} text="尚未建立任何廠商資料。" action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptyVendor })}>新增第一家廠商</Btn>} />

@@ -1,0 +1,5 @@
+.vendor-filters .vendor-search { width:530px; }
+.vendor-filters .sales-search > span,.vendor-filters .sales-company-row > span { font-size:13px; }
+@media(max-width:680px) {
+  .vendor-filters .vendor-search { width:100%; align-items:stretch; flex-direction:column; gap:5px; }
+}
