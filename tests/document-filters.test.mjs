@@ -34,6 +34,12 @@ test("無選項時不顯示空下拉，零筆與特殊文字安全顯示",()=>{
   const long=renderToStaticMarkup(React.createElement(Filters,{...base,contract:longName,contracts:[longName]}));
   assert.ok(long.includes(longName));
 });
+test("篩選同列依編輯人、案名、月份、搜尋排列，保留清除月份按鈕名稱",()=>{
+  const all=nodes(Filters({...base,month:"2026-10"}));
+  assert.deepEqual(all.filter(e=>e.type==="input"||e.type==="select").map(e=>e.props["aria-label"]),["編輯人","契約案名","發文日期月份","搜尋公文"]);
+  assert.equal(all.find(e=>e.type==="button").props["aria-label"],"顯示全部");
+  assert.equal(all.filter(e=>e.props?.className==="sales-filter-controls document-filter-row").length,1);
+});
 test("正式整合保持四種篩選、異動時間排序與公文功能",async()=>{
   const app=await readFile(new URL("../src/App.jsx",import.meta.url),"utf8");
   const section=app.slice(app.indexOf("function DocumentsView("),app.indexOf("function DocumentsView(")+14000);
