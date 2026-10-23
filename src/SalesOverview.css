@@ -36,13 +36,9 @@
 .sales-filters--inline .sales-company-row button { flex:0 0 auto; white-space:nowrap; max-width:none; padding:7px 10px; }
 .sales-filters--inline .sales-search { flex:0 1 340px; width:340px; min-width:240px; }
 .sales-filters--inline .sales-search > span,.sales-filters--inline .sales-company-row > span { font-size:13px; }
-/* Reserve the invoice row for all company options; search remains compact. */
-.sales-filters--invoice .sales-inline-row { gap:8px; }
-.sales-filters--invoice .sales-search { flex:0 0 clamp(180px,14vw,230px); width:clamp(180px,14vw,230px); min-width:0; }
-.sales-filters--invoice .sales-company-row { gap:6px; }
-.sales-filters--invoice .sales-company-row > div { gap:5px; }
-.sales-filters--invoice .sales-company-row button { padding:7px 5px; gap:4px; }
-.sales-filters--invoice .sales-company-row i { display:none; }
+/* Same company buttons as quotations; keep search next to them, not at the far edge. */
+.sales-filters--invoice .sales-search { flex:0 0 250px; width:250px; min-width:0; }
+.sales-filters--invoice .sales-company-row { flex:0 1 auto; }
 .sales-filters--invoice .month-filter-bar { gap:6px!important; }
 .sales-filters--invoice .month-filter-bar select { padding:7px 6px!important; font-size:13px!important; }
 .sales-filters--invoice .month-filter-bar select:first-of-type { width:82px!important; }

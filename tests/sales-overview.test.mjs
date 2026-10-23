@@ -81,7 +81,9 @@ test("單列樣式僅限估價單及發票，公司過多仍可捲動與鍵盤�
 });
 test("只有發票縮短搜尋欄，保留其他篩選與手機自適應",async()=>{
   const css=await readFile(new URL("../src/SalesOverview.css",import.meta.url),"utf8");
-  assert.ok(css.includes(".sales-filters--invoice .sales-search { flex:0 0 clamp(180px,14vw,230px)"));
+  assert.ok(css.includes(".sales-filters--invoice .sales-search { flex:0 0 250px"));
+  assert.ok(css.includes(".sales-filters--invoice .sales-company-row { flex:0 1 auto; }"));
+  assert.doesNotMatch(css,/\.sales-filters--invoice \.sales-company-row (?:button|i)\s*\{/);
   assert.ok(css.includes(".sales-filters--inline .sales-search { flex:0 1 340px"));
   assert.ok(css.includes(".sales-filters--inline .sales-search { flex:1 1 100%"));
 });
