@@ -4,6 +4,7 @@ dist-billing-preview
 dist-contract-preview
 dist-compact-preview
 dist-vendor-preview
+dist-document-preview
 supabase/.temp/
 .env
 .env.local

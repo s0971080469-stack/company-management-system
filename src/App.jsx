@@ -28,6 +28,7 @@ import PayrollApprovalButton from "./PayrollApprovalButton.jsx";
 import { EmployeesOverview, PayrollOverview } from "./WorkforceOverview.jsx";
 import { VendorsOverview, DocumentsOverview } from "./OfficeOverview.jsx";
 import VendorFilters from "./VendorFilters.jsx";
+import DocumentFilters from "./DocumentFilters.jsx";
 import { SalesOverview, SalesFilters } from "./SalesOverview.jsx";
 import { OperationsOverview, OperationsFilters, OperationsSearch, VehicleReminders, AttendanceControls } from "./OperationsOverview.jsx";
 import { PermissionsOverview, PermissionSectionHeading } from "./AdministrationOverview.jsx";
@@ -4955,35 +4956,10 @@ function DocumentsView({ ctx }) {
         <EmptyState icon={Stamp} text="尚未建立任何公文紀錄。" action={<Btn variant="brass" icon={Plus} onClick={() => setPickerOpen(true)}>建立第一筆公文</Btn>} />
       ) : (
         <>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 16 }}>
-            <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600 }}>發文日期</span>
-            <TextInput type="month" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} style={{ width: 160 }} />
-            {monthFilter && <Btn size="sm" onClick={() => setMonthFilter("")}>顯示全部</Btn>}
-          </div>
-          <div style={{ display: "flex", gap: 16, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
-            {handlerOptions.length > 0 && (
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600 }}>編輯人</span>
-                <Select value={handlerFilter} onChange={(e) => setHandlerFilter(e.target.value)} style={{ width: 180 }}>
-                  <option value="全部">全部</option>
-                  {handlerOptions.map((h) => <option key={h} value={h}>{h}</option>)}
-                </Select>
-              </div>
-            )}
-            {contractOptions.length > 0 && (
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600 }}>契約案名</span>
-                <Select value={contractFilter} onChange={(e) => setContractFilter(e.target.value)} style={{ width: 200 }}>
-                  <option value="全部">全部</option>
-                  {contractOptions.map((c) => <option key={c} value={c}>{c}</option>)}
-                </Select>
-              </div>
-            )}
-            <div style={{ position: "relative", maxWidth: 260 }}>
-              <Search size={14} style={{ position: "absolute", left: 10, top: 10, color: THEME.muted }} />
-              <TextInput placeholder="搜尋文號／公文概述／發文機關" value={query} onChange={(e) => setQuery(e.target.value)} style={{ paddingLeft: 30 }} />
-            </div>
-          </div>
+          <DocumentFilters count={filtered.length} month={monthFilter} onMonthChange={setMonthFilter}
+            handler={handlerFilter} handlers={handlerOptions} onHandlerChange={setHandlerFilter}
+            contract={contractFilter} contracts={contractOptions} onContractChange={setContractFilter}
+            query={query} onQueryChange={setQuery} />
 
           {filtered.length === 0 ? (
             <EmptyState icon={Stamp} text="這個篩選條件下沒有公文。" />

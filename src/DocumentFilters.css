@@ -1,0 +1,21 @@
+.document-filters .sales-filter-controls { gap:10px 24px; }
+.document-month-group { display:flex; align-items:center; flex-wrap:wrap; gap:8px; max-width:100%; }
+.document-filter-field { display:flex; align-items:center; gap:8px; min-width:0; max-width:100%; }
+.document-filter-field > span,.document-filters .sales-search > span { font-size:13px; font-weight:600; color:#65768a; flex-shrink:0; }
+.document-filter-field input,.document-filter-field select { min-width:0; max-width:100%; padding:7px 12px; border:1px solid #d4dfe8; border-radius:8px; background:#fafcfd; color:#203047; font:inherit; min-height:38px; }
+.document-filter-field input { width:166px; }
+.document-filter-field select { flex:1; width:100%; text-overflow:ellipsis; }
+.document-filters .document-search { width:510px; flex:1 1 420px; }
+.document-month-clear { display:inline-flex; align-items:center; gap:4px; border:1px solid #cde1df; border-radius:8px; background:#edf6f4; color:#256966; padding:7px 10px; font:inherit; font-size:13px; cursor:pointer; }
+.document-month-clear:hover { background:#dfefeb; }
+.document-filter-details { display:flex; align-items:center; flex-wrap:wrap; gap:10px 24px; padding-top:8px; border-top:1px solid #edf1f5; }
+.document-handler { width:260px; }
+.document-contract { width:470px; flex:1 1 320px; }
+@media(max-width:680px) {
+  .document-filters .sales-filter-controls { gap:10px; }
+  .document-month-group { width:100%; }
+  .document-filters .document-search { width:100%; flex-basis:100%; flex-direction:column; align-items:stretch; gap:5px; }
+  .document-filter-details { gap:10px; }
+  .document-handler,.document-contract { width:100%; flex:1 1 100%; flex-direction:column; align-items:stretch; gap:5px; }
+  .document-filter-field input,.document-filter-field select,.document-month-clear { min-height:40px; }
+}
