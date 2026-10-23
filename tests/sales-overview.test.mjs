@@ -79,6 +79,12 @@ test("單列樣式僅限估價單及發票，公司過多仍可捲動與鍵盤�
   const config=await readFile(new URL("../vite.sales-preview.config.js",import.meta.url),"utf8");
   assert.ok(config.includes("envDir:false,publicDir:false"));
 });
+test("只有發票縮短搜尋欄，保留其他篩選與手機自適應",async()=>{
+  const css=await readFile(new URL("../src/SalesOverview.css",import.meta.url),"utf8");
+  assert.ok(css.includes(".sales-filters--invoice .sales-search { flex:0 0 clamp(180px,14vw,230px)"));
+  assert.ok(css.includes(".sales-filters--inline .sales-search { flex:0 1 340px"));
+  assert.ok(css.includes(".sales-filters--inline .sales-search { flex:1 1 100%"));
+});
 test("預覽獨立於正式登入與儲存，含空資料、大額及收支參考",async()=>{
   const source=await readFile(new URL("./previews/sales-overview.jsx",import.meta.url),"utf8");
   const component=await readFile(new URL("../src/SalesOverview.jsx",import.meta.url),"utf8");
