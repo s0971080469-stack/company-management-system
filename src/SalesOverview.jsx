@@ -32,15 +32,14 @@ export function SalesOverview({ kind, stats, period, formatMoney, onNew, onTempl
 
 export function SalesFilters({ kind, count, company, companies, onCompanyChange, companyColor, query, onQueryChange, monthControl }) {
   const invoice = kind === "invoices";
-  return <section className="sales-filters" aria-label={`${invoice ? "發票" : "估價單"}清單篩選`}>
-    <div className="sales-filter-heading"><h3><SlidersHorizontal size={16} aria-hidden="true" />清單篩選</h3><span>目前顯示 <b>{count}</b> 張</span></div>
-    <div className="sales-filter-controls">
+  return <section className={`sales-filters sales-filters--inline${invoice ? " sales-filters--invoice" : ""}`} aria-label={`${invoice ? "發票" : "估價單"}清單篩選`}>
+    <div className="sales-filter-heading"><h3><SlidersHorizontal size={16} aria-hidden="true" />清單篩選</h3>{!invoice && <p className="sales-group-hint">依開立月份分組・各月份筆數與小計保留於清單</p>}<span role="status" aria-live="polite">目前顯示 <b>{count}</b> 張</span></div>
+    <div className="sales-filter-controls sales-inline-row">
       {monthControl && <div className="sales-month-control">{monthControl}</div>}
+      <div className="sales-company-row"><span>{invoice ? "開票公司" : "報價公司"}</span><div role="group" aria-label={`${invoice ? "開票" : "報價"}公司篩選`} tabIndex={0} title="公司選項較多時可左右捲動，或使用 Tab 鍵選取">
+        {companies.map(name => <button type="button" key={name} title={name} aria-label={name} aria-pressed={company === name} onClick={() => onCompanyChange(name)} style={{ "--sales-company-bg": companyColor(name) }}><i aria-hidden="true" />{invoice || name === "全部" || name === "未填公司" ? name : name.slice(0, 4)}{company === name && <Check size={13} aria-hidden="true" />}</button>)}
+      </div></div>
       <label className="sales-search"><span>{invoice ? "關鍵字搜尋" : "客戶搜尋"}</span><div><Search size={16} aria-hidden="true" /><input type="search" aria-label={invoice ? "搜尋發票關鍵字" : "搜尋客戶名稱"} placeholder={invoice ? "搜尋發票、客戶或工程名稱" : "搜尋客戶名稱"} title={invoice ? "可搜尋發票號碼、開票公司、估價單號碼、客戶、工程名稱、付款方式、類別、狀態、備註及品項；多個關鍵字以空白分隔" : "依客戶名稱搜尋"} value={query} onChange={e => onQueryChange(e.target.value)} /></div></label>
-      {!invoice && <p className="sales-group-hint">依開立月份分組<br /><span>各月份筆數與小計保留於清單</span></p>}
     </div>
-    <div className="sales-company-row"><span>{invoice ? "開票公司" : "報價公司"}</span><div role="group" aria-label={`${invoice ? "開票" : "報價"}公司篩選`}>
-      {companies.map(name => <button type="button" key={name} title={name} aria-label={name} aria-pressed={company === name} onClick={() => onCompanyChange(name)} style={{ "--sales-company-bg": companyColor(name) }}><i aria-hidden="true" />{invoice || name === "全部" || name === "未填公司" ? name : name.slice(0, 4)}{company === name && <Check size={13} aria-hidden="true" />}</button>)}
-    </div></div>
   </section>;
 }

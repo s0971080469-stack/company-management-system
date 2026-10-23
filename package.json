@@ -11,6 +11,7 @@
     "build:compact-preview": "vite build --config vite.compact-preview.config.js",
     "build:vendor-preview": "vite build --config vite.vendor-preview.config.js",
     "build:document-preview": "vite build --config vite.document-preview.config.js",
+    "build:sales-preview": "vite build --config vite.sales-preview.config.js",
     "preview": "vite preview"
   },
   "dependencies": {

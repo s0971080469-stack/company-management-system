@@ -29,7 +29,7 @@ function Preview(){
   const grouped=[...new Set(rows.map(r=>r.date.slice(0,7)))].sort().reverse();
   const pick=key=>{setPage(key);setCompany("全部");setQuery("");setMessage("");setNav(false);};
   const action=name=>()=>setMessage(`${name}按鈕已連接。這是示範預覽，不新增、修改正式資料或發送通知。`);
-  const monthControl=<div className="month-filter-bar sales-demo-month"><span>開立日期月份</span><select aria-label="開立年份" value={month.slice(0,4)} onChange={e=>setMonth(e.target.value?`${e.target.value}-${month.slice(5)||"10"}`:"")}><option value="">年</option><option value="2026">115 年</option><option value="2025">114 年</option></select><select aria-label="開立月份" value={month.slice(5)} onChange={e=>setMonth(e.target.value?`${month.slice(0,4)||"2026"}-${e.target.value}`:"")}><option value="">月</option>{Array.from({length:12},(_,i)=><option key={i} value={String(i+1).padStart(2,"0")}>{i+1} 月</option>)}</select><button onClick={()=>setMonth("")}>顯示全部</button></div>;
+  const monthControl=<div className="month-filter-bar sales-demo-month"><span>開立日期月份</span><select aria-label="開立年份" style={{width:96}} value={month.slice(0,4)} onChange={e=>setMonth(e.target.value&&month.slice(5)?`${e.target.value}-${month.slice(5)}`:"")}><option value="">年</option><option value="2026">115 年</option><option value="2025">114 年</option></select><select aria-label="開立月份" style={{width:76}} value={month.slice(5)} onChange={e=>setMonth(e.target.value&&month.slice(0,4)?`${month.slice(0,4)}-${e.target.value}`:"")}><option value="">月</option>{Array.from({length:12},(_,i)=><option key={i} value={String(i+1).padStart(2,"0")}>{i+1} 月</option>)}</select>{month&&<button onClick={()=>setMonth("")}>顯示全部</button>}</div>;
   return <div className="wm-preview-shell workforce-preview-shell office-preview sales-preview">
     {nav&&<button className="wm-preview-backdrop" aria-label="關閉側邊欄" onClick={()=>setNav(false)}/>}
     <aside className={`wm-preview-sidebar ${nav?"open":""}`}><div className="wm-preview-brand"><Building2 size={26}/><div>公司管理系統<small>COMPANY OS · 測試預覽</small></div></div><nav aria-label="預覽導覽">{Object.entries(pages).map(([key,label])=><button key={key} className={page===key?"active":""} onClick={()=>pick(key)}>{label}</button>)}</nav><footer>全部為示範資料<br/>不連接正式資料庫</footer></aside>
@@ -50,4 +50,4 @@ function Preview(){
     </main></div>
   </div>;
 }
-if(import.meta.env.DEV) createRoot(document.getElementById("root")).render(<Preview/>);
+if(import.meta.env.DEV || import.meta.env.MODE === "design-preview") createRoot(document.getElementById("root")).render(<Preview/>);

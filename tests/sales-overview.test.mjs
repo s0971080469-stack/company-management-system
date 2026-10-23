@@ -61,6 +61,24 @@ test("正式整合保留月份分組、搜尋、全域提醒及入帳取消通�
   const app=await readFile(new URL("../src/App.jsx",import.meta.url),"utf8");
   for(const snippet of ["quoteOverviewStats(filteredQuotes, q => sumItems(q.items))","invoiceOverviewStats(filtered, inv => inv.total ?? sumItems(inv.items)","getInvoiceReminders(invoices, ctx.now)","<MonthFilterBar month={month} setMonth={setMonth} label=\"開立日期月份\" />","return matchesInvoiceKeyword(inv, query)","groupedByMonth.flatMap", "onChange={(v) => setDueDate(inv, v)}", "取消選擇日期", "重送通知"]) assert.ok(app.includes(snippet),snippet);
 });
+test("估價單公司在搜尋前；發票依月份、公司、搜尋維持同列順序",()=>{
+  const props={count:0,company:"全部",companies:["全部","綠石環保股份有限公司"],onCompanyChange:()=>{},companyColor:salesCompanyColor,query:"",onQueryChange:()=>{}};
+  for(const kind of ["quotes","invoices"]){
+    const tree=SalesFilters({...props,kind,monthControl:kind==="invoices"?React.createElement("div",null,"月份元件"):null});
+    const row=nodes(tree).find(e=>e.props?.className==="sales-filter-controls sales-inline-row");
+    const children=React.Children.toArray(row.props.children);
+    assert.deepEqual(children.map(e=>e.props.className),kind==="invoices"?["sales-month-control","sales-company-row","sales-search"]:["sales-company-row","sales-search"]);
+    const html=renderToStaticMarkup(tree);assert.ok(html.includes('aria-live="polite"'));
+    if(kind==="invoices")assert.ok(html.includes("綠石環保股份有限公司"));
+  }
+});
+test("單列樣式僅限估價單及發票，公司過多仍可捲動與鍵盤選取",async()=>{
+  const css=await readFile(new URL("../src/SalesOverview.css",import.meta.url),"utf8");
+  assert.ok(css.includes(".sales-filters--inline .sales-inline-row { flex-wrap:nowrap"));
+  assert.ok(css.includes("overflow-x:auto"));
+  const config=await readFile(new URL("../vite.sales-preview.config.js",import.meta.url),"utf8");
+  assert.ok(config.includes("envDir:false,publicDir:false"));
+});
 test("預覽獨立於正式登入與儲存，含空資料、大額及收支參考",async()=>{
   const source=await readFile(new URL("./previews/sales-overview.jsx",import.meta.url),"utf8");
   const component=await readFile(new URL("../src/SalesOverview.jsx",import.meta.url),"utf8");
