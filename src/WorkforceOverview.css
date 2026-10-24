@@ -70,4 +70,26 @@
   .workforce-payroll-stats .workforce-metric-value { font-size:24px; }
   .workforce-paid-split > div { flex:1 1 100%; }
 }
+/* Compact personnel filters only; payroll controls retain their existing spacing. */
+.workforce-overview--personnel .workforce-filter-heading { padding-top:6px; }
+.workforce-overview--personnel .workforce-personnel-controls { padding-top:6px; padding-bottom:6px; gap:8px 16px; }
+.workforce-overview--personnel .workforce-field { gap:4px; }
+.workforce-overview--personnel .workforce-field input,
+.workforce-overview--personnel .workforce-field select { height:34px; padding-top:5px; padding-bottom:5px; }
+.workforce-overview--personnel .workforce-search svg { top:9px; }
+.workforce-overview--personnel .workforce-company-filters { padding-bottom:6px; gap:8px; }
+.workforce-overview--personnel .workforce-company-filters button { min-height:30px; padding-top:4px; padding-bottom:4px; }
+.workforce-overview--personnel .workforce-filter-footer { padding-top:3px; padding-bottom:3px; flex-wrap:wrap; }
+@media(min-width:681px) {
+  .workforce-overview--personnel .workforce-field { flex-direction:row; align-items:center; gap:8px; }
+  .workforce-overview--personnel .workforce-field > span { flex-shrink:0; }
+  .workforce-overview--personnel .workforce-field > div,
+  .workforce-overview--personnel .workforce-field > select { flex:1; min-width:0; }
+}
+@media(max-width:680px) {
+  .workforce-overview--personnel .workforce-field input,
+  .workforce-overview--personnel .workforce-field select { height:40px; }
+  .workforce-overview--personnel .workforce-search svg { top:12px; }
+  .workforce-overview--personnel .workforce-company-filters button { min-height:38px; }
+}
 @media print { .workforce-header-actions,.workforce-company-filters button,.workforce-generation-notice,.workforce-filter-footer { display:none!important; }.workforce-header { background:#fff; color:#203047; border:1px solid #dbe3ea; }.workforce-header p,.workforce-eyebrow { color:#65768a; }.workforce-overview { print-color-adjust:exact; -webkit-print-color-adjust:exact; }.workforce-metric,.workforce-filters { break-inside:avoid; } }
