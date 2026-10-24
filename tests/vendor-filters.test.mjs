@@ -14,7 +14,7 @@ const nodes=e=>!e||typeof e!=="object"?[]:Array.isArray(e)?e.flatMap(nodes):type
 
 test("廠商搜尋略為加長並與分類按鈕拉開距離，手機維持滿寬",async()=>{
   const css=await readFile(new URL("../src/VendorFilters.css",import.meta.url),"utf8");
-  assert.match(css,/\.vendor-filters \.vendor-search \{ width:auto; flex:0\.35 1 0; min-width:290px; margin-left:24px;/);
+  assert.match(css,/\.vendor-filters \.vendor-search \{ width:auto; flex:0\.35 1 0; min-width:290px; margin-left:auto;/);
   assert.match(css,/@media\(max-width:680px\)[\s\S]*flex:1 1 100%; min-width:0; margin-left:0/);
 });
 test("廠商篩選沿用人員公司按鈕樣式，保留分類原值及顏色",()=>{

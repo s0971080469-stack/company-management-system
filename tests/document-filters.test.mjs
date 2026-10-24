@@ -16,6 +16,8 @@ const base={count:4,month:"",handler:"全部",handlers:["甲","乙"],contract:"�
 test("公文搜尋縮為剩餘列寬約三分之一，手機恢復滿寬",async()=>{
   const css=await readFile(new URL("../src/DocumentFilters.css",import.meta.url),"utf8");
   assert.match(css,/\.document-filters \.document-search \{ width:auto; flex:0\.333333 1 0; min-width:220px;/);
+  assert.match(css,/\.document-filters \.document-search \{[^}]*margin-left:auto/);
+  assert.match(css,/@media\(max-width:680px\)[\s\S]*\.document-search \{[^}]*margin-left:0/);
   assert.match(css,/@media\(max-width:680px\)[\s\S]*flex:1 1 100%; min-width:0/);
 });
 test("公文各篩選保留原值與完整案名，清除月份不改其他條件",()=>{

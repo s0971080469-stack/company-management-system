@@ -1,8 +1,22 @@
+/* Match quotation filter typography without changing control sizing. */
+.contract-filters .workforce-filters { font-size:14px; font-weight:400; line-height:1.6; }
+.contract-filters .workforce-filter-heading h3 { font-size:14px; font-weight:700; }
+.contract-filters .workforce-filter-heading > span { font-size:13px; font-weight:400; }
+.contract-filters .workforce-filter-heading b { font-size:inherit; font-weight:700; }
+.contract-filters .workforce-company-filters > span,
+.contract-filters .workforce-field > span { font-size:13px; font-weight:600; }
+.contract-filters .workforce-field input,
+.contract-filters .workforce-field select { font-size:14px; font-weight:400; }
+.contract-filters .workforce-filter-footer { font-size:12px; font-weight:400; }
 @media(min-width:681px) {
   .contract-filters.workforce-overview--personnel .workforce-personnel-controls { grid-template-columns:minmax(0,1.8fr) 170px minmax(0,1.1fr); }
-  /* Halve the input area, keeping its label and position unchanged. */
+  /* Keep the half-width input and its label together at the right edge. */
+  .contract-filters.workforce-overview--personnel .workforce-search { justify-content:flex-end; }
   .contract-filters.workforce-overview--personnel .workforce-search > div { flex:0.5 1 0; }
 }
 @media(min-width:1200px) {
   .contract-filters.workforce-overview--personnel .workforce-personnel-controls { grid-template-columns:max-content 170px minmax(0,1fr); }
+}
+@media(min-width:681px) and (max-width:1199px) {
+  .contract-filters.workforce-overview--personnel .workforce-search > div { flex:1 1 0; }
 }

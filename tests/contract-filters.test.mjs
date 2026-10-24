@@ -8,9 +8,18 @@ const bundle=await build({entryPoints:[fileURLToPath(new URL("../src/ContractFil
 const mod={exports:{}};
 new Function("require","module","exports",bundle.outputFiles[0].text)(createRequire(import.meta.url),mod,mod.exports);
 const Filters=mod.exports.default;
+test("契約篩選字級與粗細對齊估價單並限制在契約篩選區",async()=>{
+  const css=await readFile(new URL("../src/ContractFilters.css",import.meta.url),"utf8");
+  const typography=css.split("@media")[0];
+  assert.match(typography,/workforce-filter-heading h3 \{ font-size:14px; font-weight:700/);
+  assert.match(typography,/workforce-field > span \{ font-size:13px; font-weight:600/);
+  assert.match(typography,/workforce-field select \{ font-size:14px; font-weight:400/);
+  assert.ok(typography.split('\n').filter(line=>line.startsWith('.')).every(line=>line.startsWith('.contract-filters ')));
+});
 test("契約搜尋輸入區桌面縮短一半，手機不受影響",async()=>{
   const css=await readFile(new URL("../src/ContractFilters.css",import.meta.url),"utf8");
   assert.match(css,/@media\(min-width:681px\)[\s\S]*\.workforce-search > div \{ flex:0\.5 1 0; \}/);
+  assert.match(css,/\.contract-filters.workforce-overview--personnel \.workforce-search \{ justify-content:flex-end; \}/);
 });
 const nodes=e=>!e||typeof e!=="object"?[]:Array.isArray(e)?e.flatMap(nodes):typeof e.type==="function"?nodes(e.type(e.props)):[e,...nodes(e.props?.children)];
 test("契約篩選共用人員窄版，依公司、民國年度、搜尋排序並回傳原值",()=>{

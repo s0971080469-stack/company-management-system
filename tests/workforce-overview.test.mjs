@@ -25,6 +25,20 @@ function nodes(element) {
 }
 const knownCompanies=workforceCompanies.filter(company=>!["全部","其他"].includes(company));
 
+test("人員篩選字級與粗細對齊估價單且不套用到薪資或契約",async()=>{
+  const css=await readFile(new URL("../src/WorkforceOverview.css",import.meta.url),"utf8");
+  const section=css.split("/* Personnel filter typography matches SalesFilters;")[1].split("/* Compact personnel filters. */")[0];
+  assert.match(section,/workforce-filter-heading h3 \{ font-size:14px; font-weight:700/);
+  assert.match(section,/workforce-field > span \{ font-size:13px; font-weight:600/);
+  assert.match(section,/workforce-field select \{ font-size:14px; font-weight:400/);
+  assert.ok(section.split('\n').filter(line=>line.startsWith('.')).every(line=>line.includes('[aria-label="人員清單篩選"]')));
+});
+
+test("人員關鍵字搜尋縮短三分之一並靠右，僅套用桌面人員篩選",async()=>{
+  const css=await readFile(new URL("../src/WorkforceOverview.css",import.meta.url),"utf8");
+  assert.match(css,/@media\(min-width:681px\) \{\s*\.workforce-filters\[aria-label="人員清單篩選"\] \.workforce-search \{ justify-content:flex-end; \}\s*\.workforce-filters\[aria-label="人員清單篩選"\] \.workforce-search > div \{ flex:0\.666667 1 0; \}/);
+});
+
 test("人員篩選依投保公司、所屬案場、關鍵字搜尋排序並共用單列容器",()=>{
   const tree=nodes(EmployeesOverview(personnelProps()));
   const controls=tree.find(node=>node.props?.className === "workforce-personnel-controls");

@@ -70,7 +70,21 @@
   .workforce-payroll-stats .workforce-metric-value { font-size:24px; }
   .workforce-paid-split > div { flex:1 1 100%; }
 }
+/* Personnel filter typography matches SalesFilters; leave payroll/contracts unchanged. */
+.workforce-filters[aria-label="人員清單篩選"] { font-size:14px; font-weight:400; line-height:1.6; }
+.workforce-filters[aria-label="人員清單篩選"] .workforce-filter-heading h3 { font-size:14px; font-weight:700; }
+.workforce-filters[aria-label="人員清單篩選"] .workforce-filter-heading > span { font-size:13px; font-weight:400; }
+.workforce-filters[aria-label="人員清單篩選"] .workforce-filter-heading b { font-size:inherit; font-weight:700; }
+.workforce-filters[aria-label="人員清單篩選"] .workforce-company-filters > span,
+.workforce-filters[aria-label="人員清單篩選"] .workforce-field > span { font-size:13px; font-weight:600; }
+.workforce-filters[aria-label="人員清單篩選"] .workforce-field input,
+.workforce-filters[aria-label="人員清單篩選"] .workforce-field select { font-size:14px; font-weight:400; }
+.workforce-filters[aria-label="人員清單篩選"] .workforce-filter-footer { font-size:12px; font-weight:400; }
 /* Compact personnel filters. */
+@media(min-width:681px) {
+  .workforce-filters[aria-label="人員清單篩選"] .workforce-search { justify-content:flex-end; }
+  .workforce-filters[aria-label="人員清單篩選"] .workforce-search > div { flex:0.666667 1 0; }
+}
 .workforce-overview--personnel .workforce-filter-heading { padding-top:6px; }
 .workforce-overview--personnel .workforce-personnel-controls { padding-top:6px; padding-bottom:6px; gap:8px 16px; }
 .workforce-overview--personnel .workforce-field { gap:4px; }
