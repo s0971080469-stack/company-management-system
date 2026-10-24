@@ -38,8 +38,13 @@ export function OperationsOverview({ kind, stats = {}, period = "", formatMoney,
 }
 
 export function OperationsFilters({ title="清單篩選", count, unit="筆", children, options=[], selected, onSelect, optionLabel="分類", colorOf=()=>"#edf2f7" }) {
-  return <section className="operations-filters" aria-label={title}><div className="operations-filter-heading"><h3><SlidersHorizontal size={16} aria-hidden="true"/>{title}</h3>{count!==undefined&&<span>目前顯示 <b>{count}</b> {unit}</span>}</div><div className="operations-filter-controls">{children}</div>
-    {options.length>0&&<div className="operations-options"><span>{optionLabel}</span><div role="group" aria-label={optionLabel}>{options.map(option=>{const value=typeof option==="string"?option:option.value;const label=typeof option==="string"?option:option.label;return optionLabel === "承攬公司" ? <CompanyFilterButton key={value} name={value} label={label} selected={selected===value} onSelect={onSelect}/> : <button type="button" key={value} aria-pressed={selected===value} style={{background:colorOf(value)}} onClick={()=>onSelect(value)}>{label}{selected===value&&<Check size={13} aria-hidden="true"/>}</button>;})}</div></div>}
+  const tracking = optionLabel === "承攬公司";
+  const ledger = title === "帳務清單篩選";
+  const inlineOptions = tracking || ledger;
+  const ledgerTones = { 收入:{bg:"#E1F0EE",fg:"#1B6B63"}, 支出:{bg:"#F9E8E6",fg:"#A24B44"} };
+  const optionControls = options.length>0&&<div className="operations-options"><span>{optionLabel}</span><div role="group" aria-label={optionLabel} tabIndex={tracking ? 0 : undefined}>{options.map(option=>{const value=typeof option==="string"?option:option.value;const label=typeof option==="string"?option:option.label;return tracking || ledger ? <CompanyFilterButton key={value} name={value} label={label} selected={selected===value} onSelect={onSelect} tone={ledger ? ledgerTones[value] : undefined}/> : <button type="button" key={value} aria-pressed={selected===value} style={{background:colorOf(value)}} onClick={()=>onSelect(value)}>{label}{selected===value&&<Check size={13} aria-hidden="true"/>}</button>;})}</div></div>;
+  return <section className={`operations-filters${tracking ? " operations-filters--tracking-inline" : ""}${ledger ? " operations-filters--ledger-inline" : ""}`} aria-label={title}><div className="operations-filter-heading"><h3><SlidersHorizontal size={16} aria-hidden="true"/>{title}</h3>{count!==undefined&&<span>目前顯示 <b>{count}</b> {unit}</span>}</div><div className="operations-filter-controls">{inlineOptions && optionControls}{children}</div>
+    {!inlineOptions && optionControls}
   </section>;
 }
 export function OperationsSearch({label,query,onChange}) {

@@ -13,6 +13,67 @@ const {OperationsOverview,OperationsFilters,OperationsSearch,VehicleReminders,At
 const render=(c,p)=>renderToStaticMarkup(React.createElement(c,p));
 const nodes=e=>!e||typeof e!=="object"?[]:Array.isArray(e)?e.flatMap(nodes):[e,...nodes(e.props?.children)];
 
+test("每月請款契約名稱縮窄且完整換行，不影響契約管理",async()=>{
+  const css=await readFile(new URL("../src/OperationsOverview.css",import.meta.url),"utf8");
+  assert.match(css,/\.tracking-contract-title \{[^}]*width:180px;[^}]*white-space:normal;[^}]*overflow-wrap:anywhere/);
+  const app=await readFile(new URL("../src/App.jsx",import.meta.url),"utf8");
+  assert.equal(app.indexOf('className="tracking-contract-title"')>app.indexOf('export function ContractBillingView'),true);
+  assert.match(app,/<strong className="tracking-contract-title">\{c.title\}<\/strong>/);
+});
+
+test("正式請款選定公司後仍套用月份與關鍵字",async()=>{
+  const app=await readFile(new URL("../src/App.jsx",import.meta.url),"utf8");
+  const view=app.slice(app.indexOf("export function ContractBillingView("));
+  const rules=view.slice(view.indexOf("const filtered = contracts.filter"),view.indexOf("const recordFor ="));
+  const filter=new Function("contracts","inMonth","companyFilter","query","KNOWN_COMPANIES",`${rules};return filtered;`);
+  const rows=[{no:"CT-001",title:"甲",contractorCompany:"歐克環境"},{no:"CT-002",title:"乙",contractorCompany:"歐克環境"},{no:"CT-003",title:"其他",contractorCompany:"自訂公司"}];
+  assert.deepEqual(filter(rows,()=>true,"歐克環境","ct-001",["歐克環境"]).map(r=>r.no),["CT-001"]);
+  assert.equal(filter(rows,()=>true,"其他","不存在",["歐克環境"]).length,0);
+  assert.equal(filter(rows,()=>false,"全部","",["歐克環境"]).length,0);
+});
+
+test("請款篩選依承攬公司、月份、搜尋排列於同一列，其他分類位置不變",()=>{
+  const children=[React.createElement("div",{className:"month-filter-bar",key:"month"}),React.createElement("input",{type:"search",key:"search"})];
+  const tracking=OperationsFilters({optionLabel:"承攬公司",options:["全部"],children});
+  assert.match(tracking.props.className,/operations-filters--tracking-inline/);
+  const controls=nodes(tracking).find(n=>n.props?.className === "operations-filter-controls");
+  const order=nodes(controls).filter(n=>n.props?.className === "operations-options" || n.props?.className === "month-filter-bar" || n.type === "input");
+  assert.deepEqual(order.map(n=>n.props.className || n.type),["operations-options","month-filter-bar","input"]);
+  const ledger=OperationsFilters({options:["收入","支出"],children});
+  assert.equal(ledger.props.className,"operations-filters");
+  assert.equal(nodes(nodes(ledger).find(n=>n.props?.className === "operations-filter-controls")).some(n=>n.props?.className === "operations-options"),false);
+});
+
+test("帳務入口分類與月份同列，分類在前且回呼保持正常",()=>{
+  let selected;
+  const ledger=OperationsFilters({title:"帳務清單篩選",options:["全部","收入","支出"],selected:"全部",onSelect:value=>{selected=value;},children:React.createElement("div",{className:"month-filter-bar"})});
+  assert.match(ledger.props.className,/operations-filters--ledger-inline/);
+  const controls=nodes(ledger).find(n=>n.props?.className === "operations-filter-controls");
+  const order=nodes(controls).filter(n=>["operations-options","month-filter-bar"].includes(n.props?.className));
+  assert.deepEqual(order.map(n=>n.props.className),["operations-options","month-filter-bar"]);
+  const income=nodes(controls).find(n=>n.key==="收入");
+  income.type(income.props).props.onClick();
+  assert.equal(selected,"收入");
+});
+
+test("帳務分類沿用公司按鈕樣式，色點與選取底色區分收支",()=>{
+  for(const selected of ["全部","收入","支出"]){
+    const tree=OperationsFilters({title:"帳務清單篩選",options:["全部","收入","支出"],selected});
+    const buttons=nodes(tree).filter(n=>["全部","收入","支出"].includes(n.key)).map(n=>n.type(n.props));
+    assert.equal(buttons.length,3);
+    for(const button of buttons){
+      assert.equal(button.props.className,"company-filter-button");
+      assert.equal(button.props["aria-pressed"],button.props.title===selected);
+      assert.equal(nodes(button).filter(n=>n.type==="i").length,1);
+      assert.equal(button.props.style.borderRadius,6);
+      assert.equal(button.props.style.minHeight,30);
+      if(button.props.title!==selected) assert.equal(button.props.style.background,"#fff");
+      else assert.notEqual(button.props.style.background,"#fff");
+    }
+    assert.notEqual(buttons[1].props.style.color,buttons[2].props.style.color);
+  }
+});
+
 test("精簡篩選高度僅套用請款與帳務，手機仍保留原按鈕大小",async()=>{
   const css=await readFile(new URL("../src/OperationsOverview.css",import.meta.url),"utf8");
   const compact=css.split("/* Only billing tracking and ledger filters use this compact density. */")[1].split("@media print")[0];

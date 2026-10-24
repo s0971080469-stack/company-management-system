@@ -1,7 +1,8 @@
 .vendor-filters .vendor-filter-row { flex-wrap:nowrap; gap:18px; margin-bottom:0; }
 .vendor-filters .sales-company-row { flex:0 0 auto; flex-wrap:nowrap; padding-top:0; border-top:0; }
 .vendor-filters .sales-company-row > div { flex-wrap:nowrap; }
-.vendor-filters .vendor-search { width:auto; flex:1; min-width:240px; }
+/* Keep a compact search field with more separation from the type buttons. */
+.vendor-filters .vendor-search { width:auto; flex:0.35 1 0; min-width:290px; margin-left:24px; }
 .vendor-filters .sales-search > span,.vendor-filters .sales-company-row > span { font-size:13px; }
 @media(max-width:900px) {
   .vendor-filters .vendor-filter-row { flex-wrap:wrap; gap:10px 18px; }
@@ -9,5 +10,5 @@
 @media(max-width:680px) {
   .vendor-filters .sales-company-row { flex-wrap:wrap; }
   .vendor-filters .sales-company-row > div { flex-wrap:wrap; }
-  .vendor-filters .vendor-search { width:100%; flex-basis:100%; min-width:0; align-items:stretch; flex-direction:column; gap:5px; }
+  .vendor-filters .vendor-search { width:100%; flex:1 1 100%; min-width:0; margin-left:0; align-items:stretch; flex-direction:column; gap:5px; }
 }

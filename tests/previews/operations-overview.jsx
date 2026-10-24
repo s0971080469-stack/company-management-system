@@ -14,7 +14,7 @@ const pages={tracking:"每月請款追蹤",vehicles:"車輛管理",attendance:"�
 function MonthControl({month,setMonth,label}) {
   return <div className="month-filter-bar operations-demo-month"><span>{label}</span><select aria-label={`${label}年份`} value={month.slice(0,4)} onChange={e=>setMonth(e.target.value?`${e.target.value}-${month.slice(5)||"10"}`:"")}><option value="">年</option><option value="2026">115 年</option><option value="2025">114 年</option></select><select aria-label={`${label}月份`} value={month.slice(5)} onChange={e=>setMonth(e.target.value?`${month.slice(0,4)||"2026"}-${e.target.value}`:"")}><option value="">月</option>{Array.from({length:12},(_,i)=><option key={i} value={String(i+1).padStart(2,"0")}>{i+1} 月</option>)}</select><button onClick={()=>setMonth("")}>顯示全部</button></div>;
 }
-function DemoTable({columns,rows}) {return <div className="office-preview-table"><table><thead><tr>{columns.map(c=><th key={c}>{c}</th>)}</tr></thead><tbody>{rows.map((r,i)=><tr key={i}>{r.map((value,j)=><td key={j}>{value}</td>)}</tr>)}</tbody></table>{!rows.length&&<p className="workforce-preview-empty">沒有符合條件的示範資料</p>}</div>;}
+function DemoTable({columns,rows}) {return <div className="office-preview-table"><table><thead><tr>{columns.map(c=><th key={c}>{c}</th>)}</tr></thead><tbody>{rows.map((r,i)=><tr key={i}>{r.map((value,j)=><td key={j} className={columns[j]==="契約名稱"?"tracking-contract-title-cell":undefined}>{columns[j]==="契約名稱"?<strong className="tracking-contract-title">{value}</strong>:value}</td>)}</tr>)}</tbody></table>{!rows.length&&<p className="workforce-preview-empty">沒有符合條件的示範資料</p>}</div>;}
 function Preview(){
   const [page,setPage]=useState("tracking"),[mode,setMode]=useState("normal"),[nav,setNav]=useState(false),[message,setMessage]=useState("");
   const [month,setMonth]=useState("2026-10"),[company,setCompany]=useState("全部"),[query,setQuery]=useState(""),[type,setType]=useState("全部");
@@ -23,7 +23,7 @@ function Preview(){
   const action=name=>()=>setMessage(`${name}：此頁僅測試版面，不會儲存、打卡、取得定位或發送通知。`);
   const pick=key=>{setPage(key);setCompany("全部");setQuery("");setMessage("");setNav(false);};
   // Mirror existing filters; do not invoke business write handlers in a design preview.
-  const contracts=data.contracts.filter(c=>(!month||(c.startDate<=`${month}-31`&&c.endDate>=`${month}-01`))&&(company==="全部"?(c.no+c.title).includes(query):company===c.company));
+  const contracts=data.contracts.filter(c=>(!month||(c.startDate<=`${month}-31`&&c.endDate>=`${month}-01`))&&(company==="全部"||company===c.company)&&(c.no+c.title).toLowerCase().includes(query.toLowerCase()));
   const vehicles=data.vehicles.filter(v=>(v.plate+v.model+v.driver).toLowerCase().includes(query.toLowerCase()));
   const ledger=data.ledger.filter(r=>(!month||r.date.startsWith(month))&&(type==="全部"||r.type===type));
   const attendance=data.attendance.filter(r=>(!restricted||r.employeeId===myEmployee)&&(!month||r.date.startsWith(month)));

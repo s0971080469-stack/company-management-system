@@ -12,6 +12,12 @@ new Function("require","module","exports",bundle.outputFiles[0].text)(createRequ
 const Filters=module.exports.default;
 const nodes=e=>!e||typeof e!=="object"?[]:Array.isArray(e)?e.flatMap(nodes):[e,...nodes(e.props?.children)];
 const base={count:4,month:"",handler:"全部",handlers:["甲","乙"],contract:"全部",contracts:["同名契約第一案","同名契約第二案"],query:"",onMonthChange:()=>{},onHandlerChange:()=>{},onContractChange:()=>{},onQueryChange:()=>{}};
+
+test("公文搜尋縮為剩餘列寬約三分之一，手機恢復滿寬",async()=>{
+  const css=await readFile(new URL("../src/DocumentFilters.css",import.meta.url),"utf8");
+  assert.match(css,/\.document-filters \.document-search \{ width:auto; flex:0\.333333 1 0; min-width:220px;/);
+  assert.match(css,/@media\(max-width:680px\)[\s\S]*flex:1 1 100%; min-width:0/);
+});
 test("公文各篩選保留原值與完整案名，清除月份不改其他條件",()=>{
   const calls=[];
   const tree=Filters({...base,month:"2026-10",onMonthChange:v=>calls.push(["month",v]),onHandlerChange:v=>calls.push(["handler",v]),onContractChange:v=>calls.push(["contract",v]),onQueryChange:v=>calls.push(["query",v])});

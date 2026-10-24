@@ -1,4 +1,7 @@
 .operations-overview .billing-header { flex-wrap:wrap; }
+/* Keep monthly billing contract names compact without truncating their text. */
+.tracking-contract-title-cell { width:208px; max-width:208px; white-space:normal; }
+.tracking-contract-title { display:block; width:180px; max-width:100%; white-space:normal; overflow-wrap:anywhere; line-height:1.65; }
 .operations-overview .billing-header > div { min-width:0; }
 .operations-overview .billing-metric-heading { align-items:flex-start; }
 .operations-filters { margin-bottom:16px; padding:10px 16px; background:#fff; border:1px solid #e1e7ed; border-radius:12px; color:#203047; font:14px/1.6 'PingFang TC','Microsoft JhengHei',system-ui,sans-serif; min-width:0; }
@@ -37,10 +40,37 @@
 .operations-location-heading { display:flex; align-items:center; gap:8px; color:#466aa8; margin-bottom:9px; }.operations-location-heading h3 { margin:0; color:#203047; font-size:14px; }
 @media(max-width:1000px) { .operations-attendance-controls { grid-template-columns:minmax(0,1fr); }.operations-reminder ul { grid-template-columns:minmax(0,1fr); } }
 @media(max-width:680px) { .operations-filters { padding:10px 12px; }.operations-search { width:100%; }.operations-options button { min-height:40px; }.operations-attendance-layout { grid-template-columns:minmax(0,1fr); }.operations-attendance-layout > * { grid-row:auto!important; }.operations-clock { padding:16px; }.operations-clock-actions { max-width:none; }.operations-location { padding:14px; } }
+/* Tracking: company, billing month, then search in the same row. */
+.operations-filters--tracking-inline .operations-options { flex:0 1 auto; min-width:0; border:0; }
+.operations-filters--tracking-inline .operations-options > span { flex-shrink:0; white-space:nowrap; }
+@media(min-width:681px) {
+  .operations-filters--tracking-inline .operations-filter-controls { flex-wrap:nowrap; gap:12px; }
+  .operations-filters--tracking-inline .operations-options { flex-wrap:nowrap; gap:8px; }
+  .operations-filters--tracking-inline .operations-options > div { flex-wrap:nowrap; overflow-x:auto; padding:3px; }
+  .operations-filters--tracking-inline .month-filter-bar { flex:0 0 auto; flex-wrap:nowrap; white-space:nowrap; gap:6px!important; }
+  .operations-filters--tracking-inline .month-filter-bar select:first-of-type { width:90px!important; }
+  .operations-filters--tracking-inline .month-filter-bar select:nth-of-type(2) { width:72px!important; }
+  .operations-filters--tracking-inline .month-filter-bar :is(select,button) { padding-left:6px!important; padding-right:6px!important; }
+  .operations-filters--tracking-inline .operations-search { flex:0 1 230px; min-width:160px; margin-left:auto; }
+}
+@media(max-width:680px) {
+  .operations-filters--tracking-inline .operations-options { flex-basis:100%; }
+  .operations-filters--tracking-inline .month-filter-bar { width:100%; }
+}
+/* Ledger: category before month; keep a single row on desktop. */
+.operations-filters--ledger-inline .operations-options { border:0; flex:0 0 auto; flex-wrap:nowrap; }
+.operations-filters--ledger-inline .operations-options > div { flex-wrap:nowrap; }
+.operations-filters--ledger-inline .operations-options > span { white-space:nowrap; }
+@media(min-width:681px) {
+  .operations-filters--ledger-inline .operations-filter-controls { flex-wrap:nowrap; gap:24px; }
+  .operations-filters--ledger-inline .month-filter-bar { flex:0 0 auto; flex-wrap:nowrap; white-space:nowrap; }
+}
 /* Only billing tracking and ledger filters use this compact density. */
 .operations-filters:is([aria-label="請款清單篩選"],[aria-label="帳務清單篩選"]) { padding-top:6px; padding-bottom:6px; }
 .operations-filters:is([aria-label="請款清單篩選"],[aria-label="帳務清單篩選"]) .operations-filter-heading { margin-bottom:4px; }
 .operations-filters:is([aria-label="請款清單篩選"],[aria-label="帳務清單篩選"]) .operations-options { margin-top:4px; padding-top:4px; }
+.operations-filters.operations-filters--tracking-inline .operations-options { margin-top:0; padding-top:0; }
+.operations-filters.operations-filters--ledger-inline .operations-options { margin-top:0; padding-top:0; }
 @media(min-width:681px) {
   .operations-filters:is([aria-label="請款清單篩選"],[aria-label="帳務清單篩選"]) .operations-options button { min-height:34px; padding-top:4px; padding-bottom:4px; }
   .operations-filters:is([aria-label="請款清單篩選"],[aria-label="帳務清單篩選"]) .operations-search input { height:34px; padding-top:4px; padding-bottom:4px; }

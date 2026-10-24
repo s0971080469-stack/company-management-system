@@ -1,0 +1,41 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {readFile} from "node:fs/promises";
+import {createRequire} from "node:module";
+import {fileURLToPath} from "node:url";
+import {build} from "esbuild";
+const bundle=await build({entryPoints:[fileURLToPath(new URL("../src/ContractFilters.jsx",import.meta.url))],bundle:true,platform:"node",format:"cjs",write:false,packages:"external",loader:{".css":"empty"}});
+const mod={exports:{}};
+new Function("require","module","exports",bundle.outputFiles[0].text)(createRequire(import.meta.url),mod,mod.exports);
+const Filters=mod.exports.default;
+test("契約搜尋輸入區桌面縮短一半，手機不受影響",async()=>{
+  const css=await readFile(new URL("../src/ContractFilters.css",import.meta.url),"utf8");
+  assert.match(css,/@media\(min-width:681px\)[\s\S]*\.workforce-search > div \{ flex:0\.5 1 0; \}/);
+});
+const nodes=e=>!e||typeof e!=="object"?[]:Array.isArray(e)?e.flatMap(nodes):typeof e.type==="function"?nodes(e.type(e.props)):[e,...nodes(e.props?.children)];
+test("契約篩選共用人員窄版，依公司、民國年度、搜尋排序並回傳原值",()=>{
+  const calls=[];
+  const tree=Filters({count:2,company:"全部",companies:["全部","歐克環境"],onCompanyChange:v=>calls.push(v),year:"2026",years:["全部","2026"],onYearChange:v=>calls.push(v),formatYear:v=>Number(v)-1911,query:"",onQueryChange:v=>calls.push(v)});
+  assert.equal(tree.props.className,"workforce-overview workforce-overview--personnel contract-filters");
+  const all=nodes(tree);
+  const fields=all.filter(e=>["button","select","input"].includes(e.type));
+  assert.deepEqual(fields.map(e=>e.type),["button","button","select","input"]);
+  fields[1].props.onClick(); fields[2].props.onChange({target:{value:"2026"}}); fields[3].props.onChange({target:{value:"特殊名稱"}});
+  assert.deepEqual(calls,["歐克環境","2026","特殊名稱"]);
+  assert.ok(all.some(e=>e.type === "option" && e.props.children === "115 年"));
+});
+test("正式公司、年度與搜尋交叉生效，其他公司不略過搜尋，跨年契約仍列入",async()=>{
+  const source=await readFile(new URL("../src/App.jsx",import.meta.url),"utf8");
+  const view=source.slice(source.indexOf("export function ContractsView("),source.indexOf("export function ContractBillingView("));
+  const rules=view.slice(view.indexOf("const overlapsYear ="),view.indexOf("const sortedFiltered ="));
+  const filter=new Function("contracts","year","companyFilter","query","KNOWN_COMPANIES",`${rules};return filtered;`);
+  const contracts=[{id:1,no:"CT-01",title:"甲清潔",party:"示範客戶",contractorCompany:"歐克環境",startDate:"2025-01-01",endDate:"2026-12-31"},{id:2,no:"CT-02",title:"乙清潔",contractorCompany:"歐克環境",startDate:"2026-01-01",endDate:"2027-12-31"},{id:3,no:"CT-03",title:"其他示範",contractorCompany:"未列公司",startDate:"2026-01-01",endDate:"2026-12-31"}];
+  const known=["歐克環境"];
+  assert.deepEqual(filter(contracts,"2026","歐克環境","CT-01",known).map(c=>c.id),[1]);
+  assert.equal(filter(contracts,"2026","歐克環境","不存在",known).length,0);
+  assert.equal(filter(contracts,"2026","其他","不存在",known).length,0);
+  assert.deepEqual(filter(contracts,"全部","其他","示範",known).map(c=>c.id),[3]);
+  assert.deepEqual(filter(contracts,"2025","全部","",known).map(c=>c.id),[1]);
+  assert.match(view,/<ContractOverview totalCount=\{contracts.length\} hideYearFilter/);
+  assert.match(view,/<ContractFilters count=\{filtered.length\}/);
+});

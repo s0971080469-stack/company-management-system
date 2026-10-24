@@ -20,10 +20,12 @@ test('兩頁清單保留公司底色，公司篩選改用共用按鈕', () => {
   for (const view of [contracts, billing]) {
     assert.match(view, /<tr key=\{c.id\} style=\{\{ background: companyRowColor\(c.contractorCompany\) \}\}>/);
   }
-  assert.match(contracts, /<CompanyFilterButton key=\{c\} name=\{c\} selected=\{companyFilter === c\} onSelect=\{setCompanyFilter\}/);
+  assert.match(contracts, /<ContractFilters count=\{filtered.length\} company=\{companyFilter\} companies=\{companyTabs\} onCompanyChange=\{setCompanyFilter\}/);
   assert.match(billing, /selected=\{companyFilter\} onSelect=\{setCompanyFilter\} colorOf=\{c => c === "全部" \? THEME.canvas : companyRowColor\(c\)\}/);
   const component = readFileSync(new URL('../src/OperationsOverview.jsx', import.meta.url), 'utf8');
-  assert.match(component, /optionLabel === "承攬公司" \? <CompanyFilterButton/);
+  assert.match(component, /const tracking = optionLabel === "承攬公司"/);
+  assert.match(component, /tracking \|\| ledger \? <CompanyFilterButton/);
+  assert.match(component, /tone=\{ledger \? ledgerTones\[value\] : undefined\}/);
   assert.match(component, /aria-pressed=\{selected===value\} style=\{\{background:colorOf\(value\)\}\}/);
   const css = readFileSync(new URL('../src/OperationsOverview.css', import.meta.url), 'utf8');
   const selectedRule=css.match(/\.operations-options button\[aria-pressed="true"\] \{([^}]+)\}/)?.[1];

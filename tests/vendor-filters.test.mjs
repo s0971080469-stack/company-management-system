@@ -10,15 +10,29 @@ const bundle=await build({entryPoints:[fileURLToPath(new URL("../src/VendorFilte
 const module={exports:{}};
 new Function("require","module","exports",bundle.outputFiles[0].text)(createRequire(import.meta.url),module,module.exports);
 const VendorFilters=module.exports.default;
-const nodes=e=>!e||typeof e!=="object"?[]:Array.isArray(e)?e.flatMap(nodes):[e,...nodes(e.props?.children)];
-test("廠商篩選沿用估價單樣式，保留分類原值及顏色",()=>{
+const nodes=e=>!e||typeof e!=="object"?[]:Array.isArray(e)?e.flatMap(nodes):typeof e.type==="function"?nodes(e.type(e.props)):[e,...nodes(e.props?.children)];
+
+test("廠商搜尋略為加長並與分類按鈕拉開距離，手機維持滿寬",async()=>{
+  const css=await readFile(new URL("../src/VendorFilters.css",import.meta.url),"utf8");
+  assert.match(css,/\.vendor-filters \.vendor-search \{ width:auto; flex:0\.35 1 0; min-width:290px; margin-left:24px;/);
+  assert.match(css,/@media\(max-width:680px\)[\s\S]*flex:1 1 100%; min-width:0; margin-left:0/);
+});
+test("廠商篩選沿用人員公司按鈕樣式，保留分類原值及顏色",()=>{
   const calls=[];let query;
   const tree=VendorFilters({count:2,type:"供應商",query:"",onTypeChange:v=>calls.push(v),onQueryChange:v=>query=v});
   const all=nodes(tree),buttons=all.filter(e=>e.type==="button");
   buttons.forEach(e=>e.props.onClick());
   assert.deepEqual(calls,["全部","供應商","業主"]);
   assert.deepEqual(buttons.map(e=>e.props["aria-pressed"]),[false,true,false]);
-  assert.deepEqual(buttons.map(e=>e.props.style["--sales-company-bg"]),["#edf2f7","#E4E9F0","#F5E9EE"]);
+  assert.deepEqual(buttons.map(e=>e.props.style.background),["#fff","#E4E9F0","#fff"]);
+  assert.deepEqual(buttons.map(e=>e.props.style.color),["#344e65","#3E5872","#8B3A5C"]);
+  for(const button of buttons){
+    assert.equal(button.props.className,"company-filter-button");
+    assert.equal(button.props.style.borderRadius,6);
+    assert.equal(button.props.style.minHeight,30);
+    assert.equal(button.props.children[0].type,"i");
+    assert.equal(Boolean(button.props.children[2]),button.props["aria-pressed"]);
+  }
   all.find(e=>e.type==="input").props.onChange({target:{value:" ABC "}});
   assert.equal(query," ABC ");
   const html=renderToStaticMarkup(tree);

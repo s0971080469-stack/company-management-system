@@ -23,6 +23,16 @@ test("收件清單放大文字並保留窄螢幕換行，不影響頁首統計",
   assert.doesNotMatch(overrides, /\.wm-heading|\.wm-stat\s*\{/);
 });
 
+test("統計月份與重新整理整合為白底精簡篩選列", async () => {
+  const css=await readFile(new URL("../src/WebsiteManagement.css",import.meta.url),"utf8");
+  assert.match(css,/\.wm-period-bar \{[^}]*background:#fff;[^}]*border:1px solid var\(--wm-line\);[^}]*border-radius:12px/);
+  assert.match(css,/\.wm-page-actions \{[^}]*margin-left:auto/);
+  assert.match(css,/\.website-management \.wm-period-bar :is\(select,button\) \{ min-height:38px/);
+  const html=render({toolbar:React.createElement("button",{disabled:true},"讀取中…")});
+  assert.ok(html.indexOf('aria-label="統計年份"')<html.indexOf('class="wm-page-actions"'));
+  assert.match(html,/<button disabled="">讀取中…<\/button>/);
+});
+
 test("未串接頁面不顯示虛構流量或假裝已收到資料", () => {
   const html = render();
   assert.match(html, /尚未串接網站/);

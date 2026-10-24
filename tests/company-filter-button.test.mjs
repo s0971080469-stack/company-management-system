@@ -28,8 +28,8 @@ test('公司全名與縮寫配色一致，但篩選仍傳完整原值',()=>{
   assert.equal(companyFilterColor('未填公司').fg,COMPANY_FILTER_COLORS.其他.fg);
   assert.equal(companyFilterColor('__proto__').fg,COMPANY_FILTER_COLORS.其他.fg);
 });
-test('所有公司篩選入口共用按鈕，不改廠商類型與收入支出分類',async()=>{
-  for(const file of ['WorkforceOverview.jsx','SalesOverview.jsx','OperationsOverview.jsx','App.jsx']){
+test('所有公司與廠商類型篩選入口共用按鈕',async()=>{
+  for(const file of ['WorkforceOverview.jsx','SalesOverview.jsx','OperationsOverview.jsx','VendorFilters.jsx','ContractFilters.jsx','BillingFilters.jsx']){
     const src=await readFile(new URL(`../src/${file}`,import.meta.url),'utf8');
     assert.match(src,/import CompanyFilterButton/); assert.match(src,/<CompanyFilterButton/);
   }

@@ -32,10 +32,10 @@ export function EmployeesOverview({ employeeCount, activeCount, filteredCount, q
     <section className="workforce-filters" aria-label="人員清單篩選">
       <FilterHeading count={filteredCount} unit="位員工" />
       <div className="workforce-personnel-controls">
-        <label className="workforce-field workforce-search"><span>關鍵字搜尋</span><div><Search size={16} aria-hidden="true" /><input type="search" aria-label="搜尋姓名／部門／職位" placeholder="搜尋姓名、部門或職位" value={query} onChange={e => onQueryChange(e.target.value)} /></div></label>
+        <div className="workforce-company-filters"><span>投保公司</span><div role="group" aria-label="投保公司篩選" tabIndex={0} title="公司選項可左右捲動，或使用 Tab 鍵選取">{companies.map(name => <CompanyFilterButton key={name} name={name} selected={company === name} onSelect={onCompanyChange}/>)}</div></div>
         <label className="workforce-field"><span>所屬案場</span><select aria-label="所屬案場" value={site} onChange={e => onSiteChange(e.target.value)}><option value="全部">全部案場</option>{sites.map(name => <option key={name} value={name}>{name}</option>)}</select></label>
+        <label className="workforce-field workforce-search"><span>關鍵字搜尋</span><div><Search size={16} aria-hidden="true" /><input type="search" aria-label="搜尋姓名／部門／職位" placeholder="搜尋姓名、部門或職位" value={query} onChange={e => onQueryChange(e.target.value)} /></div></label>
       </div>
-      <div className="workforce-company-filters"><span>投保公司</span><div role="group" aria-label="投保公司篩選">{companies.map(name => <CompanyFilterButton key={name} name={name} selected={company === name} onSelect={onCompanyChange}/>)}</div></div>
       <div className="workforce-filter-footer"><span>公司與案場可交叉篩選</span><span>人員資料 <ArrowRight size={12} aria-hidden="true" /> 下方清單</span></div>
     </section>
   </div>;

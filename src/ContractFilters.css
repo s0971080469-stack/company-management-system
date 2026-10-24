@@ -1,0 +1,8 @@
+@media(min-width:681px) {
+  .contract-filters.workforce-overview--personnel .workforce-personnel-controls { grid-template-columns:minmax(0,1.8fr) 170px minmax(0,1.1fr); }
+  /* Halve the input area, keeping its label and position unchanged. */
+  .contract-filters.workforce-overview--personnel .workforce-search > div { flex:0.5 1 0; }
+}
+@media(min-width:1200px) {
+  .contract-filters.workforce-overview--personnel .workforce-personnel-controls { grid-template-columns:max-content 170px minmax(0,1fr); }
+}

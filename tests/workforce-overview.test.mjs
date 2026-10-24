@@ -25,6 +25,17 @@ function nodes(element) {
 }
 const knownCompanies=workforceCompanies.filter(company=>!["全部","其他"].includes(company));
 
+test("人員篩選依投保公司、所屬案場、關鍵字搜尋排序並共用單列容器",()=>{
+  const tree=nodes(EmployeesOverview(personnelProps()));
+  const controls=tree.find(node=>node.props?.className === "workforce-personnel-controls");
+  const children=React.Children.toArray(controls.props.children);
+  assert.equal(children.length,3);
+  assert.equal(children[0].props.className,"workforce-company-filters");
+  assert.equal(children[1].props.children[0].props.children,"所屬案場");
+  assert.equal(children[2].props.children[0].props.children,"關鍵字搜尋");
+  assert.equal(nodes(children[0]).find(node=>node.props?.role === "group").props.tabIndex,0);
+});
+
 test("薪資精簡篩選使用獨立樣式並保留原有提示與批准控制",async()=>{
   assert.match(render(PayrollOverview,payrollProps()),/workforce-overview--payroll/);
   const css=await readFile(new URL("../src/WorkforceOverview.css",import.meta.url),"utf8");

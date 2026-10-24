@@ -4,7 +4,7 @@ import "./ContractOverview.css";
 import "./CompactOverview.css";
 
 // Display only: contract filtering, dates, amounts and persistence stay in ContractsView.
-export default function ContractOverview({ totalCount, totalAmount, activeCount, expiringCount, filteredCount, year, yearTabs, onYearChange, onNew, formatMoney, formatYear }) {
+export default function ContractOverview({ totalCount, totalAmount, activeCount, expiringCount, filteredCount, year, yearTabs, onYearChange, onNew, formatMoney, formatYear, hideYearFilter = false }) {
   const period = year === "全部" ? "全部年度" : `${formatYear(year)} 年度`;
   const metrics = [
     { label: "契約總數", value: totalCount, icon: FileSignature, tone: "blue", caption: "完整契約紀錄", scope: "全部契約" },
@@ -19,7 +19,7 @@ export default function ContractOverview({ totalCount, totalAmount, activeCount,
       <button type="button" className="contract-overview-new" onClick={onNew}><Plus size={17} aria-hidden="true" />新增契約<ArrowUpRight size={16} aria-hidden="true" /></button>
     </header>
 
-    {totalCount > 0 && <section className="contract-year-panel" aria-label="契約年度篩選">
+    {!hideYearFilter && totalCount > 0 && <section className="contract-year-panel" aria-label="契約年度篩選">
       <div className="contract-year-label"><span className="contract-year-symbol"><CalendarDays size={18} aria-hidden="true" /></span><div><h3>契約年度</h3><p>起訖日期涵蓋該年度即列入</p></div></div>
       <nav className="contract-year-options" aria-label="選擇契約年度">{yearTabs.map(value => <button type="button" key={value} className={year === value ? "is-active" : ""} aria-pressed={year === value} onClick={() => onYearChange(value)}>{value === "全部" ? <Layers3 size={14} aria-hidden="true" /> : null}{value === "全部" ? "全部" : `${formatYear(value)} 年`}{year === value && <Check size={13} aria-hidden="true" />}</button>)}</nav>
     </section>}

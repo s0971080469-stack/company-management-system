@@ -36,6 +36,7 @@ function Preview() {
     <aside className={`wm-preview-sidebar ${mobileNav ? "open" : ""}`}><div className="wm-preview-brand"><Building2 size={26} /><div>公司管理系統<small>COMPANY OS · 測試預覽</small></div></div><nav aria-label="側邊欄位置預覽">{nav.map((label, i) => <div key={label} className={label === "網站資訊管理" ? "active" : ""}><span>{String(i + 1).padStart(2, "0")}</span>{label}</div>)}</nav><footer>測試頁側欄僅示範排列位置<br />不連接正式系統資料</footer></aside>
     <div className="wm-preview-main"><header className="wm-preview-topbar"><button aria-label="開啟側邊欄" onClick={() => setMobileNav(value => !value)}><Menu size={20} /></button><Globe size={19} /><strong>網站資訊管理</strong><small>測試環境 · 尚未上傳正式版</small></header><main className="wm-preview-content">
       <CompactPreviewNav />
+      <div className="website-management wm-toolbar"><button onClick={() => setShowForm(true)}><Plus size={15} style={{ verticalAlign: "middle", marginRight: 5 }} />模擬表單送出</button><span className="wm-muted">僅測試頁操作，不會傳送正式通知</span></div>
       {message && <div role="status" className="wm-preview-success">{message}<button aria-label="關閉提示" onClick={() => setMessage("")}><X size={14} /></button></div>}
       {showForm && <section className="website-management wm-panel wm-preview-form">
         <div className="wm-list-heading"><h2>模擬客戶填寫網站表單</h2><button aria-label="關閉模擬表單" onClick={() => setShowForm(false)}><X size={16} /></button></div>
@@ -50,7 +51,7 @@ function Preview() {
           {formType === "預約服務" && <><label>希望服務日期<input type="date" name="preferredDate" required /></label><label>希望時段<select name="preferredTime"><option>上午</option><option>下午</option><option>時間彈性，可再討論</option></select></label></>}
         </div><label>需求說明<textarea name="message" rows={3} maxLength={4000} defaultValue="希望了解定期環境維護的方案與報價，請與我聯繫。" /></label><button className="wm-primary" type="submit">送出模擬表單</button></form>
       </section>}
-      <WebsiteManagement key={reset} preview rows={rows} analytics={analytics} initialMonth={month} onUpdate={async (id, status) => { setRows(previous => previous.map(row => row.id === id ? { ...row, status } : row)); }} toolbar={<button className="wm-primary" onClick={() => setShowForm(true)}><Plus size={15} style={{ verticalAlign: "middle", marginRight: 5 }} />模擬表單送出</button>} />
+      <WebsiteManagement key={reset} preview rows={rows} analytics={analytics} initialMonth={month} onUpdate={async (id, status) => { setRows(previous => previous.map(row => row.id === id ? { ...row, status } : row)); }} toolbar={<button onClick={() => { setRows(previous => [...previous]); setMessage("已重新整理測試資料，未連接正式資料庫。"); }}>重新整理</button>} />
     </main></div>
   </div>;
 }

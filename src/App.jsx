@@ -17,8 +17,9 @@ import Docxtemplater from "docxtemplater";
 import { renderAsync as renderDocxAsync } from "docx-preview";
 import DashboardOverview from "./DashboardOverview.jsx";
 import BillingOverview from "./BillingOverview.jsx";
+import BillingFilters from "./BillingFilters.jsx";
 import ContractOverview from "./ContractOverview.jsx";
-import CompanyFilterButton from "./CompanyFilterButton.jsx";
+import ContractFilters from "./ContractFilters.jsx";
 import InvoiceOverdueReminder from "./InvoiceOverdueReminder.jsx";
 import { getInvoiceReminders } from "./invoiceReminders.js";
 import { matchesInvoiceKeyword } from "./invoiceSearch.js";
@@ -4084,12 +4085,8 @@ function BillingView({ ctx }) {
         <EmptyState icon={emptyIcon} text={`尚未建立任何${expenseTab === "零用金" ? "零用金紀錄" : expenseTab === "銀行入帳" ? "銀行入帳紀錄" : "公司應付款項"}。`} action={<Btn variant="brass" icon={Plus} onClick={openNew}>{newLabel}</Btn>} />
       ) : (
         <>
-          <MonthFilterBar month={month} setMonth={setMonth} label={expenseTab === "公司付款" ? "預訂付款月份" : "日期月份"} />
-          {(expenseTab === "公司付款" || expenseTab === "銀行入帳") && (
-            <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
-              {companyTabs.map(c => <CompanyFilterButton key={c} name={c} selected={companyFilter === c} onSelect={setCompanyFilter}/>)}
-            </div>
-          )}
+          <BillingFilters expenseTab={expenseTab} count={filtered.length} company={companyFilter} companies={companyTabs} onCompanyChange={setCompanyFilter}
+            monthControl={<MonthFilterBar month={month} setMonth={setMonth} label={expenseTab === "公司付款" ? "預訂付款月份" : "日期月份"} />} />
           {filtered.length === 0 ? (
             <EmptyState icon={emptyIcon} text="這個月份沒有紀錄。" />
           ) : expenseTab === "零用金" ? (
@@ -5195,8 +5192,8 @@ export function ContractsView({ ctx }) {
   const filtered = contracts.filter((c) => {
     if (year !== "全部" && !overlapsYear(c, year)) return false;
     if (companyFilter !== "全部") {
-      if (companyFilter === "其他") return !KNOWN_COMPANIES.includes(c.contractorCompany);
-      return c.contractorCompany === companyFilter;
+      const matchesCompany = companyFilter === "其他" ? !KNOWN_COMPANIES.includes(c.contractorCompany) : c.contractorCompany === companyFilter;
+      if (!matchesCompany) return false;
     }
     if (query && !(c.no + c.title + (c.party || "")).toLowerCase().includes(query.toLowerCase())) return false;
     return true;
@@ -5241,7 +5238,7 @@ export function ContractsView({ ctx }) {
 
   return (
     <div>
-      <ContractOverview totalCount={contracts.length}
+      <ContractOverview totalCount={contracts.length} hideYearFilter
         totalAmount={filtered.reduce((s, c) => s + Number(c.amount || 0), 0)} filteredCount={filtered.length}
         activeCount={contracts.filter((c) => c.status === "生效中").length} expiringCount={contracts.filter(isExpiringSoon).length}
         year={year} yearTabs={yearTabs} onYearChange={setYear} formatYear={toROCYear} formatMoney={fmtMoney}
@@ -5251,16 +5248,8 @@ export function ContractsView({ ctx }) {
         <EmptyState icon={FileSignature} text="尚未建立任何契約。" action={<Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptyContract(vendors) })}>建立第一份契約</Btn>} />
       ) : (
         <>
-          <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-              <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600, marginRight: 4 }}>承攬公司</span>
-              {companyTabs.map(c => <CompanyFilterButton key={c} name={c} selected={companyFilter === c} onSelect={setCompanyFilter}/>)}
-            </div>
-            <div style={{ position: "relative", maxWidth: 260 }}>
-              <Search size={14} style={{ position: "absolute", left: 10, top: 10, color: THEME.muted }} />
-              <TextInput placeholder="搜尋契約編號／名稱／對方單位" value={query} onChange={(e) => setQuery(e.target.value)} style={{ paddingLeft: 30 }} />
-            </div>
-          </div>
+          <ContractFilters count={filtered.length} company={companyFilter} companies={companyTabs} onCompanyChange={setCompanyFilter}
+            year={year} years={yearTabs} onYearChange={setYear} formatYear={toROCYear} query={query} onQueryChange={setQuery}/>
           {filtered.length === 0 ? (
             <EmptyState icon={FileSignature} text="這個篩選條件下沒有契約。" />
           ) : (
@@ -5376,8 +5365,8 @@ export function ContractBillingView({ ctx, previewOnly = false }) {
   const filtered = contracts.filter((c) => {
     if (!inMonth(c)) return false;
     if (companyFilter !== "全部") {
-      if (companyFilter === "其他") return !KNOWN_COMPANIES.includes(c.contractorCompany);
-      return c.contractorCompany === companyFilter;
+      const matchesCompany = companyFilter === "其他" ? !KNOWN_COMPANIES.includes(c.contractorCompany) : c.contractorCompany === companyFilter;
+      if (!matchesCompany) return false;
     }
     if (query && !(c.no + c.title + (c.party || "")).toLowerCase().includes(query.toLowerCase())) return false;
     return true;
@@ -5503,7 +5492,7 @@ export function ContractBillingView({ ctx, previewOnly = false }) {
             return (
               <tr key={c.id} style={{ background: companyRowColor(c.contractorCompany) }}>
                 <td style={{ ...td, fontFamily: FONT_NUM }}>{c.no}</td>
-                <td style={td}><strong>{c.title}</strong></td>
+                <td className="tracking-contract-title-cell" style={td}><strong className="tracking-contract-title">{c.title}</strong></td>
                 <td style={td}>{c.contractorCompany ? <StatusBadge status={BILLING_COMPANY_OPTIONS.includes(c.contractorCompany) ? c.contractorCompany : "其他"} /> : "—"}</td>
                 <td style={td}>{c.type}</td>
                 <td style={td}>{fmtDate(c.startDate)} — {fmtDate(c.endDate)}</td>

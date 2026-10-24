@@ -77,14 +77,19 @@
 .workforce-overview--personnel .workforce-field input,
 .workforce-overview--personnel .workforce-field select { height:34px; padding-top:5px; padding-bottom:5px; }
 .workforce-overview--personnel .workforce-search svg { top:9px; }
-.workforce-overview--personnel .workforce-company-filters { padding-bottom:6px; gap:8px; }
+.workforce-overview--personnel .workforce-company-filters { padding:0; gap:8px; min-width:0; }
 .workforce-overview--personnel .workforce-company-filters button { min-height:30px; padding-top:4px; padding-bottom:4px; }
 .workforce-overview--personnel .workforce-filter-footer { padding-top:3px; padding-bottom:3px; flex-wrap:wrap; }
 @media(min-width:681px) {
+  .workforce-overview--personnel .workforce-personnel-controls { grid-template-columns:minmax(0,1.8fr) minmax(0,1fr) minmax(0,1.1fr); align-items:center; gap:12px; }
+  .workforce-overview--personnel .workforce-company-filters > div { min-width:0; flex-wrap:nowrap; overflow-x:auto; padding:3px; }
   .workforce-overview--personnel .workforce-field { flex-direction:row; align-items:center; gap:8px; }
   .workforce-overview--personnel .workforce-field > span { flex-shrink:0; }
   .workforce-overview--personnel .workforce-field > div,
   .workforce-overview--personnel .workforce-field > select { flex:1; min-width:0; }
+}
+@media(min-width:1200px) {
+  .workforce-overview--personnel .workforce-personnel-controls { grid-template-columns:max-content minmax(0,1fr) minmax(0,1.1fr); }
 }
 @media(max-width:680px) {
   .workforce-overview--personnel .workforce-field input,
