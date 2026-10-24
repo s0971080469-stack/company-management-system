@@ -37,4 +37,14 @@
 .operations-location-heading { display:flex; align-items:center; gap:8px; color:#466aa8; margin-bottom:9px; }.operations-location-heading h3 { margin:0; color:#203047; font-size:14px; }
 @media(max-width:1000px) { .operations-attendance-controls { grid-template-columns:minmax(0,1fr); }.operations-reminder ul { grid-template-columns:minmax(0,1fr); } }
 @media(max-width:680px) { .operations-filters { padding:10px 12px; }.operations-search { width:100%; }.operations-options button { min-height:40px; }.operations-attendance-layout { grid-template-columns:minmax(0,1fr); }.operations-attendance-layout > * { grid-row:auto!important; }.operations-clock { padding:16px; }.operations-clock-actions { max-width:none; }.operations-location { padding:14px; } }
+/* Only billing tracking and ledger filters use this compact density. */
+.operations-filters:is([aria-label="請款清單篩選"],[aria-label="帳務清單篩選"]) { padding-top:6px; padding-bottom:6px; }
+.operations-filters:is([aria-label="請款清單篩選"],[aria-label="帳務清單篩選"]) .operations-filter-heading { margin-bottom:4px; }
+.operations-filters:is([aria-label="請款清單篩選"],[aria-label="帳務清單篩選"]) .operations-options { margin-top:4px; padding-top:4px; }
+@media(min-width:681px) {
+  .operations-filters:is([aria-label="請款清單篩選"],[aria-label="帳務清單篩選"]) .operations-options button { min-height:34px; padding-top:4px; padding-bottom:4px; }
+  .operations-filters:is([aria-label="請款清單篩選"],[aria-label="帳務清單篩選"]) .operations-search input { height:34px; padding-top:4px; padding-bottom:4px; }
+  /* MonthFilterBar provides inline padding; keep the override inside these two filters. */
+  .operations-filters:is([aria-label="請款清單篩選"],[aria-label="帳務清單篩選"]) .month-filter-bar :is(select,button) { min-height:34px; height:34px; padding-top:4px!important; padding-bottom:4px!important; }
+}
 @media print { .operations-filters,.operations-clock-actions { display:none!important; }.operations-reminder ul { max-height:none; overflow:visible; } }

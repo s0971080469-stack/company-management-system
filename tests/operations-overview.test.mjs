@@ -12,6 +12,16 @@ const module={exports:{}};new Function("require","module","exports",bundle.outpu
 const {OperationsOverview,OperationsFilters,OperationsSearch,VehicleReminders,AttendanceControls}=module.exports;
 const render=(c,p)=>renderToStaticMarkup(React.createElement(c,p));
 const nodes=e=>!e||typeof e!=="object"?[]:Array.isArray(e)?e.flatMap(nodes):[e,...nodes(e.props?.children)];
+
+test("精簡篩選高度僅套用請款與帳務，手機仍保留原按鈕大小",async()=>{
+  const css=await readFile(new URL("../src/OperationsOverview.css",import.meta.url),"utf8");
+  const compact=css.split("/* Only billing tracking and ledger filters use this compact density. */")[1].split("@media print")[0];
+  assert.match(compact,/aria-label="請款清單篩選"/);
+  assert.match(compact,/aria-label="帳務清單篩選"/);
+  assert.match(compact,/@media\(min-width:681px\)/);
+  assert.match(compact,/min-height:34px/);
+  assert.doesNotMatch(compact,/font-size|display:none|車輛清單篩選|月份出勤/);
+});
 test("四頁保留原統計項目與傳入值，打卡頁不增加無根據統計",()=>{
   for(const [kind,stats,count] of [["tracking",{count:8,billed:3,unbilled:5},3],["vehicles",{count:5,active:3,expiring:2,overdue:1},4],["ledger",{income:100,expense:120,net:-20},3],["attendance",{},0]]){
     const before=JSON.stringify(stats),html=render(OperationsOverview,{kind,stats,period:"115年10月",formatMoney:money});

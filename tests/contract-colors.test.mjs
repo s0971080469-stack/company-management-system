@@ -16,15 +16,14 @@ test('契約沿用既有公司配色，不改動其他畫面色碼', () => {
   assert.equal(colorOf(''), '#FFFFFF');
   assert.equal(colorOf(undefined), '#FFFFFF');
 });
-test('兩頁清單和篩選均使用共享配色，選取狀態不覆蓋公司底色', () => {
+test('兩頁清單保留公司底色，公司篩選改用共用按鈕', () => {
   for (const view of [contracts, billing]) {
     assert.match(view, /<tr key=\{c.id\} style=\{\{ background: companyRowColor\(c.contractorCompany\) \}\}>/);
   }
-  assert.match(contracts, /background: c === "全部" \? THEME.canvas : companyRowColor\(c\)/);
-  assert.match(contracts, /aria-pressed=\{companyFilter === c\}/);
-  assert.match(contracts, /boxShadow: companyFilter === c/);
+  assert.match(contracts, /<CompanyFilterButton key=\{c\} name=\{c\} selected=\{companyFilter === c\} onSelect=\{setCompanyFilter\}/);
   assert.match(billing, /selected=\{companyFilter\} onSelect=\{setCompanyFilter\} colorOf=\{c => c === "全部" \? THEME.canvas : companyRowColor\(c\)\}/);
   const component = readFileSync(new URL('../src/OperationsOverview.jsx', import.meta.url), 'utf8');
+  assert.match(component, /optionLabel === "承攬公司" \? <CompanyFilterButton/);
   assert.match(component, /aria-pressed=\{selected===value\} style=\{\{background:colorOf\(value\)\}\}/);
   const css = readFileSync(new URL('../src/OperationsOverview.css', import.meta.url), 'utf8');
   const selectedRule=css.match(/\.operations-options button\[aria-pressed="true"\] \{([^}]+)\}/)?.[1];

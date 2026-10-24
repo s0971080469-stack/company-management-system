@@ -3,6 +3,7 @@ import { FileText, Receipt, Check, Clock, Plus, FileSignature, Search, SlidersHo
 import "./BillingOverview.css";
 import "./CompactOverview.css";
 import "./SalesOverview.css";
+import CompanyFilterButton from "./CompanyFilterButton.jsx";
 
 // Display only: callers retain filtering, financial calculations and all write actions.
 export function SalesOverview({ kind, stats, period, formatMoney, onNew, onTemplates, children }) {
@@ -37,7 +38,7 @@ export function SalesFilters({ kind, count, company, companies, onCompanyChange,
     <div className="sales-filter-controls sales-inline-row">
       {monthControl && <div className="sales-month-control">{monthControl}</div>}
       <div className="sales-company-row"><span>{invoice ? "開票公司" : "報價公司"}</span><div role="group" aria-label={`${invoice ? "開票" : "報價"}公司篩選`} tabIndex={0} title="公司選項較多時可左右捲動，或使用 Tab 鍵選取">
-        {companies.map(name => <button type="button" key={name} title={name} aria-label={name} aria-pressed={company === name} onClick={() => onCompanyChange(name)} style={{ "--sales-company-bg": companyColor(name) }}><i aria-hidden="true" />{invoice || name === "全部" || name === "未填公司" ? name : name.slice(0, 4)}{company === name && <Check size={13} aria-hidden="true" />}</button>)}
+        {companies.map(name => <CompanyFilterButton key={name} name={name} label={invoice || name === "全部" || name === "未填公司" ? name : name.slice(0, 4)} selected={company === name} onSelect={onCompanyChange}/>)}
       </div></div>
       <label className="sales-search"><span>{invoice ? "關鍵字搜尋" : "客戶搜尋"}</span><div><Search size={16} aria-hidden="true" /><input type="search" aria-label={invoice ? "搜尋發票關鍵字" : "搜尋客戶名稱"} placeholder={invoice ? "搜尋發票、客戶或工程名稱" : "搜尋客戶名稱"} title={invoice ? "可搜尋發票號碼、開票公司、估價單號碼、客戶、工程名稱、付款方式、類別、狀態、備註及品項；多個關鍵字以空白分隔" : "依客戶名稱搜尋"} value={query} onChange={e => onQueryChange(e.target.value)} /></div></label>
     </div>

@@ -2,16 +2,10 @@ import React from "react";
 import { Users, Wallet, Check, AlertCircle, Plus, Printer, Search, SlidersHorizontal, CalendarDays, ArrowRight, ShieldCheck } from "lucide-react";
 import "./WorkforceOverview.css";
 import "./CompactOverview.css";
+import CompanyFilterButton, { COMPANY_FILTER_COLORS } from "./CompanyFilterButton.jsx";
 
 // Matches the existing company badges; colors identify companies, not payment status.
-export const WORKFORCE_COMPANY_COLORS = {
-  全部: { bg: "#edf2f7", fg: "#344e65" },
-  綠石環保: { bg: "#E1F0EE", fg: "#1B6B63" },
-  歐克環境: { bg: "#E5EDF9", fg: "#2A5199" },
-  上藝除蟲: { bg: "#F1E7F5", fg: "#6B3F82" },
-  維娜科技: { bg: "#FBEADB", fg: "#B5651D" },
-  其他: { bg: "#E9EBF0", fg: "#454C5C" },
-};
+export const WORKFORCE_COMPANY_COLORS = COMPANY_FILTER_COLORS;
 
 function Action({ icon: Icon, children, primary, ...props }) {
   return <button type="button" className={`workforce-action${primary ? " workforce-action--primary" : ""}`} {...props}>{Icon && <Icon size={15} aria-hidden="true" />}{children}</button>;
@@ -41,14 +35,14 @@ export function EmployeesOverview({ employeeCount, activeCount, filteredCount, q
         <label className="workforce-field workforce-search"><span>關鍵字搜尋</span><div><Search size={16} aria-hidden="true" /><input type="search" aria-label="搜尋姓名／部門／職位" placeholder="搜尋姓名、部門或職位" value={query} onChange={e => onQueryChange(e.target.value)} /></div></label>
         <label className="workforce-field"><span>所屬案場</span><select aria-label="所屬案場" value={site} onChange={e => onSiteChange(e.target.value)}><option value="全部">全部案場</option>{sites.map(name => <option key={name} value={name}>{name}</option>)}</select></label>
       </div>
-      <div className="workforce-company-filters"><span>投保公司</span><div role="group" aria-label="投保公司篩選">{companies.map(name => { const color = WORKFORCE_COMPANY_COLORS[name] || WORKFORCE_COMPANY_COLORS.其他; return <button type="button" key={name} aria-pressed={company === name} onClick={() => onCompanyChange(name)} style={{ "--company-bg": color.bg, "--company-fg": color.fg }}><i />{name}{company === name && <Check size={13} aria-hidden="true" />}</button>; })}</div></div>
+      <div className="workforce-company-filters"><span>投保公司</span><div role="group" aria-label="投保公司篩選">{companies.map(name => <CompanyFilterButton key={name} name={name} selected={company === name} onSelect={onCompanyChange}/>)}</div></div>
       <div className="workforce-filter-footer"><span>公司與案場可交叉篩選</span><span>人員資料 <ArrowRight size={12} aria-hidden="true" /> 下方清單</span></div>
     </section>
   </div>;
 }
 
 export function PayrollOverview({ rowCount, totalNet, paidNet, unpaidNet, paidCount, heldNet, heldCount, month, nextMonth, boss, site, sites, onBossChange, onSiteChange, monthControl, approvalControl, generateLocked, nextGenerateLocked, generating, generationNotice, onGenerate, onPrint, formatMoney, formatMonth }) {
-  return <div className="workforce-overview">
+  return <div className="workforce-overview workforce-overview--payroll">
     <Header eyebrow="PAYROLL OPERATIONS · 薪資作業" title="薪資表管理" description="依月份與案場管理薪資，掌握核准及發放進度。" actions={<><Action icon={Printer} onClick={onPrint}>列印</Action><Action primary icon={generateLocked && month ? Check : Plus} onClick={() => onGenerate(month)} disabled={generating || generateLocked}>{generateLocked && month ? "本月薪資表已產生" : "產生本月薪資表"}</Action><Action icon={nextGenerateLocked && nextMonth ? Check : CalendarDays} title={nextMonth ? `產生 ${formatMonth(nextMonth)} 的薪資表；以目前選取月份的下一個月為準。` : "請先選擇月份"} onClick={() => onGenerate(nextMonth)} disabled={generating || nextGenerateLocked}>{nextGenerateLocked && nextMonth ? "下月薪資表已產生" : "產生下月薪資表"}</Action></>} />
     <div className="workforce-section-heading"><h3><CalendarDays size={15} aria-hidden="true" />{month ? formatMonth(month) : "請選擇月份"}<span>薪資概況</span></h3><p>依目前老闆、案場篩選統計</p></div>
     <section className="workforce-payroll-stats" aria-label="薪資統計">

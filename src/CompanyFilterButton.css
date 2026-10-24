@@ -1,0 +1,3 @@
+button.company-filter-button:focus-visible { outline:3px solid #168d98; outline-offset:3px; }
+button.company-filter-button:hover { filter:brightness(.97); }
+@media(max-width:680px) { button.company-filter-button { min-height:38px!important; } }

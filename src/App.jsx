@@ -18,6 +18,7 @@ import { renderAsync as renderDocxAsync } from "docx-preview";
 import DashboardOverview from "./DashboardOverview.jsx";
 import BillingOverview from "./BillingOverview.jsx";
 import ContractOverview from "./ContractOverview.jsx";
+import CompanyFilterButton from "./CompanyFilterButton.jsx";
 import InvoiceOverdueReminder from "./InvoiceOverdueReminder.jsx";
 import { getInvoiceReminders } from "./invoiceReminders.js";
 import { matchesInvoiceKeyword } from "./invoiceSearch.js";
@@ -4086,16 +4087,7 @@ function BillingView({ ctx }) {
           <MonthFilterBar month={month} setMonth={setMonth} label={expenseTab === "公司付款" ? "預訂付款月份" : "日期月份"} />
           {(expenseTab === "公司付款" || expenseTab === "銀行入帳") && (
             <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
-              {companyTabs.map((c) => (
-                <button key={c} onClick={() => setCompanyFilter(c)}
-                  style={{
-                    padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-                    border: `1px solid ${companyFilter === c ? THEME.brassDeep : "#B8B6AA"}`,
-                    background: c === "全部" ? THEME.canvas : companyRowColor(c),
-                    color: THEME.text,
-                    boxShadow: companyFilter === c ? `inset 0 0 0 1px ${THEME.brassDeep}` : "none",
-                  }} aria-pressed={companyFilter === c}>{c}</button>
-              ))}
+              {companyTabs.map(c => <CompanyFilterButton key={c} name={c} selected={companyFilter === c} onSelect={setCompanyFilter}/>)}
             </div>
           )}
           {filtered.length === 0 ? (
@@ -5262,16 +5254,7 @@ export function ContractsView({ ctx }) {
           <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
               <span style={{ fontSize: 12.5, color: THEME.muted, fontWeight: 600, marginRight: 4 }}>承攬公司</span>
-              {companyTabs.map((c) => (
-                <button key={c} onClick={() => setCompanyFilter(c)}
-                  style={{
-                    padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-                    border: `1px solid ${companyFilter === c ? THEME.brassDeep : "#B8B6AA"}`,
-                    background: c === "全部" ? THEME.canvas : companyRowColor(c),
-                    color: THEME.text,
-                    boxShadow: companyFilter === c ? `inset 0 0 0 1px ${THEME.brassDeep}` : "none",
-                  }} aria-pressed={companyFilter === c}>{c}</button>
-              ))}
+              {companyTabs.map(c => <CompanyFilterButton key={c} name={c} selected={companyFilter === c} onSelect={setCompanyFilter}/>)}
             </div>
             <div style={{ position: "relative", maxWidth: 260 }}>
               <Search size={14} style={{ position: "absolute", left: 10, top: 10, color: THEME.muted }} />

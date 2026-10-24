@@ -25,6 +25,16 @@ function nodes(element) {
 }
 const knownCompanies=workforceCompanies.filter(company=>!["全部","其他"].includes(company));
 
+test("薪資精簡篩選使用獨立樣式並保留原有提示與批准控制",async()=>{
+  assert.match(render(PayrollOverview,payrollProps()),/workforce-overview--payroll/);
+  const css=await readFile(new URL("../src/WorkforceOverview.css",import.meta.url),"utf8");
+  const compact=css.split("/* Compact payroll filters without changing approval controls or notices. */")[1].split("@media print")[0];
+  assert.match(compact,/@media\(min-width:681px\)/);
+  assert.match(compact,/workforce-generation-notice/);
+  assert.match(compact,/payroll-approvals__button/);
+  assert.doesNotMatch(compact,/font-size|display:none|overflow:hidden/);
+});
+
 test("人員搜尋、投保公司、案場同時生效，不略過案場條件",()=>{
   const rows=filterPersonnel(workforceEmployees,{query:"現場",company:"綠石環保",site:workforceSites[2],knownCompanies});
   assert.deepEqual(rows.map(row=>row.name),["示範員工丙"]);

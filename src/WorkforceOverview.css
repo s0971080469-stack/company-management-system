@@ -70,7 +70,7 @@
   .workforce-payroll-stats .workforce-metric-value { font-size:24px; }
   .workforce-paid-split > div { flex:1 1 100%; }
 }
-/* Compact personnel filters only; payroll controls retain their existing spacing. */
+/* Compact personnel filters. */
 .workforce-overview--personnel .workforce-filter-heading { padding-top:6px; }
 .workforce-overview--personnel .workforce-personnel-controls { padding-top:6px; padding-bottom:6px; gap:8px 16px; }
 .workforce-overview--personnel .workforce-field { gap:4px; }
@@ -91,5 +91,18 @@
   .workforce-overview--personnel .workforce-field select { height:40px; }
   .workforce-overview--personnel .workforce-search svg { top:12px; }
   .workforce-overview--personnel .workforce-company-filters button { min-height:38px; }
+}
+/* Compact payroll filters without changing approval controls or notices. */
+.workforce-overview--payroll .workforce-filter-heading { padding-top:6px; }
+.workforce-overview--payroll .workforce-payroll-controls { padding-top:6px; padding-bottom:6px; gap:8px 14px; }
+.workforce-overview--payroll .workforce-field { gap:4px; }
+.workforce-overview--payroll .workforce-generation-notice { padding-top:5px; padding-bottom:5px; }
+@media(min-width:681px) {
+  .workforce-overview--payroll .workforce-field { flex-direction:row; align-items:center; gap:8px; }
+  .workforce-overview--payroll .workforce-field > span { flex-shrink:0; }
+  .workforce-overview--payroll .workforce-field input,
+  .workforce-overview--payroll .workforce-field select { flex:1; min-width:0; height:34px; padding-top:5px; padding-bottom:5px; }
+  .workforce-overview--payroll .workforce-period-approval { align-items:center; }
+  .workforce-overview--payroll .payroll-approvals__button { min-height:34px; padding-top:5px; padding-bottom:5px; }
 }
 @media print { .workforce-header-actions,.workforce-company-filters button,.workforce-generation-notice,.workforce-filter-footer { display:none!important; }.workforce-header { background:#fff; color:#203047; border:1px solid #dbe3ea; }.workforce-header p,.workforce-eyebrow { color:#65768a; }.workforce-overview { print-color-adjust:exact; -webkit-print-color-adjust:exact; }.workforce-metric,.workforce-filters { break-inside:avoid; } }

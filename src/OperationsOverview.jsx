@@ -3,6 +3,7 @@ import { FileSignature, Check, Clock, Car, AlertCircle, TrendingUp, TrendingDown
 import "./BillingOverview.css";
 import "./CompactOverview.css";
 import "./OperationsOverview.css";
+import CompanyFilterButton from "./CompanyFilterButton.jsx";
 
 const PAGES = {
   tracking: { title:"每月請款追蹤", eyebrow:"BILLING TRACKER · 請款作業", description:"依月份追蹤契約請款，集中管理本期金額與掃描文件。", section:"請款概況" },
@@ -38,7 +39,7 @@ export function OperationsOverview({ kind, stats = {}, period = "", formatMoney,
 
 export function OperationsFilters({ title="清單篩選", count, unit="筆", children, options=[], selected, onSelect, optionLabel="分類", colorOf=()=>"#edf2f7" }) {
   return <section className="operations-filters" aria-label={title}><div className="operations-filter-heading"><h3><SlidersHorizontal size={16} aria-hidden="true"/>{title}</h3>{count!==undefined&&<span>目前顯示 <b>{count}</b> {unit}</span>}</div><div className="operations-filter-controls">{children}</div>
-    {options.length>0&&<div className="operations-options"><span>{optionLabel}</span><div role="group" aria-label={optionLabel}>{options.map(option=>{const value=typeof option==="string"?option:option.value;const label=typeof option==="string"?option:option.label;return <button type="button" key={value} aria-pressed={selected===value} style={{background:colorOf(value)}} onClick={()=>onSelect(value)}>{label}{selected===value&&<Check size={13} aria-hidden="true"/>}</button>;})}</div></div>}
+    {options.length>0&&<div className="operations-options"><span>{optionLabel}</span><div role="group" aria-label={optionLabel}>{options.map(option=>{const value=typeof option==="string"?option:option.value;const label=typeof option==="string"?option:option.label;return optionLabel === "承攬公司" ? <CompanyFilterButton key={value} name={value} label={label} selected={selected===value} onSelect={onSelect}/> : <button type="button" key={value} aria-pressed={selected===value} style={{background:colorOf(value)}} onClick={()=>onSelect(value)}>{label}{selected===value&&<Check size={13} aria-hidden="true"/>}</button>;})}</div></div>}
   </section>;
 }
 export function OperationsSearch({label,query,onChange}) {

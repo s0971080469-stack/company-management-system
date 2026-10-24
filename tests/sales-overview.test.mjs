@@ -12,7 +12,7 @@ const bundle=await build({entryPoints:[fileURLToPath(new URL("../src/SalesOvervi
 const module={exports:{}};
 new Function("require","module","exports",bundle.outputFiles[0].text)(createRequire(import.meta.url),module,module.exports);
 const {SalesOverview,SalesFilters}=module.exports;
-const nodes=e=>!e||typeof e!=="object"?[]:Array.isArray(e)?e.flatMap(nodes):[e,...nodes(e.props?.children)];
+const nodes=e=>!e||typeof e!=="object"?[]:Array.isArray(e)?e.flatMap(nodes):typeof e.type==="function"?nodes(e.type(e.props)):[e,...nodes(e.props?.children)];
 const render=(component,props)=>renderToStaticMarkup(React.createElement(component,props));
 const base={kind:"quotes",stats:{count:3,total:123456,approved:1},period:"全部月份",formatMoney:salesMoney};
 test("估價概況沿用清單品項金額、核准狀態；不修改資料",()=>{
@@ -53,7 +53,9 @@ test("同前四字公司仍傳回完整公司名稱，搜尋與月份元件保�
   const tree=SalesFilters(props),all=nodes(tree),buttons=all.filter(e=>e.type==="button");
   buttons[2].props.onClick(); assert.equal(selected,"綠石環保另一公司");
   assert.equal(buttons[1].props["aria-pressed"],true);
-  assert.equal(buttons[1].props.style["--sales-company-bg"],"#E1F0EE");
+  assert.equal(buttons[1].props.style.background,"#E1F0EE");
+  assert.equal(buttons[1].props.style.color,"#1B6B63");
+  assert.equal(buttons[2].props.style.background,"#fff");
   all.find(e=>e.type==="input").props.onChange({target:{value:"新關鍵字"}}); assert.equal(query,"新關鍵字");
   assert.ok(renderToStaticMarkup(tree).includes("原本月份元件"));
 });
