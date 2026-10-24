@@ -116,7 +116,15 @@ test("多筆車輛明細全部渲染且以固定高度捲動，不截斷資料",
   const html=render(VehicleReminders,{overdue:rows,expiring:[],isOverdue,isExpiringSoon,daysUntil});
   assert.equal((html.match(/<li>/g)||[]).length,24);
   const css=await readFile(new URL("../src/OperationsOverview.css",import.meta.url),"utf8");
-  assert.ok(css.includes("max-height:168px; overflow:auto"));assert.ok(css.includes("@media(max-width:680px)"));
+  assert.match(css,/\.operations-vehicle-reminders \.operations-reminder ul \{[^}]*max-height:116px; overflow:auto/);
+  assert.ok(css.includes("@media(max-width:680px)"));
+});
+test("車輛提醒雙欄精簡、搜尋列限制寬度，手機保留可操作高度",async()=>{
+  const css=await readFile(new URL("../src/OperationsOverview.css",import.meta.url),"utf8");
+  assert.match(css,/\.operations-vehicle-reminders \{ display:grid; grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(css,/\[aria-label="車輛清單篩選"\] \{[^}]*max-width:720px/);
+  assert.match(css,/@media\(max-width:900px\) \{ \.operations-vehicle-reminders \{ grid-template-columns:minmax\(0,1fr\)/);
+  assert.match(css,/\[aria-label="車輛清單篩選"\] \.operations-search input \{ min-height:40px/);
 });
 test("打卡元件只呈現傳入控制項，停用狀態不被改寫",()=>{
   let called=0;
