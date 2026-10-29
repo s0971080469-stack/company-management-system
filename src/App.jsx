@@ -1955,12 +1955,12 @@ const BANK_OPTIONS = [
   { code: "822", name: "中國信託商業銀行" },
 ];
 const emptyEmployee = {
-  name: "", company: "", dept: "", title: "", phone: "", email: "", hireDate: todayStr(), baseSalary: "", status: "在職", siteName: "",
+  name: "", company: "", dept: "", title: "", phone: "", email: "", hireDate: todayStr(), resignationDate: "", baseSalary: "", status: "在職", siteName: "",
   additions: [], deductions: [], laborInsurance: 0, healthInsurance: 0, pensionSelf: 0, advances: [], insuranceStatus: "無加保", insuranceGrade: "",
   bankCode: "", bankName: "", bankAccount: "", bankAccountNote: "",
 };
 
-function EmployeesView({ ctx }) {
+export function EmployeesView({ ctx }) {
   const { employees, contracts, persist, askDelete } = ctx;
   const siteOptions = [...SITE_FIXED_OPTIONS, ...Array.from(new Set(contracts.map((c) => c.title).filter(Boolean)))];
   const [modal, setModal] = useState(null); // {mode, data}
@@ -2025,7 +2025,7 @@ function EmployeesView({ ctx }) {
       {filtered.length === 0 ? (
         <EmptyState icon={Users} text={employees.length ? "沒有符合目前篩選條件的人員。" : "尚未建立任何員工資料。"} action={!employees.length && <Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptyEmployee })}>新增第一位員工</Btn>} />
       ) : (
-        <Table columns={["姓名", "部門", "職位", "投保公司", "到職日", "底薪", "聯絡方式", "銀行帳號", "投保級距", "狀態", "所屬案場", ""]}>
+        <Table columns={["姓名", "部門", "職位", "投保公司", "到職日", "底薪", "聯絡方式", "銀行帳號", "投保級距", "狀態", "離職日", "所屬案場", ""]}>
           {sortedFiltered.map((e) => (
             <tr key={e.id} style={{ background: groupRowColor(e.siteName, siteOptions) }}>
               <td style={td}><strong>{e.name}</strong></td>
@@ -2049,6 +2049,7 @@ function EmployeesView({ ctx }) {
               </td>
               <td style={{ ...td, fontFamily: FONT_NUM }}>{e.insuranceGrade || "—"}</td>
               <td style={td}><StatusBadge status={e.status} /></td>
+              <td style={td}>{e.status === "離職" ? fmtDate(e.resignationDate) : "—"}</td>
               <td style={td}>{e.siteName || "—"}</td>
               <td style={{ ...td, textAlign: "right" }}>
                 <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
@@ -2097,6 +2098,12 @@ function EmployeeForm({ data, siteOptions, onSave, onCancel }) {
             <option value="離職">離職</option>
           </Select>
         </Field>
+        {f.status === "離職" && (
+          <Field label="離職日">
+            <TextInput type="date" value={f.resignationDate || ""} onChange={set("resignationDate")} />
+            <span style={{ fontSize: 12, color: THEME.muted }}>{f.resignationDate ? `民國 ${fmtDate(f.resignationDate)}` : "請選擇離職日期"}</span>
+          </Field>
+        )}
         <Field label="所屬案場">
           <Select value={f.siteName || ""} onChange={set("siteName")}>
             <option value="">未指定</option>
