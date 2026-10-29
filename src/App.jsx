@@ -35,7 +35,7 @@ import { SalesOverview, SalesFilters } from "./SalesOverview.jsx";
 import { OperationsOverview, OperationsFilters, OperationsSearch, VehicleReminders, AttendanceControls } from "./OperationsOverview.jsx";
 import { PermissionsOverview, PermissionSectionHeading } from "./AdministrationOverview.jsx";
 import { quoteOverviewStats, invoiceOverviewStats } from "./salesOverview.js";
-import { filterPersonnel } from "./personnelFilters.js";
+import { filterPersonnel, personnelFilterYear, personnelSiteFilterOptions } from "./personnelFilters.js";
 import WebsiteInbox from "./WebsiteInbox.jsx";
 import { payrollSiteOf, payrollNetAmount, payrollReleaseStatus } from "./payrollApproval.js";
 
@@ -1963,10 +1963,17 @@ const emptyEmployee = {
 export function EmployeesView({ ctx }) {
   const { employees, contracts, persist, askDelete } = ctx;
   const siteOptions = [...SITE_FIXED_OPTIONS, ...Array.from(new Set(contracts.map((c) => c.title).filter(Boolean)))];
+  const filterYear = personnelFilterYear(ctx.now);
+  const filterSiteOptions = useMemo(() => personnelSiteFilterOptions(contracts, filterYear), [contracts, filterYear]);
   const [modal, setModal] = useState(null); // {mode, data}
   const [query, setQuery] = useState("");
   const [companyFilter, setCompanyFilter] = useState("全部");
   const [siteFilter, setSiteFilter] = useState("全部");
+  // Year-scoped choices never rewrite employees or historical payroll.
+  const effectiveSiteFilter = siteFilter === "全部" || filterSiteOptions.includes(siteFilter) ? siteFilter : "全部";
+  useEffect(() => {
+    if (siteFilter !== effectiveSiteFilter) setSiteFilter(effectiveSiteFilter);
+  }, [siteFilter, effectiveSiteFilter]);
 
   // 數據遷移：轉換舊借支格式，並將未指定投保公司的員工統一設為無加保
   useEffect(() => {
@@ -1993,7 +2000,7 @@ export function EmployeesView({ ctx }) {
 
   const KNOWN_COMPANIES = BILLING_COMPANY_OPTIONS.filter((o) => o !== "其他");
   const companyTabs = ["全部", ...KNOWN_COMPANIES, "其他"];
-  const filtered = filterPersonnel(employees, { query, company: companyFilter, site: siteFilter, knownCompanies: KNOWN_COMPANIES });
+  const filtered = filterPersonnel(employees, { query, company: companyFilter, site: effectiveSiteFilter, knownCompanies: KNOWN_COMPANIES });
   const siteOrder = new Map(siteOptions.map((site, index) => [site, index]));
   const sortedFiltered = [...filtered].sort((a, b) => {
     const aOrder = siteOrder.has(a.siteName) ? siteOrder.get(a.siteName) : Number.MAX_SAFE_INTEGER;
@@ -2018,7 +2025,7 @@ export function EmployeesView({ ctx }) {
   return (
     <div>
       <EmployeesOverview employeeCount={employees.length} activeCount={employees.filter(e => e.status === "在職").length} filteredCount={filtered.length}
-        query={query} onQueryChange={setQuery} site={siteFilter} sites={siteOptions} onSiteChange={setSiteFilter}
+        query={query} onQueryChange={setQuery} site={effectiveSiteFilter} sites={filterSiteOptions} onSiteChange={setSiteFilter}
         company={companyFilter} companies={companyTabs} onCompanyChange={setCompanyFilter}
         onPrint={() => window.print()} onNew={() => setModal({ mode: "new", data: emptyEmployee })} />
 
@@ -2064,7 +2071,7 @@ export function EmployeesView({ ctx }) {
 
       {modal && (
         <Modal title={modal.mode === "new" ? "新增員工" : "編輯員工資料"} onClose={() => setModal(null)} width={680}>
-          <EmployeeForm data={modal.data} siteOptions={siteOptions} onSave={save} onCancel={() => setModal(null)} />
+          <EmployeeForm data={modal.data} siteOptions={filterSiteOptions} onSave={save} onCancel={() => setModal(null)} />
         </Modal>
       )}
     </div>
@@ -2074,6 +2081,7 @@ export function EmployeesView({ ctx }) {
 function EmployeeForm({ data, siteOptions, onSave, onCancel }) {
   const [f, setF] = useState({ additions: [], deductions: [], laborInsurance: 0, healthInsurance: 0, pensionSelf: 0, advances: [], insuranceStatus: "無加保", insuranceGrade: "", bankCode: "", bankName: "", bankAccount: "", bankAccountNote: "", ...data });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const hasHistoricalSite = Boolean(f.siteName && !siteOptions.includes(f.siteName));
   return (
     <div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
@@ -2105,10 +2113,12 @@ function EmployeeForm({ data, siteOptions, onSave, onCancel }) {
           </Field>
         )}
         <Field label="所屬案場">
-          <Select value={f.siteName || ""} onChange={set("siteName")}>
+          <Select aria-label="員工所屬案場" value={f.siteName || ""} onChange={set("siteName")}>
+            {hasHistoricalSite && <option value={f.siteName} disabled>保留原案場（未變更）</option>}
             <option value="">未指定</option>
             {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
           </Select>
+          {hasHistoricalSite && <span style={{ fontSize: 12, color: THEME.muted }}>原案場：{f.siteName}。未選新案場時，儲存仍保留原設定。</span>}
         </Field>
         <Field label="聯絡電話"><TextInput value={f.phone} onChange={set("phone")} placeholder="0912-345-678" /></Field>
         <Field label="Email"><TextInput value={f.email} onChange={set("email")} placeholder="name@company.com" /></Field>
