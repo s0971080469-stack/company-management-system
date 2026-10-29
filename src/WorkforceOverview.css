@@ -111,6 +111,10 @@
   .workforce-overview--personnel .workforce-search svg { top:12px; }
   .workforce-overview--personnel .workforce-company-filters button { min-height:38px; }
 }
+/* Keep long personnel site names readable without stretching the table. */
+.personnel-site-cell { width:220px; max-width:220px; box-sizing:border-box; white-space:normal; }
+.personnel-site-name { display:block; width:192px; max-width:100%; white-space:normal; overflow-wrap:anywhere; line-height:1.6; }
+
 /* Compact payroll filters without changing approval controls or notices. */
 .workforce-overview--payroll .workforce-filter-heading { padding-top:6px; }
 .workforce-overview--payroll .workforce-payroll-controls { padding-top:6px; padding-bottom:6px; gap:8px 14px; }

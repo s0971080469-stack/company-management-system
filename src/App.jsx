@@ -2057,7 +2057,7 @@ export function EmployeesView({ ctx }) {
               <td style={{ ...td, fontFamily: FONT_NUM }}>{e.insuranceGrade || "—"}</td>
               <td style={td}><StatusBadge status={e.status} /></td>
               <td style={td}>{e.status === "離職" ? fmtDate(e.resignationDate) : "—"}</td>
-              <td style={td}>{e.siteName || "—"}</td>
+              <td className="personnel-site-cell" style={td}><span className="personnel-site-name">{e.siteName || "—"}</span></td>
               <td style={{ ...td, textAlign: "right" }}>
                 <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                   <Btn size="sm" icon={Pencil} onClick={() => setModal({ mode: "edit", data: e })}>編輯</Btn>
