@@ -7,8 +7,9 @@ const source = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8"
 const view = source.split("export function EmployeesView")[1].split("function EmployeeForm")[0];
 const form = source.split("function EmployeeForm")[1].split("const sumAmounts")[0];
 
-test("人員清單在狀態後顯示離職日，沿用民國日期且在職顯示破折號", () => {
-  assert.match(view, /"狀態", "離職日", "所屬案場"/);
+test("人員清單在到職日後顯示離職日，沿用民國日期且在職顯示破折號", () => {
+  assert.match(view, /"到職日", "離職日", "底薪"/);
+  assert.match(view, /fmtDate\(e.hireDate\)\}<\/td>\s*<td style=\{td\}>\{e.status === "離職" \? fmtDate\(e.resignationDate\) : "—"\}<\/td>\s*<td[^>]*>\{fmtMoney\(e.baseSalary\)/);
   assert.match(view, /e.status === "離職" \? fmtDate\(e.resignationDate\) : "—"/);
   assert.match(view, /\.\.\.data,/); // save preserves the newly selected field and all existing employee fields
 });

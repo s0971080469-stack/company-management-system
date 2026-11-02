@@ -2032,7 +2032,7 @@ export function EmployeesView({ ctx }) {
       {filtered.length === 0 ? (
         <EmptyState icon={Users} text={employees.length ? "沒有符合目前篩選條件的人員。" : "尚未建立任何員工資料。"} action={!employees.length && <Btn variant="brass" icon={Plus} onClick={() => setModal({ mode: "new", data: emptyEmployee })}>新增第一位員工</Btn>} />
       ) : (
-        <Table columns={["姓名", "部門", "職位", "投保公司", "到職日", "底薪", "聯絡方式", "銀行帳號", "投保級距", "狀態", "離職日", "所屬案場", ""]}>
+        <Table columns={["姓名", "部門", "職位", "投保公司", "到職日", "離職日", "底薪", "聯絡方式", "銀行帳號", "投保級距", "狀態", "所屬案場", ""]}>
           {sortedFiltered.map((e) => (
             <tr key={e.id} style={{ background: groupRowColor(e.siteName, siteOptions) }}>
               <td style={td}><strong>{e.name}</strong></td>
@@ -2040,6 +2040,7 @@ export function EmployeesView({ ctx }) {
               <td style={td}>{e.title || "—"}</td>
               <td style={td}>{e.company ? <StatusBadge status={BILLING_COMPANY_OPTIONS.includes(e.company) ? e.company : "其他"} /> : "—"}</td>
               <td style={td}>{fmtDate(e.hireDate)}</td>
+              <td style={td}>{e.status === "離職" ? fmtDate(e.resignationDate) : "—"}</td>
               <td style={{ ...td, fontFamily: FONT_NUM }}>{fmtMoney(e.baseSalary)}</td>
               <td style={td}>
                 <div style={{ fontSize: 12.5 }}>{e.phone || "—"}</div>
@@ -2056,7 +2057,6 @@ export function EmployeesView({ ctx }) {
               </td>
               <td style={{ ...td, fontFamily: FONT_NUM }}>{e.insuranceGrade || "—"}</td>
               <td style={td}><StatusBadge status={e.status} /></td>
-              <td style={td}>{e.status === "離職" ? fmtDate(e.resignationDate) : "—"}</td>
               <td className="personnel-site-cell" style={td}><span className="personnel-site-name">{e.siteName || "—"}</span></td>
               <td style={{ ...td, textAlign: "right" }}>
                 <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
